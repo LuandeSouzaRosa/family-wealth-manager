@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 from streamlit_gsheets import GSheetsConnection
 from datetime import datetime, timedelta
 
@@ -8,11 +9,18 @@ from datetime import datetime, timedelta
 # 1. CONFIGURATION & SETUP
 # ==============================================================================
 st.set_page_config(
-    page_title="Family Wealth Manager",
-    page_icon="🦅",
+    page_title="Family Office",
+    page_icon="🏛️",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
+
+# Hardcoded Expected Income (Metas de Salário)
+EXPECTED_INCOME = {
+    "Luan": 10000.00,
+    "Luana": 10000.00,
+    "Casal": 20000.00
+}
 
 # Premium Dark Mode & Mobile Optimizations
 st.markdown("""
@@ -38,7 +46,7 @@ st.markdown("""
     #MainMenu {visibility: hidden;}
     header {visibility: hidden;}
     footer {visibility: hidden;}
-    .block-container {padding-top: 1rem !important; padding-bottom: 3rem !important;}
+    .block-container {padding-top: 2rem !important; padding-bottom: 5rem !important;}
 
     /* KPI Cards */
     .metric-container {
@@ -57,21 +65,20 @@ st.markdown("""
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
     }
     .metric-label {
-        font-size: 0.75rem;
+        font-size: 0.70rem;
         color: var(--text-secondary);
         text-transform: uppercase;
         letter-spacing: 0.05em;
     }
     .metric-value {
-        font-size: 1.4rem;
+        font-size: 1.3rem;
         font-weight: 700;
         color: var(--accent);
-        margin-top: 5px;
+        margin: 5px 0;
     }
     .metric-sub {
         font-size: 0.65rem;
         color: var(--text-secondary);
-        margin-top: 2px;
     }
 
     /* Inputs & Buttons */
@@ -86,7 +93,7 @@ st.markdown("""
         color: #0f172a !important;
         font-weight: 800 !important;
         border-radius: 8px !important;
-        height: 48px !important;
+        height: 52px !important;
         border: none !important;
         text-transform: uppercase;
         letter-spacing: 1px;
@@ -102,8 +109,9 @@ st.markdown("""
         border-radius: 6px;
         color: var(--text-secondary);
         border: 1px solid #334155;
-        padding: 5px 10px;
+        padding: 8px 10px;
         flex: 1;
+        text-align: center;
     }
     .stTabs [data-baseweb="tab"][aria-selected="true"] {
         background-color: var(--accent);
@@ -131,22 +139,16 @@ def load_data():
         if not df_trans.empty:
             df_trans["Data"] = pd.to_datetime(df_trans["Data"], errors='coerce')
             df_trans["Valor"] = pd.to_numeric(df_trans["Valor"], errors='coerce').fillna(0.0)
-        else:
-             df_trans = pd.DataFrame(columns=["Data", "Descricao", "Valor", "Categoria", "Tipo", "Responsavel"])
     except Exception:
         df_trans = pd.DataFrame(columns=["Data", "Descricao", "Valor", "Categoria", "Tipo", "Responsavel"])
 
-    # 2. Load Assets (Patrimonio Inicial / Bens)
+    # 2. Load Assets (Patrimonio)
     try:
         df_assets = conn.read(worksheet="Patrimonio", ttl=0)
         df_assets = df_assets.dropna(how="all")
         if not df_assets.empty:
             df_assets["Valor"] = pd.to_numeric(df_assets["Valor"], errors='coerce').fillna(0.0)
-        else:
-             # Create base structure if empty
-             df_assets = pd.DataFrame(columns=["Item", "Valor", "Responsavel"])
     except Exception:
-        # Fallback if tab missing
         df_assets = pd.DataFrame(columns=["Item", "Valor", "Responsavel"])
 
     return df_trans, df_assets
@@ -166,7 +168,6 @@ def save_entry(data, worksheet):
         
         # Date formatting for Transacoes
         if "Data" in df_updated.columns:
-            # Normalize to string YYYY-MM-DD
             df_updated["Data"] = pd.to_datetime(df_updated["Data"]).dt.strftime("%Y-%m-%d")
             
         conn.update(worksheet=worksheet, data=df_updated)
@@ -177,29 +178,34 @@ def save_entry(data, worksheet):
         return False
 
 # ==============================================================================
-# 3. METRICS ENGINE
+# 3. METRICS ENGINE (DIGITAL FAMILY OFFICE)
 # ==============================================================================
 def calculate_kpis(df_trans, df_assets, responsible_filter):
     # Filter by Responsible
     if responsible_filter != "Casal":
-        # Check if 'Responsavel' column exists in Assets before filtering
+        # Assets Filter
         if "Responsavel" in df_assets.columns:
             df_a = df_assets[df_assets["Responsavel"] == responsible_filter].copy()
         else:
-            df_a = df_assets # Assume assets are shared if no column
+            df_a = df_assets # If shared, show all? Or split? Assume shared for MVP.
         
+        # Trans Filter
         if "Responsavel" in df_trans.columns:
             df_t = df_trans[df_trans["Responsavel"] == responsible_filter].copy()
         else:
             df_t = df_trans
+            
+        expected_inc = EXPECTED_INCOME.get(responsible_filter, 0.0)
     else:
         df_a = df_assets.copy()
         df_t = df_trans.copy()
+        expected_inc = EXPECTED_INCOME.get("Casal", 0.0)
 
     today = datetime.now()
     
     # --- 1. Net Worth (Patrimônio Total) ---
-    # Formula: (Sum Assets Tab) + (Sum 'Investimento' Transactions)
+    # Formula: (Sum Assets Tab) + (Cumulative Sum 'Saída' + 'Investimento')
+    # Use filtering? Yes.
     base_assets = df_a["Valor"].sum()
     
     invested_flow = 0.0
@@ -211,18 +217,25 @@ def calculate_kpis(df_trans, df_assets, responsible_filter):
             
     net_worth = base_assets + invested_flow
 
-    # --- 2. Monthly Metrics (Income, Savings Rate) ---
+    # --- 2. Monthly Stats ---
     income_month = 0.0
     savings_month = 0.0
+    salary_month = 0.0
     
     if not df_t.empty:
         curr_month_mask = (df_t["Data"].dt.month == today.month) & (df_t["Data"].dt.year == today.year)
         df_month = df_t[curr_month_mask]
         
-        # Income: Tipo 'Entrada'
+        # Income total
         income_month = df_month[df_month["Tipo"] == "Entrada"]["Valor"].sum()
         
-        # Savings: Tipo 'Saída' but Categoria 'Investimento'
+        # Specific Salary for Goal Tracking
+        salary_month = df_month[
+            (df_month["Tipo"] == "Entrada") & 
+            (df_month["Categoria"] == "Salário")
+        ]["Valor"].sum()
+        
+        # Savings (Investments done this month)
         savings_month = df_month[
             (df_month["Tipo"] == "Saída") & 
             (df_month["Categoria"] == "Investimento")
@@ -230,78 +243,57 @@ def calculate_kpis(df_trans, df_assets, responsible_filter):
     
     savings_rate = (savings_month / income_month * 100) if income_month > 0 else 0.0
 
-    # --- 3. Runway ---
-    # (Net Worth / Avg Expenses Last 3 Months)
-    avg_burn = 0.0
-    if not df_t.empty:
-        start_date = today - timedelta(days=90)
-        df_3m = df_t[df_t["Data"] >= start_date]
-        
-        # Burn Rate = Expenses (Excluding Investments)
-        expenses_3m = df_3m[
-            (df_3m["Tipo"] == "Saída") & 
-            (df_3m["Categoria"] != "Investimento")
-        ]["Valor"].sum()
-        
-        avg_burn = expenses_3m / 3
-        
-    runway = (net_worth / avg_burn) if avg_burn > 0 else 999.0
-
     return {
         "net_worth": net_worth,
         "savings_rate": savings_rate,
-        "runway": runway,
+        "income_month": income_month,
+        "salary_month": salary_month,
+        "expected_income": expected_inc,
         "base_assets": base_assets,
-        "df_t": df_t # Return filtered df for charts
+        "df_t": df_t # filtered transactions
     }
 
 # ==============================================================================
-# 4. MAIN APPLICATION
+# 4. VIEW COMPONENTS & MAIN
 # ==============================================================================
 def main():
-    # --- Header & Filter ---
-    c1, c2 = st.columns([1, 1])
-    with c1:
-        st.markdown("### 🦅 Family Wealth")
-    with c2:
-        # Use st.pills if available (Streamlit > 1.40), else radio
-        try:
-            user_filter = st.pills("Visão:", ["Casal", "Luan", "Luana"], selection_mode="single", default="Casal")
-        except:
-             user_filter = st.radio("Visão", ["Casal", "Luan", "Luana"], horizontal=True, label_visibility="collapsed")
-
-    # Load Data
-    df_trans, df_assets = load_data()
+    # --- Top Bar with Filters ---
+    st.markdown("### 🏛️ Digital Family Office")
     
-    # Calc Metrics
-    # Handling None in user_filter (st.pills can return None if deselected)
+    try:
+        user_filter = st.pills("Visão:", ["Casal", "Luan", "Luana"], default="Casal")
+    except:
+        user_filter = st.radio("Visão:", ["Casal", "Luan", "Luana"], horizontal=True)
+    
     if not user_filter: user_filter = "Casal"
-    
+
+    # Load & Calc
+    df_trans, df_assets = load_data()
     kpis = calculate_kpis(df_trans, df_assets, user_filter)
 
     # --- KPI Dashboard ---
     st.markdown(f"""
     <div class="metric-container">
         <div class="metric-card">
-            <div class="metric-label">Patrimônio</div>
+            <div class="metric-label">Patrimônio Global</div>
             <div class="metric-value">R$ {kpis['net_worth']:,.0f}</div>
-            <div class="metric-sub">Total Acumulado</div>
+            <div class="metric-sub">Bens + Aportes Acumulados</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-label">Renda Mensal (Atual)</div>
+            <div class="metric-value">R$ {kpis['income_month']:,.0f}</div>
+            <div class="metric-sub">Meta: R$ {kpis['expected_income']:,.0f}</div>
         </div>
         <div class="metric-card">
             <div class="metric-label">Savings Rate</div>
-            <div class="metric-value">{kpis['savings_rate']:.0f}%</div>
-            <div class="metric-sub">Meta: >30%</div>
-        </div>
-        <div class="metric-card">
-            <div class="metric-label">Runway</div>
-            <div class="metric-value">{kpis['runway']:.1f} <span style="font-size:0.8rem">meses</span></div>
-            <div class="metric-sub">Liberdade</div>
+            <div class="metric-value">{kpis['savings_rate']:.1f}%</div>
+            <div class="metric-sub">Aportes / Renda</div>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
     # --- Tabs Layout ---
-    tab1, tab2, tab3 = st.tabs(["Lançamentos", "Patrimônio Inicial", "Dashboard"])
+    tab1, tab2, tab3 = st.tabs(["📝 Lançamentos", "🏦 Configuração", "📊 Dashboard"])
 
     # TAB 1: NEW TRANSACTION
     with tab1:
@@ -315,14 +307,13 @@ def main():
             
             col_val, col_cat = st.columns(2)
             valor = col_val.number_input("Valor (R$)", min_value=0.01, step=10.00)
-            categoria = col_cat.selectbox("Categoria", [
-                "Moradia", "Alimentação", "Lazer", "Saúde", "Transporte", 
-                "Investimento", "Salário", "Outros"
-            ])
+            # Ensure 'Salário' is prominent
+            cols_cats = ["Moradia", "Alimentação", "Lazer", "Saúde", "Transporte", "Investimento", "Salário", "Outros"]
+            categoria = col_cat.selectbox("Categoria", cols_cats)
             
             resp_input = st.selectbox("Responsável", ["Casal", "Luan", "Luana"])
             
-            if st.form_submit_button("💾 Salvar", use_container_width=True):
+            if st.form_submit_button("💾 Registar"):
                 if not desc:
                     st.warning("Preencha a descrição.")
                 else:
@@ -339,73 +330,85 @@ def main():
                         st.balloons()
                         st.rerun()
 
-    # TAB 2: INITIAL ASSETS
+    # TAB 2: CONFIGURATION (ASSETS & SETUP)
     with tab2:
-        st.markdown("#### Bens e Saldos Iniciais")
-        st.caption("Cadastre saldos de contas, imóveis, veículos. Use 'Lançamentos' para os aportes mensais.")
+        st.markdown("#### Configuração Patrimonial")
         
-        with st.expander("➕ Adicionar Novo Item"):
-            with st.form("new_asset", clear_on_submit=True):
-                col1, col2 = st.columns(2)
-                item_name = col1.text_input("Item / Ativo", placeholder="Ex: Nubank Inicial")
-                item_value = col2.number_input("Valor (R$)", min_value=0.0)
-                item_resp = st.selectbox("Pertence a:", ["Casal", "Luan", "Luana"])
-                
-                if st.form_submit_button("Adicionar"):
-                    if item_name and item_value > 0:
-                        entry = {"Item": item_name, "Valor": item_value, "Responsavel": item_resp}
-                        if save_entry(entry, "Patrimonio"):
-                            st.success("Adicionado!")
-                            st.rerun()
+        c_conf1, c_conf2 = st.columns(2)
+        with c_conf1:
+            st.info(f"**Metas de Salário Definidas (Código):**\n\n- Luan: R$ {EXPECTED_INCOME['Luan']:,.2f}\n- Luana: R$ {EXPECTED_INCOME['Luana']:,.2f}")
         
-        if not df_assets.empty:
-            st.dataframe(
-                df_assets, 
-                use_container_width=True, 
-                hide_index=True,
-                column_config={"Valor": st.column_config.NumberColumn("Valor", format="R$ %.2f")}
-            )
-        else:
-            st.info("Nenhum patrimônio cadastrado.")
+        with c_conf2:
+            st.dataframe(df_assets, use_container_width=True, hide_index=True)
 
-    # TAB 3: DASHBOARD
+        with st.expander("➕ Adicionar Novo Bem (Saldo Inicial / Imóvel)"):
+            with st.form("new_asset"):
+                i_name = st.text_input("Item", placeholder="Ex: Apartamento, Saldo Inicial...")
+                i_val = st.number_input("Valor (R$)", min_value=0.0)
+                i_resp = st.selectbox("Titular", ["Casal", "Luan", "Luana"])
+                if st.form_submit_button("Adicionar"):
+                    if i_name and i_val > 0:
+                        save_entry({"Item": i_name, "Valor": i_val, "Responsavel": i_resp}, "Patrimonio")
+                        st.rerun()
+
+    # TAB 3: DASHBOARD STATS
     with tab3:
         df_view = kpis["df_t"]
+        
+        # Row 1: Income vs Goal
+        st.markdown("##### 🎯 Performance de Renda")
+        target_income = kpis['expected_income']
+        current_income = kpis['income_month']
+        
+        fig_gauge = go.Figure(go.Indicator(
+            mode = "gauge+number+delta",
+            value = current_income,
+            domain = {'x': [0, 1], 'y': [0, 1]},
+            title = {'text': "Renda do Mês (Real vs Meta)"},
+            delta = {'reference': target_income},
+            gauge = {
+                'axis': {'range': [None, target_income * 1.5], 'tickwidth': 1, 'tickcolor': "white"},
+                'bar': {'color': "#34d399"},
+                'bgcolor': "rgba(0,0,0,0)",
+                'borderwidth': 2,
+                'bordercolor': "#333",
+                'steps': [
+                    {'range': [0, target_income], 'color': "#1e293b"},
+                    {'range': [target_income, target_income*1.5], 'color': "#064e3b"}],
+                'threshold': {
+                    'line': {'color': "white", 'width': 4},
+                    'thickness': 0.75,
+                    'value': target_income}}))
+        fig_gauge.update_layout(height=250, paper_bgcolor="rgba(0,0,0,0)", font={'color': "white", 'family': "Arial"})
+        st.plotly_chart(fig_gauge, use_container_width=True)
+
         if not df_view.empty:
-            st.markdown("##### 📈 Evolução do Patrimônio")
-            
+            st.markdown("##### 📈 Curva de Patrimônio Líquido")
+            # Net Worth Evolution Logic
             df_inv = df_view[
                 (df_view["Tipo"] == "Saída") & 
                 (df_view["Categoria"] == "Investimento")
             ].sort_values("Data")
             
             if not df_inv.empty:
+                # Base Assets are static (t=0), Investments are cumulative flow
                 df_inv["Acumulado"] = df_inv["Valor"].cumsum() + kpis['base_assets']
                 
-                fig = px.area(df_inv, x="Data", y="Acumulado", height=250)
-                fig.update_layout(
+                fig_area = px.area(df_inv, x="Data", y="Acumulado")
+                fig_area.update_layout(
                     paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                    font=dict(color="#94a3b8"),
-                    margin=dict(l=0,r=0,t=10,b=0),
-                    yaxis=dict(showgrid=True, gridcolor="#334155")
+                    font=dict(color="#94a3b8"), margin=dict(l=0,r=0,t=10,b=0), height=300
                 )
-                fig.update_traces(line_color="#34d399", fillcolor="rgba(52, 211, 153, 0.1)")
-                st.plotly_chart(fig, use_container_width=True)
+                fig_area.update_traces(line_color="#34d399", fillcolor="rgba(52, 211, 153, 0.1)")
+                st.plotly_chart(fig_area, use_container_width=True)
             else:
-                st.caption("Sem dados de investimento para o gráfico.")
+                st.caption("Sem histórico de investimentos.")
             
             st.markdown("##### 📋 Extrato Recente")
             st.dataframe(
                 df_view.sort_values("Data", ascending=False).head(10),
-                use_container_width=True,
-                hide_index=True,
-                column_config={
-                    "Data": st.column_config.DateColumn("Data", format="DD/MM/YYYY"),
-                    "Valor": st.column_config.NumberColumn("Valor", format="R$ %.2f")
-                }
+                use_container_width=True, hide_index=True
             )
-        else:
-            st.caption("Sem transações.")
 
 if __name__ == "__main__":
     main()
