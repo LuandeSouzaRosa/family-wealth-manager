@@ -6,16 +6,16 @@ from streamlit_gsheets import GSheetsConnection
 from datetime import datetime, timedelta
 
 # ==============================================================================
-# 1. CONFIGURATION & DESIGN SYSTEM (GLASSMORPHISM)
+# 1. CONFIGURATION & ZEN DESIGN SYSTEM
 # ==============================================================================
 st.set_page_config(
-    page_title="Family Office",
+    page_title="Zen Family Office",
     page_icon="🦅",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
 
-# Premium Glassmorphism CSS
+# Zen Premium Dark CSS
 def local_css():
     st.markdown("""
     <style>
@@ -24,12 +24,14 @@ def local_css():
         /* Base Variables */
         :root {
             --bg-color: #0f172a; /* Slate 900 */
-            --glass-bg: rgba(30, 41, 59, 0.7); /* Slate 800 semi-transparent */
-            --glass-border: 1px solid rgba(255, 255, 255, 0.08);
+            --glass-bg: rgba(30, 41, 59, 0.4); /* Ultra-subtle glass */
+            --glass-border: 1px solid rgba(255, 255, 255, 0.05);
             --text-primary: #f8fafc;
             --text-secondary: #94a3b8;
-            --accent-primary: #3b82f6; /* Blue 500 */
-            --accent-success: #10b981; /* Emerald 500 */
+            --accent-primary: #3b82f6; 
+            --accent-wealth: #8b5cf6; /* Violet for Wealth */
+            --accent-income: #10b981; /* Emerald for Income */
+            --accent-lifestyle: #f43f5e; /* Rose for Lifestyle */
             --radius-lg: 16px;
             --radius-md: 12px;
         }
@@ -42,101 +44,79 @@ def local_css():
         }
         
         .stApp {
-            background: radial-gradient(circle at top left, #1e293b, #0f172a);
+            background: radial-gradient(circle at 50% 10%, #1e293b, #0f172a);
         }
 
-        /* Hide Streamlit Elements */
-        #MainMenu, header, footer {visibility: hidden;}
+        /* Helpers */
         .block-container {
-            padding-top: 1.5rem !important; 
-            padding-bottom: 3rem !important;
-            max-width: 1000px;
+            padding-top: 2rem !important; 
+            max-width: 1200px;
         }
 
         /* Glass Cards */
         .glass-card {
             background: var(--glass-bg);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
             border: var(--glass-border);
             border-radius: var(--radius-lg);
-            padding: 20px;
-            margin-bottom: 20px;
-            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
         }
 
-        /* KPI Typography */
+        /* KPI Style */
         .kpi-label {
-            font-size: 0.75rem;
+            font-size: 0.8rem;
             color: var(--text-secondary);
             text-transform: uppercase;
-            letter-spacing: 0.08em;
-            margin-bottom: 4px;
+            letter-spacing: 0.1em;
+            margin-bottom: 6px;
         }
         .kpi-value {
-            font-size: 1.6rem;
-            font-weight: 800;
-            background: linear-gradient(90deg, #fff, #cbd5e1);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #fff;
         }
         .kpi-sub {
-            font-size: 0.75rem;
-            color: var(--accent-success);
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 4px;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-top: 4px;
         }
 
-        /* Inputs Customization */
+        /* Input Styling */
         .stTextInput input, .stNumberInput input, .stSelectbox, .stDateInput input {
             background-color: rgba(15, 23, 42, 0.6) !important;
             border: 1px solid rgba(255,255,255,0.1) !important;
             color: white !important;
             border-radius: var(--radius-md) !important;
-            padding: 10px 12px !important;
         }
-        .stTextInput input:focus, .stNumberInput input:focus {
-            border-color: var(--accent-primary) !important;
-            box-shadow: 0 0 0 1px var(--accent-primary) !important;
-        }
-
-        /* Tabs as Modern Nav */
+        
+        /* Tabs */
         .stTabs [data-baseweb="tab-list"] {
-            background-color: rgba(15, 23, 42, 0.5);
-            padding: 4px;
-            border-radius: var(--radius-lg);
-            border: var(--glass-border);
-            margin-bottom: 20px;
+            background-color: transparent;
+            gap: 24px;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            margin-bottom: 30px;
         }
         .stTabs [data-baseweb="tab"] {
-            border-radius: var(--radius-md);
-            color: var(--text-secondary);
-            border: none;
             background: transparent;
-            font-weight: 500;
-            font-size: 0.9rem;
+            color: var(--text-secondary);
+            font-weight: 600;
+            font-size: 1rem;
+            border: none;
+            padding-bottom: 12px;
         }
         .stTabs [data-baseweb="tab"][aria-selected="true"] {
-            background: linear-gradient(135deg, #3b82f6, #2563eb);
             color: white;
-            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+            border-bottom: 2px solid var(--accent-primary);
         }
+        
+        /* Custom Button Gradients */
+        .btn-lifestyle button { background: linear-gradient(135deg, #f43f5e, #e11d48) !important; border:none; color:white; }
+        .btn-income button { background: linear-gradient(135deg, #10b981, #059669) !important; border:none; color:white; }
+        .btn-wealth button { background: linear-gradient(135deg, #8b5cf6, #7c3aed) !important; border:none; color:white; }
 
-        /* Action Button */
-        .stButton > button {
-            background: linear-gradient(135deg, #10b981, #059669) !important;
-            color: white !important;
-            font-weight: 700 !important;
-            border-radius: var(--radius-md) !important;
-            border: none !important;
-            box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3) !important;
-            transition: transform 0.1s ease;
-        }
-        .stButton > button:active {
-            transform: scale(0.98);
-        }
     </style>
     """, unsafe_allow_html=True)
 
@@ -168,13 +148,7 @@ def load_data():
     except:
         df_assets = pd.DataFrame(columns=["Item", "Valor", "Responsavel"])
         
-    try:
-        df_config = conn.read(worksheet="Config", ttl=0)
-        df_config = df_config.dropna(how="all")
-    except:
-        df_config = pd.DataFrame(columns=["Chave", "Valor"])
-
-    return df_trans, df_assets, df_config
+    return df_trans, df_assets
 
 def save_entry(data, worksheet):
     conn = get_conn()
@@ -186,263 +160,261 @@ def save_entry(data, worksheet):
         
         df_new = pd.DataFrame([data])
         df_updated = pd.concat([df_curr, df_new], ignore_index=True)
+        # Ensure ISO Date
         if "Data" in df_updated.columns:
             df_updated["Data"] = pd.to_datetime(df_updated["Data"]).dt.strftime("%Y-%m-%d")
+            
         conn.update(worksheet=worksheet, data=df_updated)
+        st.cache_data.clear()
+        return True
+    except Exception as e:
+        st.error(f"Erro ao salvar: {e}")
+        return False
+
+def update_data_editor(df_edited, worksheet):
+    conn = get_conn()
+    try:
+        if "Data" in df_edited.columns:
+            df_edited["Data"] = pd.to_datetime(df_edited["Data"]).dt.strftime("%Y-%m-%d")
+        conn.update(worksheet=worksheet, data=df_edited)
         st.cache_data.clear()
         return True
     except Exception as e:
         st.error(f"Save Error: {e}")
         return False
 
-def save_config(key, value):
-    conn = get_conn()
-    try:
-        try:
-            df_curr = conn.read(worksheet="Config", ttl=0)
-        except:
-            df_curr = pd.DataFrame(columns=["Chave", "Valor"])
-            
-        if key in df_curr["Chave"].values:
-            df_curr.loc[df_curr["Chave"] == key, "Valor"] = value
-        else:
-            df_curr = pd.concat([df_curr, pd.DataFrame([{"Chave": key, "Valor": value}])], ignore_index=True)
-            
-        conn.update(worksheet="Config", data=df_curr)
-        st.cache_data.clear()
-        return True
-    except:
-        return False
-
 # ==============================================================================
-# 3. ANALYTICS ENGINE
+# 3. ZEN ANALYTICS ENGINE
 # ==============================================================================
-def calculate_kpis(df_trans, df_assets, responsible_filter, selected_date, meta_renda):
-    import calendar
-    
+def calculate_zen_kpis(df_trans, df_assets, responsible_filter):
     # Filter Responsibility
     if responsible_filter != "Casal":
-        df_a = df_assets[df_assets["Responsavel"] == responsible_filter].copy() if "Responsavel" in df_assets.columns else df_assets
         df_t = df_trans[df_trans["Responsavel"] == responsible_filter].copy() if "Responsavel" in df_trans.columns else df_trans
+        df_a = df_assets[df_assets["Responsavel"] == responsible_filter].copy() if "Responsavel" in df_assets.columns else df_assets
     else:
-        df_a = df_assets.copy()
         df_t = df_trans.copy()
+        df_a = df_assets.copy()
 
-    # Net Worth Date Boundary (End of selected month)
-    last_day = calendar.monthrange(selected_date.year, selected_date.month)[1]
-    period_end = selected_date.replace(day=last_day, hour=23, minute=59)
+    # 1. Total Income (Renda)
+    total_income = df_t[df_t["Tipo"] == "Entrada"]["Valor"].sum()
     
-    base_assets = df_a["Valor"].sum()
-    invested_cumulative = 0.0
+    # 2. Total Lifestyle (Gastos de Consumo)
+    # Exclude "Investimento" from Style expenses
+    total_lifestyle = df_t[
+        (df_t["Tipo"] == "Saída") & 
+        (df_t["Categoria"] != "Investimento")
+    ]["Valor"].sum()
     
-    if not df_t.empty:
-        # History up to selected date
-        df_hist = df_t[df_t["Data"] <= period_end]
-        invested_cumulative = df_hist[
-            (df_hist["Tipo"] == "Saída") & (df_hist["Categoria"] == "Investimento")
-        ]["Valor"].sum()
-            
-    net_worth = base_assets + invested_cumulative
-
-    # Monthly Metrics
-    income_month = 0.0
-    savings_month = 0.0
-    expenses_month = 0.0
+    # 3. Total Wealth Contributions (Aportes)
+    total_invested = df_t[
+        (df_t["Tipo"] == "Saída") & 
+        (df_t["Categoria"] == "Investimento")
+    ]["Valor"].sum()
     
-    df_period = pd.DataFrame()
-    if not df_t.empty:
-        df_period = df_t[
-            (df_t["Data"].dt.month == selected_date.month) & 
-            (df_t["Data"].dt.year == selected_date.year)
-        ]
-        
-        income_month = df_period[df_period["Tipo"] == "Entrada"]["Valor"].sum()
-        savings_month = df_period[(df_period["Tipo"] == "Saída") & (df_period["Categoria"] == "Investimento")]["Valor"].sum()
-        expenses_month = df_period[(df_period["Tipo"] == "Saída") & (df_period["Categoria"] != "Investimento")]["Valor"].sum()
+    # 4. Disponível Real (Cash Flow Available)
+    # Income - Lifestyle - Investments (Investments assume cash leaving the 'available' bucket)
+    real_available = total_income - total_lifestyle - total_invested
     
-    savings_rate = (savings_month / income_month * 100) if income_month > 0 else 0.0
+    # 5. Net Worth (Patrimonio)
+    # Static Assets + Cumulative Investments
+    initial_assets = df_a["Valor"].sum()
+    net_worth = initial_assets + total_invested
     
-    # Burn Rate (3M Avg)
-    avg_burn = 0.0
-    if not df_t.empty:
-        start_3m = datetime.now() - timedelta(days=90)
-        df_3m = df_t[(df_t["Data"] >= start_3m) & (df_t["Tipo"] == "Saída") & (df_t["Categoria"] != "Investimento")]
-        avg_burn = df_3m["Valor"].sum() / 3
-        
-    runway = (net_worth / avg_burn) if avg_burn > 0 else 999.0
+    # 6. Savings Rate
+    # (Invested / Income) * 100
+    savings_rate = (total_invested / total_income * 100) if total_income > 0 else 0.0
 
     return {
+        "real_available": real_available,
+        "total_invested": total_invested,
         "net_worth": net_worth,
         "savings_rate": savings_rate,
-        "income_month": income_month,
-        "expenses_month": expenses_month,
-        "base_assets": base_assets,
-        "df_t_period": df_period,
-        "df_t_all": df_t, # for historical charts
-        "runway": runway
+        "total_income": total_income,
+        "total_lifestyle": total_lifestyle,
+        "df_filtered": df_t
     }
 
 # ==============================================================================
 # 4. COMPONENT RENDERING
 # ==============================================================================
-def render_kpi_card(label, value, sub_label):
+def render_kpi(label, value, sub=None, color=None):
+    col_style = f"color: {color};" if color else ""
     st.markdown(f"""
-    <div class="glass-card" style="padding: 15px; text-align: center; margin-bottom: 0px;">
+    <div class="glass-card" style="padding: 20px; text-align: left;">
         <div class="kpi-label">{label}</div>
-        <div class="kpi-value">{value}</div>
-        <div class="kpi-sub" style="justify-content: center;">{sub_label}</div>
+        <div class="kpi-value" style="{col_style}">{value}</div>
+        <div class="kpi-sub">{sub if sub else '&nbsp;'}</div>
     </div>
     """, unsafe_allow_html=True)
 
 def main():
-    # --- Filter Header ---
-    c_filter_1, c_filter_2 = st.columns([1, 1], gap="small")
-    with c_filter_1:
+    # --- Top Nav ---
+    c_nav, c_spacer = st.columns([1, 2])
+    with c_nav:
         try:
-            user_filter = st.pills("👤 Visão", ["Casal", "Luan", "Luana"], default="Casal")
+            user_filter = st.pills("Perfil", ["Casal", "Luan", "Luana"], default="Casal")
         except:
-            user_filter = st.radio("👤 Visão", ["Casal", "Luan", "Luana"], horizontal=True)
+            user_filter = st.radio("Perfil", ["Casal", "Luan", "Luana"], horizontal=True)
             
-    with c_filter_2:
-        today = datetime.now()
-        months = [today - pd.DateOffset(months=i) for i in range(12)]
-        month_options = {d.strftime("%b/%Y"): d for d in months}
-        selected_m_str = st.selectbox("📅 Período", list(month_options.keys()))
-        selected_date = month_options[selected_m_str]
-
     if not user_filter: user_filter = "Casal"
-
-    # Data Loading
-    df_trans, df_assets, df_config = load_data()
     
-    # Meta Resolution
-    meta_key = f"Meta_Renda_{user_filter}"
-    saved_meta = 0.0
-    if not df_config.empty:
-         row = df_config[df_config["Chave"] == meta_key]
-         if not row.empty: saved_meta = float(row.iloc[0]["Valor"])
-    target_income = saved_meta if saved_meta > 0 else 10000.0
-    
-    # Calculate Config
-    kpis = calculate_kpis(df_trans, df_assets, user_filter, selected_date, target_income)
+    # Load & Calc
+    df_trans, df_assets = load_data()
+    kpis = calculate_zen_kpis(df_trans, df_assets, user_filter)
 
-    # --- KPI Overview ---
-    c1, c2, c3 = st.columns(3, gap="small")
+    # --- Dashboard Overview ---
+    c1, c2, c3, c4 = st.columns(4, gap="medium")
     with c1:
-        render_kpi_card("Patrimônio", f"R$ {kpis['net_worth']/1000:.1f}k", "Total Acumulado")
+        render_kpi("Disponível Real", f"R$ {kpis['real_available']:,.2f}", "Fluxo Livre", "#3b82f6")
     with c2:
-        delta = kpis['income_month'] - target_income
-        color = "#10b981" if delta >= 0 else "#ef4444"
-        render_kpi_card("Renda Mês", f"R$ {kpis['income_month']:,.0f}", f"<span style='color:{color}'>Meta: {target_income/1000:.1f}k</span>")
+        render_kpi("Investido Total", f"R$ {kpis['total_invested']:,.2f}", "Aportes Acumulados", "#8b5cf6")
     with c3:
-        render_kpi_card("Savings Rate", f"{kpis['savings_rate']:.1f}%", f"Runway: {kpis['runway']:.1f}m")
+        render_kpi("Net Worth", f"R$ {kpis['net_worth']/1000:.1f}k", "Patrimônio Global", "#fff")
+    with c4:
+        render_kpi("Savings Rate", f"{kpis['savings_rate']:.1f}%", f"Lifestyle: R$ {kpis['total_lifestyle']/1000:.1f}k", "#10b981")
 
-    # --- Content Tabs ---
-    tab_launch, tab_extract, tab_analytics, tab_settings = st.tabs(["📝 Lançamentos", "📜 Extrato", "📊 Analytics", "⚙️ Ajustes"])
+    st.markdown("---")
 
-    # 1. LANÇAMENTOS
-    with tab_launch:
-        with st.container():
-            st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-            with st.form("new_transaction_form", clear_on_submit=True):
-                st.caption("Novo Movimento")
-                c_form_1, c_form_2 = st.columns(2)
-                with c_form_1:
-                    data_in = st.date_input("Data", datetime.today())
-                    tipo = st.selectbox("Tipo", ["Saída", "Entrada"])
-                    valor = st.number_input("Valor (R$)", min_value=0.01, step=10.0)
-                with c_form_2:
-                    desc = st.text_input("Descrição", placeholder="Ex: Mercado, Salário")
-                    categoria = st.selectbox("Categoria", ["Moradia", "Alimentação", "Lazer", "Saúde", "Transporte", "Investimento", "Salário", "Outros"])
-                    resp_input = st.selectbox("Responsável", ["Casal", "Luan", "Luana"])
+    # --- Zen Tabs ---
+    tab_lifestyle, tab_income, tab_wealth, tab_history = st.tabs([
+        "💸 Lifestyle", "💰 Renda", "📈 Wealth", "📜 Histórico"
+    ])
+
+    # 1. LIFESTYLE (GASTOS)
+    with tab_lifestyle:
+        c_form, c_info = st.columns([1, 1])
+        with c_form:
+            st.markdown('<div class="glass-card btn-lifestyle">', unsafe_allow_html=True)
+            st.subheader("Registrar Consumo")
+            with st.form("form_lifestyle", clear_on_submit=True):
+                date_in = st.date_input("Data", datetime.now())
+                desc = st.text_input("Descrição", placeholder="Ex: Jantar, Uber, Mercado")
+                val = st.number_input("Valor (R$)", min_value=0.01, step=10.0)
+                # Whitelisted Categories
+                cat = st.selectbox("Categoria", [
+                    "Moradia", "Alimentação", "Lazer", "Saúde", "Transporte", "Assinaturas", "Outros"
+                ])
+                resp = st.selectbox("Responsável", ["Casal", "Luan", "Luana"])
                 
-                submitted = st.form_submit_button("💾 Salvar Registro", use_container_width=True)
-                if submitted:
+                if st.form_submit_button("💸 Registrar Saída"):
                     if not desc:
-                        st.warning("Informe uma descrição.")
+                        st.toast("⚠️ Descrição obrigatória")
                     else:
-                        entry = {"Data": data_in, "Descricao": desc, "Valor": valor, "Categoria": categoria, "Tipo": tipo, "Responsavel": resp_input}
-                        if save_entry(entry, "Transacoes"):
-                            st.success("Registrado!")
+                        payload = {
+                            "Data": date_in, "Descricao": desc, "Valor": val,
+                            "Categoria": cat, "Tipo": "Saída", "Responsavel": resp
+                        }
+                        if save_entry(payload, "Transacoes"):
+                            st.toast("✅ Gasto registrado!")
+                            st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
+            
+        with c_info:
+            st.info("💡 **Lifestyle**: Gastos de consumo que não geram retorno financeiro. Mantenha sob controle para aumentar sua Savings Rate.")
+
+    # 2. RENDA (ENTRADAS)
+    with tab_income:
+        c_form, c_info = st.columns([1, 1])
+        with c_form:
+            st.markdown('<div class="glass-card btn-income">', unsafe_allow_html=True)
+            st.subheader("Registrar Entrada")
+            with st.form("form_income", clear_on_submit=True):
+                date_in = st.date_input("Data", datetime.now())
+                desc = st.text_input("Fonte", placeholder="Ex: Salário, Freelance")
+                val = st.number_input("Valor (R$)", min_value=0.01, step=100.0)
+                cat = st.selectbox("Categoria", ["Salário", "Dividendos", "Bônus", "Extra", "Reembolso"])
+                resp = st.selectbox("Titular", ["Luan", "Luana", "Casal"])
+                
+                if st.form_submit_button("💰 Registrar Renda"):
+                    if not desc:
+                        st.toast("⚠️ Fonte obrigatória")
+                    else:
+                        payload = {
+                            "Data": date_in, "Descricao": desc, "Valor": val,
+                            "Categoria": cat, "Tipo": "Entrada", "Responsavel": resp
+                        }
+                        if save_entry(payload, "Transacoes"):
+                            st.toast("✅ Entrada registrada!")
                             st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
 
-    # 2. EXTRATO
-    with tab_extract:
-        df_p = kpis['df_t_period']
-        if not df_p.empty:
-            st.dataframe(
-                df_p.sort_values("Data", ascending=False),
-                use_container_width=True,
-                hide_index=True,
-                column_config={
-                    "Data": st.column_config.DateColumn("Data", format="DD/MM"),
-                    "Valor": st.column_config.NumberColumn("Valor", format="R$ %.2f"),
-                    "Tipo": st.column_config.TextColumn("Tipo", width="small"),
-                }
-            )
-        else:
-            st.info(f"Sem movimentos em {selected_m_str}.")
-
-    # 3. ANALYTICS
-    with tab_analytics:
-        # Spending Breakdown (Donut)
-        if kpis['expenses_month'] > 0:
-            df_exp = kpis['df_t_period'][
-                (kpis['df_t_period']["Tipo"] == "Saída") & 
-                (kpis['df_t_period']["Categoria"] != "Investimento")
-            ]
-            fig_pie = px.pie(df_exp, values="Valor", names="Categoria", hole=0.6, color_discrete_sequence=px.colors.sequential.Teal)
-            fig_pie.update_layout(
-                paper_bgcolor="rgba(0,0,0,0)", 
-                plot_bgcolor="rgba(0,0,0,0)",
-                showlegend=False,
-                margin=dict(t=20, b=20, l=20, r=20),
-                annotations=[dict(text=f"R$ {kpis['expenses_month']/1000:.1f}k", x=0.5, y=0.5, font_size=20, showarrow=False, font_color="white")]
-            )
-            st.markdown("##### 🍩 Distribuição de Gastos")
-            st.plotly_chart(fig_pie, use_container_width=True)
-        
-        # Net Worth History (Area Spline)
-        st.markdown("##### 📈 Curva de Patrimônio")
-        df_all = kpis['df_t_all']
-        if not df_all.empty:
-            df_inv = df_all[(df_all["Tipo"] == "Saída") & (df_all["Categoria"] == "Investimento")].copy().sort_values("Data")
-            if not df_inv.empty:
-                df_inv["Acumulado"] = df_inv["Valor"].cumsum() + kpis['base_assets']
-                fig_area = px.area(df_inv, x="Data", y="Acumulado")
-                fig_area.update_layout(
-                    paper_bgcolor="rgba(0,0,0,0)", 
-                    plot_bgcolor="rgba(0,0,0,0)",
-                    font=dict(color="#94a3b8"),
-                    margin=dict(l=0, r=0, t=10, b=0),
-                    xaxis=dict(showgrid=False),
-                    yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.05)")
-                )
-                fig_area.update_traces(line_color="#3b82f6", fillcolor="rgba(59, 130, 246, 0.1)")
-                st.plotly_chart(fig_area, use_container_width=True)
-
-    # 4. AJUSTES
-    with tab_settings:
-        st.markdown("##### 🎯 Metas & Patrimônio Inicial")
-        c_set_1, c_set_2 = st.columns(2)
-        with c_set_1:
-            new_meta = st.number_input(f"Meta Renda ({user_filter})", value=float(target_income))
-            if st.button("Atualizar Meta"):
-                save_config(meta_key, new_meta)
-                st.rerun()
-        
-        with c_set_2:
-            st.dataframe(df_assets, use_container_width=True, hide_index=True)
+    # 3. WEALTH (INVESTIMENTOS)
+    with tab_wealth:
+        c_form, c_info = st.columns([1, 1])
+        with c_form:
+            st.markdown('<div class="glass-card btn-wealth">', unsafe_allow_html=True)
+            st.subheader("Registrar Aporte")
+            with st.form("form_wealth", clear_on_submit=True):
+                date_in = st.date_input("Data", datetime.now())
+                desc = st.text_input("Ativo / Corretora", placeholder="Ex: IVVB11, Bitcoin, CDB")
+                val = st.number_input("Valor Aportado (R$)", min_value=0.01, step=100.0)
+                resp = st.selectbox("Titular", ["Casal", "Luan", "Luana"])
+                
+                if st.form_submit_button("📈 Confirmar Aporte"):
+                    if not desc:
+                        st.toast("⚠️ Descrição obrigatória")
+                    else:
+                        # Force Category = Investimento, Type = Saída
+                        payload = {
+                            "Data": date_in, "Descricao": desc, "Valor": val,
+                            "Categoria": "Investimento", "Tipo": "Saída", "Responsavel": resp
+                        }
+                        if save_entry(payload, "Transacoes"):
+                            st.toast("✅ Aporte registrado! Net Worth atualizado.")
+                            st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
             
-        with st.expander("➕ Adicionar Bem Durável"):
-            with st.form("add_asset"):
-                i_name = st.text_input("Nome do Bem")
-                i_val = st.number_input("Valor Atual", min_value=0.0)
-                i_resp = st.selectbox("Titular", ["Casal", "Luan", "Luana"])
-                if st.form_submit_button("Adicionar"):
-                    save_entry({"Item": i_name, "Valor": i_val, "Responsavel": i_resp}, "Patrimonio")
-                    st.rerun()
+        with c_info:
+            st.info("🚀 **Wealth**: Dinheiro que sai do 'Disponível' mas permanece no seu Patrimônio. Aumenta seu Net Worth.")
+
+    # 4. HISTÓRICO (DATA EDITOR)
+    with tab_history:
+        st.subheader("📜 Livro Razão")
+        
+        # Filter by Date Range
+        try:
+            df_hist = kpis['df_filtered'].sort_values("Data", ascending=False)
+            
+            edited_df = st.data_editor(
+                df_hist,
+                use_container_width=True,
+                num_rows="dynamic",
+                column_config={
+                    "Data": st.column_config.DateColumn("Data", format="DD/MM/YYYY"),
+                    "Valor": st.column_config.NumberColumn("Valor", format="R$ %.2f"),
+                    "Tipo": st.column_config.SelectboxColumn("Tipo", options=["Entrada", "Saída"]),
+                    "Categoria": st.column_config.SelectboxColumn("Categoria", options=[
+                        "Moradia", "Alimentação", "Lazer", "Saúde", "Transporte", 
+                        "Investimento", "Salário", "Outros", "Assinaturas"
+                    ]),
+                },
+                hide_index=True
+            )
+            
+            # Save Changes Button
+            if st.button("💾 Salvar Alterações no Histórico"):
+                # We need to update the GSheet with this new dataframe
+                # Note: This replaces the filtered view data into the main sheet. 
+                # In a real production app with massive data, we'd handle ID-based updates.
+                # For this scale, replacing the dataset (or appending limits) is okay but risky if multi-user.
+                # Here we will assume the user knows what they are doing with the filter active.
+                # Ideally, we reload all data, update the matching rows, and save back.
+                # For simplicity in this specific request (Streamlit + GSheets generic):
+                
+                # Check for differences
+                if not df_hist.equals(edited_df):
+                    # In this specific simple implementation, we might just re-save the whole 'Transacoes' 
+                    # if the filter was 'Casal' (which implies all data). 
+                    # If filter was specific, we can't easily merge back without IDs.
+                    # FORCE SAFEGUARD: Only allow full save if filter is Casal (All Data view roughly)
+                    if user_filter == "Casal":
+                        if update_data_editor(edited_df, "Transacoes"):
+                            st.success("Histórico atualizado com sucesso!")
+                            st.rerun()
+                    else:
+                        st.warning("⚠️ Para editar o histórico completo e salvar, mude o perfil para 'Casal'.")
+        except Exception as e:
+            st.error(f"Erro ao carregar histórico: {e}")
 
 if __name__ == "__main__":
     main()
