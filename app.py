@@ -737,45 +737,51 @@ def main():
     # --- HISTÓRICO (Edição completa) ---
     with tab_hist:
         try:
-            df_hist = mx["df"].sort_values("Data", ascending=False)
-            edited = st.data_editor(
-                df_hist,
-                use_container_width=True,
-                num_rows="dynamic",
-                column_config={
-                    "Data": st.column_config.DateColumn(
-                        "Data", format="DD/MM/YYYY", required=True
-                    ),
-                    "Valor": st.column_config.NumberColumn(
-                        "Valor", format="R$ %.2f", required=True, min_value=0.0
-                    ),
-                    "Tipo": st.column_config.SelectboxColumn(
-                        "Tipo", options=["Entrada", "Saída"], required=True
-                    ),
-                    "Categoria": st.column_config.SelectboxColumn(
-                        "Categoria",
-                        options=[
-                            "Moradia", "Alimentação", "Lazer", "Saúde",
-                            "Transporte", "Investimento", "Salário",
-                            "Outros", "Assinaturas", "Educação"
-                        ],
-                        required=True
-                    ),
-                    "Descricao": st.column_config.TextColumn("Descrição", required=True),
-                    "Responsavel": st.column_config.SelectboxColumn(
-                        "Responsável", options=["Casal", "Luan", "Luana"]
-                    )
-                },
-                hide_index=True
-            )
-            if not df_hist.reset_index(drop=True).equals(edited.reset_index(drop=True)):
-                if st.button("SALVAR ALTERAÇÕES"):
-                    if user == "Casal":
-                        if update_sheet(edited, "Transacoes"):
-                            st.toast("✓ Atualizado")
-                            st.rerun()
-                    else:
-                        st.warning("Mude para 'Casal' para editar o histórico completo.")
+            df_hist = mx["df"].copy()
+            if df_hist.empty:
+                render_intel("Histórico", "Nenhuma transação registrada.")
+            else:
+                # Garantir tipo datetime na coluna Data
+                df_hist["Data"] = pd.to_datetime(df_hist["Data"], errors='coerce')
+                df_hist = df_hist.sort_values("Data", ascending=False)
+                edited = st.data_editor(
+                    df_hist,
+                    use_container_width=True,
+                    num_rows="dynamic",
+                    column_config={
+                        "Data": st.column_config.DateColumn(
+                            "Data", format="DD/MM/YYYY", required=True
+                        ),
+                        "Valor": st.column_config.NumberColumn(
+                            "Valor", format="R$ %.2f", required=True, min_value=0.0
+                        ),
+                        "Tipo": st.column_config.SelectboxColumn(
+                            "Tipo", options=["Entrada", "Saída"], required=True
+                        ),
+                        "Categoria": st.column_config.SelectboxColumn(
+                            "Categoria",
+                            options=[
+                                "Moradia", "Alimentação", "Lazer", "Saúde",
+                                "Transporte", "Investimento", "Salário",
+                                "Outros", "Assinaturas", "Educação"
+                            ],
+                            required=True
+                        ),
+                        "Descricao": st.column_config.TextColumn("Descrição", required=True),
+                        "Responsavel": st.column_config.SelectboxColumn(
+                            "Responsável", options=["Casal", "Luan", "Luana"]
+                        )
+                    },
+                    hide_index=True
+                )
+                if not df_hist.reset_index(drop=True).equals(edited.reset_index(drop=True)):
+                    if st.button("SALVAR ALTERAÇÕES"):
+                        if user == "Casal":
+                            if update_sheet(edited, "Transacoes"):
+                                st.toast("✓ Atualizado")
+                                st.rerun()
+                        else:
+                            st.warning("Mude para 'Casal' para editar o histórico completo.")
         except Exception as e:
             st.error(f"ERRO_CARREGAR: {e}")
 
