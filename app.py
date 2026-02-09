@@ -1,19 +1,29 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
 from streamlit_gsheets import GSheetsConnection
 from datetime import datetime, timedelta
 
 # ==============================================================================
-# 1. CONFIGURATION & ZEN DESIGN SYSTEM
+# 1. CONFIGURAÇÃO & L&L DESIGN SYSTEM
 # ==============================================================================
 st.set_page_config(
-    page_title="Zen Family Office",
+    page_title="L&L — Finanças",
     page_icon="🦅",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
+
+# Helpers de Localização (PT-BR)
+def format_currency_ptbr(val):
+    return f"R$ {val:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+def format_date_ptbr(dt):
+    # Manual mapping for safety across environments
+    months = {
+        1: "Jan", 2: "Fev", 3: "Mar", 4: "Abr", 5: "Mai", 6: "Jun",
+        7: "Jul", 8: "Ago", 9: "Set", 10: "Out", 11: "Nov", 12: "Dez"
+    }
+    return f"{dt.day} {months[dt.month]} {dt.year}"
 
 # Zen Premium Dark CSS
 def local_css():
@@ -123,7 +133,7 @@ def local_css():
 local_css()
 
 # ==============================================================================
-# 2. DATA LAYER (ROBUST & CACHED)
+# 2. DATA LAYER (CONEXÃO ROBUSTA)
 # ==============================================================================
 def get_conn():
     return st.connection("gsheets", type=GSheetsConnection)
@@ -160,7 +170,7 @@ def save_entry(data, worksheet):
         
         df_new = pd.DataFrame([data])
         df_updated = pd.concat([df_curr, df_new], ignore_index=True)
-        # Ensure ISO Date
+        # Ensure ISO Date for Backend (Google Sheets)
         if "Data" in df_updated.columns:
             df_updated["Data"] = pd.to_datetime(df_updated["Data"]).dt.strftime("%Y-%m-%d")
             
@@ -174,17 +184,18 @@ def save_entry(data, worksheet):
 def update_data_editor(df_edited, worksheet):
     conn = get_conn()
     try:
+        # Re-convert to ISO before saving
         if "Data" in df_edited.columns:
             df_edited["Data"] = pd.to_datetime(df_edited["Data"]).dt.strftime("%Y-%m-%d")
         conn.update(worksheet=worksheet, data=df_edited)
         st.cache_data.clear()
         return True
     except Exception as e:
-        st.error(f"Save Error: {e}")
+        st.error(f"Erro ao atualizar histórico: {e}")
         return False
 
 # ==============================================================================
-# 3. ZEN ANALYTICS ENGINE
+# 3. CORE ANALYTICS ENGINE (LÓGICA ZEN)
 # ==============================================================================
 def calculate_zen_kpis(df_trans, df_assets, responsible_filter):
     # Filter Responsibility
@@ -211,31 +222,41 @@ def calculate_zen_kpis(df_trans, df_assets, responsible_filter):
         (df_t["Categoria"] == "Investimento")
     ]["Valor"].sum()
     
-    # 4. Disponível Real (Cash Flow Available)
-    # Income - Lifestyle - Investments (Investments assume cash leaving the 'available' bucket)
+    # 4. Disponível Real (Fluxo de Caixa Livre)
+    # Renda - Estilo de Vida - Aportes
     real_available = total_income - total_lifestyle - total_invested
     
-    # 5. Net Worth (Patrimonio)
-    # Static Assets + Cumulative Investments
+    # 5. Net Worth (Patrimonio Total)
+    # Ativos Estáticos + Aportes Acumulados
     initial_assets = df_a["Valor"].sum()
     net_worth = initial_assets + total_invested
     
-    # 6. Savings Rate
-    # (Invested / Income) * 100
+    # 6. Savings Rate (Taxa de Aporte)
+    # (Investido / Renda) * 100
     savings_rate = (total_invested / total_income * 100) if total_income > 0 else 0.0
+    
+    # 7. Runway (Autonomia Financeira em Meses)
+    # Net Worth / Média de Gastos Lifestyle (3 meses)
+    avg_burn = 0.0
+    if not df_t.empty:
+        start_3m = datetime.now() - timedelta(days=90)
+        df_3m = df_t[(df_t["Data"] >= start_3m) & (df_t["Tipo"] == "Saída") & (df_t["Categoria"] != "Investimento")]
+        avg_burn = df_3m["Valor"].sum() / 3
+        
+    runway_months = (net_worth / avg_burn) if avg_burn > 0 else 999.0
 
     return {
         "real_available": real_available,
         "total_invested": total_invested,
         "net_worth": net_worth,
         "savings_rate": savings_rate,
-        "total_income": total_income,
         "total_lifestyle": total_lifestyle,
+        "runway_months": runway_months,
         "df_filtered": df_t
     }
 
 # ==============================================================================
-# 4. COMPONENT RENDERING
+# 4. COMPONENTES VISUAIS
 # ==============================================================================
 def render_kpi(label, value, sub=None, color=None):
     col_style = f"color: {color};" if color else ""
@@ -252,7 +273,8 @@ def main():
     c_nav, c_spacer = st.columns([1, 2])
     with c_nav:
         try:
-            user_filter = st.pills("Perfil", ["Casal", "Luan", "Luana"], default="Casal")
+            # st.pills is ideal, fallback to radio if version issues
+            user_filter = st.pills("Perfil", ["Casal", "Luan", "Luana"], default="Casal", selection_mode="single")
         except:
             user_filter = st.radio("Perfil", ["Casal", "Luan", "Luana"], horizontal=True)
             
@@ -262,22 +284,25 @@ def main():
     df_trans, df_assets = load_data()
     kpis = calculate_zen_kpis(df_trans, df_assets, user_filter)
 
-    # --- Dashboard Overview ---
+    # --- Dashboard Overview (Traduzido) ---
     c1, c2, c3, c4 = st.columns(4, gap="medium")
     with c1:
-        render_kpi("Disponível Real", f"R$ {kpis['real_available']:,.2f}", "Fluxo Livre", "#3b82f6")
+        render_kpi("Disponível Real", format_currency_ptbr(kpis['real_available']), "Fluxo Livre", "#3b82f6")
     with c2:
-        render_kpi("Investido Total", f"R$ {kpis['total_invested']:,.2f}", "Aportes Acumulados", "#8b5cf6")
+        render_kpi("Total Investido", format_currency_ptbr(kpis['total_invested']), "Aportes Acumulados", "#8b5cf6")
     with c3:
-        render_kpi("Net Worth", f"R$ {kpis['net_worth']/1000:.1f}k", "Patrimônio Global", "#fff")
+        val_millions = kpis['net_worth'] / 1_000_000 if kpis['net_worth'] > 1_000_000 else kpis['net_worth']/1000
+        suffix = "M" if kpis['net_worth'] > 1_000_000 else "k"
+        render_kpi("Patrimônio (Net Worth)", f"R$ {val_millions:.1f}{suffix}", "Global", "#fff")
     with c4:
-        render_kpi("Savings Rate", f"{kpis['savings_rate']:.1f}%", f"Lifestyle: R$ {kpis['total_lifestyle']/1000:.1f}k", "#10b981")
+        render_kpi("Taxa de Aporte", f"{kpis['savings_rate']:.1f}%", f"Autonomia: {kpis['runway_months']:.1f} meses", "#10b981")
 
     st.markdown("---")
 
-    # --- Zen Tabs ---
+    # --- Zen Tabs (Iconografia & Tradução) ---
+    # Using 'Estilo de Vida' for interface, mapping to 'Lifestyle' concept if needed, but keeping labels simple.
     tab_lifestyle, tab_income, tab_wealth, tab_history = st.tabs([
-        "💸 Lifestyle", "💰 Renda", "📈 Wealth", "📜 Histórico"
+        "💸 Estilo de Vida", "💰 Renda", "📈 Investimentos", "📜 Histórico"
     ])
 
     # 1. LIFESTYLE (GASTOS)
@@ -287,12 +312,13 @@ def main():
             st.markdown('<div class="glass-card btn-lifestyle">', unsafe_allow_html=True)
             st.subheader("Registrar Consumo")
             with st.form("form_lifestyle", clear_on_submit=True):
-                date_in = st.date_input("Data", datetime.now())
+                date_in = st.date_input("Data", datetime.now(), format="DD/MM/YYYY")
                 desc = st.text_input("Descrição", placeholder="Ex: Jantar, Uber, Mercado")
                 val = st.number_input("Valor (R$)", min_value=0.01, step=10.0)
-                # Whitelisted Categories
+                
+                # Lista controlada de categorias de despesa
                 cat = st.selectbox("Categoria", [
-                    "Moradia", "Alimentação", "Lazer", "Saúde", "Transporte", "Assinaturas", "Outros"
+                    "Moradia", "Alimentação", "Lazer", "Saúde", "Transporte", "Assinaturas", "Educação", "Outros"
                 ])
                 resp = st.selectbox("Responsável", ["Casal", "Luan", "Luana"])
                 
@@ -305,12 +331,12 @@ def main():
                             "Categoria": cat, "Tipo": "Saída", "Responsavel": resp
                         }
                         if save_entry(payload, "Transacoes"):
-                            st.toast("✅ Gasto registrado!")
+                            st.toast("✅ Gasto registrado com sucesso!")
                             st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
             
         with c_info:
-            st.info("💡 **Lifestyle**: Gastos de consumo que não geram retorno financeiro. Mantenha sob controle para aumentar sua Savings Rate.")
+            st.info("💡 **Estilo de Vida**: Gastos de consumo que não geram retorno financeiro. Mantenha sob controle para aumentar sua Taxa de Aporte.")
 
     # 2. RENDA (ENTRADAS)
     with tab_income:
@@ -319,7 +345,7 @@ def main():
             st.markdown('<div class="glass-card btn-income">', unsafe_allow_html=True)
             st.subheader("Registrar Entrada")
             with st.form("form_income", clear_on_submit=True):
-                date_in = st.date_input("Data", datetime.now())
+                date_in = st.date_input("Data", datetime.now(), format="DD/MM/YYYY")
                 desc = st.text_input("Fonte", placeholder="Ex: Salário, Freelance")
                 val = st.number_input("Valor (R$)", min_value=0.01, step=100.0)
                 cat = st.selectbox("Categoria", ["Salário", "Dividendos", "Bônus", "Extra", "Reembolso"])
@@ -334,7 +360,7 @@ def main():
                             "Categoria": cat, "Tipo": "Entrada", "Responsavel": resp
                         }
                         if save_entry(payload, "Transacoes"):
-                            st.toast("✅ Entrada registrada!")
+                            st.toast("✅ Entrada registrada com sucesso!")
                             st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
 
@@ -345,7 +371,7 @@ def main():
             st.markdown('<div class="glass-card btn-wealth">', unsafe_allow_html=True)
             st.subheader("Registrar Aporte")
             with st.form("form_wealth", clear_on_submit=True):
-                date_in = st.date_input("Data", datetime.now())
+                date_in = st.date_input("Data", datetime.now(), format="DD/MM/YYYY")
                 desc = st.text_input("Ativo / Corretora", placeholder="Ex: IVVB11, Bitcoin, CDB")
                 val = st.number_input("Valor Aportado (R$)", min_value=0.01, step=100.0)
                 resp = st.selectbox("Titular", ["Casal", "Luan", "Luana"])
@@ -354,13 +380,13 @@ def main():
                     if not desc:
                         st.toast("⚠️ Descrição obrigatória")
                     else:
-                        # Force Category = Investimento, Type = Saída
+                        # Força Categoria = Investimento, Tipo = Saída
                         payload = {
                             "Data": date_in, "Descricao": desc, "Valor": val,
                             "Categoria": "Investimento", "Tipo": "Saída", "Responsavel": resp
                         }
                         if save_entry(payload, "Transacoes"):
-                            st.toast("✅ Aporte registrado! Net Worth atualizado.")
+                            st.toast("✅ Aporte registrado! Patrimônio atualizado.")
                             st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
             
@@ -371,48 +397,40 @@ def main():
     with tab_history:
         st.subheader("📜 Livro Razão")
         
-        # Filter by Date Range
         try:
             df_hist = kpis['df_filtered'].sort_values("Data", ascending=False)
             
+            # Using st.data_editor with format option for Dates
             edited_df = st.data_editor(
                 df_hist,
                 use_container_width=True,
                 num_rows="dynamic",
                 column_config={
-                    "Data": st.column_config.DateColumn("Data", format="DD/MM/YYYY"),
-                    "Valor": st.column_config.NumberColumn("Valor", format="R$ %.2f"),
-                    "Tipo": st.column_config.SelectboxColumn("Tipo", options=["Entrada", "Saída"]),
+                    "Data": st.column_config.DateColumn("Data", format="DD/MM/YYYY", required=True),
+                    "Valor": st.column_config.NumberColumn("Valor", format="R$ %.2f", required=True, min_value=0.0),
+                    "Tipo": st.column_config.SelectboxColumn("Tipo", options=["Entrada", "Saída"], required=True),
                     "Categoria": st.column_config.SelectboxColumn("Categoria", options=[
                         "Moradia", "Alimentação", "Lazer", "Saúde", "Transporte", 
                         "Investimento", "Salário", "Outros", "Assinaturas"
-                    ]),
+                    ], required=True),
+                    "Descricao": st.column_config.TextColumn("Descrição", required=True),
+                    "Responsavel": st.column_config.SelectboxColumn("Responsável", options=["Casal", "Luan", "Luana"])
                 },
                 hide_index=True
             )
             
-            # Save Changes Button
-            if st.button("💾 Salvar Alterações no Histórico"):
-                # We need to update the GSheet with this new dataframe
-                # Note: This replaces the filtered view data into the main sheet. 
-                # In a real production app with massive data, we'd handle ID-based updates.
-                # For this scale, replacing the dataset (or appending limits) is okay but risky if multi-user.
-                # Here we will assume the user knows what they are doing with the filter active.
-                # Ideally, we reload all data, update the matching rows, and save back.
-                # For simplicity in this specific request (Streamlit + GSheets generic):
-                
-                # Check for differences
-                if not df_hist.equals(edited_df):
-                    # In this specific simple implementation, we might just re-save the whole 'Transacoes' 
-                    # if the filter was 'Casal' (which implies all data). 
-                    # If filter was specific, we can't easily merge back without IDs.
-                    # FORCE SAFEGUARD: Only allow full save if filter is Casal (All Data view roughly)
+            # Botão de Salvar Alterações
+            # Only show if there are actual changes to prevent unnecessary Reloads
+            if not df_hist.reset_index(drop=True).equals(edited_df.reset_index(drop=True)):
+                 if st.button("💾 Salvar Alterações no Histórico"):
+                    # Segurança: Só permite salvar se estiver no perfil Casal para evitar sobrescrita parcial
                     if user_filter == "Casal":
                         if update_data_editor(edited_df, "Transacoes"):
                             st.success("Histórico atualizado com sucesso!")
                             st.rerun()
                     else:
                         st.warning("⚠️ Para editar o histórico completo e salvar, mude o perfil para 'Casal'.")
+                        
         except Exception as e:
             st.error(f"Erro ao carregar histórico: {e}")
 
