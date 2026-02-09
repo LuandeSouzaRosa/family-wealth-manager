@@ -228,13 +228,20 @@ def update_data_editor(df_edited, worksheet):
 # 3. CORE ANALYTICS ENGINE (BI V5.0)
 # ==============================================================================
 def calculate_zen_kpis(df_trans, df_assets, responsible_filter):
-    # Filter Responsibility
-    if responsible_filter != "Casal":
-        df_t = df_trans[df_trans["Responsavel"] == responsible_filter].copy() if "Responsavel" in df_trans.columns else df_trans
-        df_a = df_assets[df_assets["Responsavel"] == responsible_filter].copy() if "Responsavel" in df_assets.columns else df_assets
-    else:
-        df_t = df_trans.copy()
-        df_a = df_assets.copy()
+    # --- Initialize Defaults ---
+    kpis = {
+        "real_available": 0.0,
+        "total_invested_mo": 0.0,
+        "all_time_invested": 0.0,
+        "net_worth": 0.0,
+        "savings_rate": 0.0,
+        "total_income": 0.0,
+        "total_lifestyle_mo": 0.0,
+        "runway_months": 0.0,
+        "df_filtered": df_t,
+        "ls_insight": "Sem gastos registrados neste mês.",
+        "inc_insight": "Nenhuma renda registrada neste mês."
+    }
 
     # --- Time Filters (Current Month) ---
     today = datetime.now()
@@ -251,22 +258,23 @@ def calculate_zen_kpis(df_trans, df_assets, responsible_filter):
         df_month = pd.DataFrame()
 
     # 1. Total Income (Renda)
-    total_income = df_month[df_month["Tipo"] == "Entrada"]["Valor"].sum()
-    
-    # 2. Total Lifestyle (Gastos de Consumo) - MONTHLY
-    total_lifestyle_mo = df_month[
-        (df_month["Tipo"] == "Saída") & 
-        (df_month["Categoria"] != "Investimento")
-    ]["Valor"].sum()
-    
-    # 3. Total Wealth Contributions (Aportes) - MONTHLY
-    total_invested_mo = df_month[
-        (df_month["Tipo"] == "Saída") & 
-        (df_month["Categoria"] == "Investimento")
-    ]["Valor"].sum()
+    if not df_month.empty:
+        kpis["total_income"] = df_month[df_month["Tipo"] == "Entrada"]["Valor"].sum()
+        
+        # 2. Total Lifestyle (Gastos de Consumo) - MONTHLY
+        kpis["total_lifestyle_mo"] = df_month[
+            (df_month["Tipo"] == "Saída") & 
+            (df_month["Categoria"] != "Investimento")
+        ]["Valor"].sum()
+        
+        # 3. Total Wealth Contributions (Aportes) - MONTHLY
+        kpis["total_invested_mo"] = df_month[
+            (df_month["Tipo"] == "Saída") & 
+            (df_month["Categoria"] == "Investimento")
+        ]["Valor"].sum()
     
     # 4. Disponível Real (Fluxo de Caixa Livre) - MONTHLY
-    real_available = total_income - total_lifestyle_mo - total_invested_mo
+    kpis["real_available"] = kpis["total_income"] - kpis["total_lifestyle_mo"] - kpis["total_invested_mo"]
     
     # 5. Net Worth (Patrimonio Global) - ALL TIME
     initial_assets = df_a["Valor"].sum()
@@ -276,58 +284,48 @@ def calculate_zen_kpis(df_trans, df_assets, responsible_filter):
         (df_t["Categoria"] == "Investimento")
     ]["Valor"].sum()
     
-    net_worth = initial_assets + all_time_invested
+    kpis["all_time_invested"] = all_time_invested
+    kpis["net_worth"] = initial_assets + all_time_invested
     
     # 6. Savings Rate (Taxa de Aporte) - MONTHLY
-    savings_rate = (total_invested_mo / total_income * 100) if total_income > 0 else 0.0
+    kpis["savings_rate"] = (kpis["total_invested_mo"] / kpis["total_income"] * 100) if kpis["total_income"] > 0 else 0.0
     
     # 7. Runway (Autonomia Financeira) - 3 Month Avg
     avg_burn = 0.0
     if not df_t.empty:
         start_3m = today - timedelta(days=90)
         df_3m = df_t[(df_t["Data"] >= start_3m) & (df_t["Tipo"] == "Saída") & (df_t["Categoria"] != "Investimento")]
-        # Calculate daily burn * 30 or simplified sum / 3
-        # If less than 3 months of data, use total / months available
-        months_available = (today - df_3m["Data"].min()).days / 30 if not df_3m.empty else 1
-        months_available = max(1, min(3, months_available))
-        avg_burn = df_3m["Valor"].sum() / months_available
         
-    runway_months = (net_worth / avg_burn) if avg_burn > 0 else 999.0
+        if not df_3m.empty:
+            months_available = (today - df_3m["Data"].min()).days / 30
+            months_available = max(1, min(3, months_available))
+            avg_burn = df_3m["Valor"].sum() / months_available
+        
+    kpis["runway_months"] = (kpis["net_worth"] / avg_burn) if avg_burn > 0 else 999.0
 
     # --- Intelligence Insights ---
     
     # Lifestyle Insight
-    ls_insight = "Sem gastos registrados neste mês."
-    if total_lifestyle_mo > 0:
+    if kpis["total_lifestyle_mo"] > 0:
         # Heaviest Category
         cat_grp = df_month[(df_month["Tipo"] == "Saída") & (df_month["Categoria"] != "Investimento")].groupby("Categoria")["Valor"].sum()
-        top_cat = cat_grp.idxmax()
-        top_cat_val = cat_grp.max()
-        # Max Expense
-        max_exp = df_month[(df_month["Tipo"] == "Saída") & (df_month["Categoria"] != "Investimento")].nlargest(1, "Valor")
-        max_exp_desc = max_exp["Descricao"].values[0] if not max_exp.empty else ""
-        max_exp_val = max_exp["Valor"].values[0] if not max_exp.empty else 0
         
-        ls_insight = f"Impacto Maior: **{top_cat}** ({format_currency_ptbr(top_cat_val)}).<br>Gasto Top: *{max_exp_desc}* ({format_currency_ptbr(max_exp_val)})."
+        if not cat_grp.empty:
+            top_cat = cat_grp.idxmax()
+            top_cat_val = cat_grp.max()
+            
+            # Max Expense
+            max_exp = df_month[(df_month["Tipo"] == "Saída") & (df_month["Categoria"] != "Investimento")].nlargest(1, "Valor")
+            max_exp_desc = max_exp["Descricao"].values[0] if not max_exp.empty else ""
+            max_exp_val = max_exp["Valor"].values[0] if not max_exp.empty else 0
+            
+            kpis["ls_insight"] = f"Impacto Maior: **{top_cat}** ({format_currency_ptbr(top_cat_val)}).<br>Gasto Top: *{max_exp_desc}* ({format_currency_ptbr(max_exp_val)})."
 
     # Income Insight
-    inc_insight = "Nenhuma renda registrada neste mês."
-    if total_income > 0:
-         inc_insight = f"Ótimo trabalho! Você já gerou **{format_currency_ptbr(total_income)}** de riqueza nova este mês. Continue plantando."
+    if kpis["total_income"] > 0:
+         kpis["inc_insight"] = f"Ótimo trabalho! Você já gerou **{format_currency_ptbr(kpis['total_income'])}** de riqueza nova este mês. Continue plantando."
 
-    return {
-        "real_available": real_available,
-        "total_invested_mo": total_invested_mo,
-        "all_time_invested": all_time_invested,
-        "net_worth": net_worth,
-        "savings_rate": savings_rate,
-        "total_lifestyle_mo": total_lifestyle_mo,
-        "runway_months": runway_months,
-        "df_filtered": df_t,
-        # Insights
-        "ls_insight": ls_insight,
-        "inc_insight": inc_insight
-    }
+    return kpis
 
 # ==============================================================================
 # 4. COMPONENTES VISUAIS (V5.0)
@@ -425,7 +423,12 @@ def main():
             
         with c_info:
             # Side Insight
-            st.info(f"💡 **Insight Inteligente**:<br>{kpis['ls_insight']}")
+            st.markdown(f"""
+            <div class="glass-card" style="border-left: 4px solid var(--accent-lifestyle);">
+                <div class="summary-title" style="margin-top:0;">💡 Insight Inteligente</div>
+                <div class="summary-value" style="font-size: 0.95rem;">{kpis['ls_insight']}</div>
+            </div>
+            """, unsafe_allow_html=True)
 
     # 2. RENDA (ENTRADAS)
     with tab_income:
@@ -463,7 +466,12 @@ def main():
             st.markdown('</div>', unsafe_allow_html=True)
             
         with c_info:
-            st.info(f"💡 **Insight Inteligente**:<br>{kpis['inc_insight']}")
+             st.markdown(f"""
+            <div class="glass-card" style="border-left: 4px solid var(--accent-income);">
+                <div class="summary-title" style="margin-top:0;">💡 Insight Inteligente</div>
+                <div class="summary-value" style="font-size: 0.95rem;">{kpis['inc_insight']}</div>
+            </div>
+            """, unsafe_allow_html=True)
 
     # 3. WEALTH (INVESTIMENTOS)
     with tab_wealth:
