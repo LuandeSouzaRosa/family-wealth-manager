@@ -228,6 +228,14 @@ def update_data_editor(df_edited, worksheet):
 # 3. CORE ANALYTICS ENGINE (BI V5.0)
 # ==============================================================================
 def calculate_zen_kpis(df_trans, df_assets, responsible_filter):
+    # Filter Responsibility
+    if responsible_filter != "Casal":
+        df_t = df_trans[df_trans["Responsavel"] == responsible_filter].copy() if "Responsavel" in df_trans.columns else df_trans
+        df_a = df_assets[df_assets["Responsavel"] == responsible_filter].copy() if "Responsavel" in df_assets.columns else df_assets
+    else:
+        df_t = df_trans.copy()
+        df_a = df_assets.copy()
+
     # --- Initialize Defaults ---
     kpis = {
         "real_available": 0.0,
@@ -242,8 +250,6 @@ def calculate_zen_kpis(df_trans, df_assets, responsible_filter):
         "ls_insight": "Sem gastos registrados neste mês.",
         "inc_insight": "Nenhuma renda registrada neste mês."
     }
-
-    # --- Time Filters (Current Month) ---
     today = datetime.now()
     current_month = today.month
     current_year = today.year
