@@ -1016,11 +1016,27 @@ def main():
     # --- HISTÓRICO ---
     with tab_hist:
         try:
-            df_hist = mx["df"].copy()
-            if df_hist.empty:
+            df_hist_base = mx["df"].copy()
+            if df_hist_base.empty:
                 render_intel("Histórico", "Nenhuma transação registrada.")
             else:
+                # Seletor de visualização
+                view_mode = st.radio(
+                    "Visualização",
+                    ["Tudo", "Mês Selecionado"],
+                    horizontal=True,
+                    label_visibility="collapsed"
+                )
+
+                df_hist = df_hist_base.copy()
                 df_hist["Data"] = pd.to_datetime(df_hist["Data"], errors='coerce')
+
+                if view_mode == "Mês Selecionado":
+                    df_hist = df_hist[
+                        (df_hist["Data"].dt.month == sel_mo) &
+                        (df_hist["Data"].dt.year == sel_yr)
+                    ]
+
                 df_hist = df_hist.sort_values("Data", ascending=False)
                 edited = st.data_editor(
                     df_hist,
