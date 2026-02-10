@@ -859,7 +859,7 @@ def main():
     # ===== ABAS DE OPERAÇÃO =====
     tab_ls, tab_renda, tab_wealth, tab_pat, tab_hist = st.tabs([
         "LIFESTYLE", "RENDA", "WEALTH", "PATRIMÔNIO", "HISTÓRICO"
-    ], key="main_tabs")
+    ])
 
     # --- LIFESTYLE ---
     with tab_ls:
@@ -1016,31 +1016,12 @@ def main():
     # --- HISTÓRICO ---
     with tab_hist:
         try:
-            df_hist_base = mx["df"].copy()
-            if df_hist_base.empty:
+            df_hist = mx["df"].copy()
+            if df_hist.empty:
                 render_intel("Histórico", "Nenhuma transação registrada.")
             else:
-                # Seletor de visualização
-                view_mode = st.radio(
-                    "Visualização",
-                    ["Tudo", "Mês Selecionado"],
-                    horizontal=True,
-                    label_visibility="collapsed",
-                    key="hist_view_mode"
-                )
-
-                df_hist = df_hist_base.copy()
                 df_hist["Data"] = pd.to_datetime(df_hist["Data"], errors='coerce')
-
-                if view_mode == "Mês Selecionado":
-                    df_hist = df_hist[
-                        (df_hist["Data"].dt.month == sel_mo) &
-                        (df_hist["Data"].dt.year == sel_yr)
-                    ]
-
                 df_hist = df_hist.sort_values("Data", ascending=False)
-                # Chave dinâmica para forçar atualização quando o filtro ou mês muda
-                editor_key = f"hist_ed_{user}_{sel_mo}_{sel_yr}_{view_mode}"
                 edited = st.data_editor(
                     df_hist,
                     use_container_width=True,
@@ -1069,8 +1050,7 @@ def main():
                             "Responsável", options=["Casal", "Luan", "Luana"]
                         )
                     },
-                    hide_index=True,
-                    key=editor_key
+                    hide_index=True
                 )
                 if not df_hist.reset_index(drop=True).equals(edited.reset_index(drop=True)):
                     if st.button("SALVAR ALTERAÇÕES"):
