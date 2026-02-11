@@ -9,6 +9,12 @@ Arquivo principal: `app.py`
 - **Resiliência**: Tratamento de erros de conexão e planilhas vazias.
 
 ## Execução
+Para a versão de produção:
 ```bash
 streamlit run app.py
+```
+
+Para a versão de homologação:
+```bash
+streamlit run app_homolog.py
 ```
