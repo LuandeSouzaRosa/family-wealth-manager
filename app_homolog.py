@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 from streamlit_gsheets import GSheetsConnection
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 import calendar
 import html as html_lib
 from dataclasses import dataclass
@@ -308,6 +308,58 @@ def inject_css() -> None:
             padding: 6px 0;
         }
 
+        /* ===== HEALTH BADGE ===== */
+        .health-badge {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            padding: 6px 12px;
+            text-align: center;
+            margin-bottom: 12px;
+            letter-spacing: 0.08em;
+        }
+        .health-excellent {
+            color: #00FFCC;
+            border: 1px solid #00FFCC33;
+            background: rgba(0,255,204,0.05);
+        }
+        .health-good {
+            color: #00FFCC;
+            border: 1px solid #00FFCC22;
+        }
+        .health-warning {
+            color: #FFAA00;
+            border: 1px solid #FFAA0022;
+            background: rgba(255,170,0,0.05);
+        }
+        .health-danger {
+            color: #FF4444;
+            border: 1px solid #FF444422;
+            background: rgba(255,68,68,0.05);
+        }
+
+        /* ===== HIST SUMMARY ===== */
+        .hist-summary {
+            display: flex;
+            gap: 16px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.72rem;
+            padding: 10px 0;
+            border-bottom: 1px solid #1a1a1a;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+        .hist-summary-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .hist-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 0px;
+            flex-shrink: 0;
+        }
+
         .stTextInput input, .stNumberInput input, .stDateInput input {
             background-color: #0a0a0a !important;
             border: 1px solid #1a1a1a !important;
@@ -405,6 +457,7 @@ def inject_css() -> None:
             .kpi-mono-value { font-size: 1.1rem; }
             .cat-bar-label { width: 70px; font-size: 0.6rem; }
             .cat-bar-value { width: 80px; font-size: 0.6rem; }
+            .hist-summary { gap: 8px; font-size: 0.65rem; }
         }
 
         @media (prefers-reduced-motion: reduce) {
@@ -437,6 +490,22 @@ def end_of_month(year: int, month: int) -> datetime:
     last_day = calendar.monthrange(year, month)[1]
     return datetime(year, month, last_day, 23, 59, 59)
 
+def default_form_date(sel_mo: int, sel_yr: int) -> date:
+    """Retorna a data padrão inteligente para formulários.
+    
+    - Se o mês selecionado é o atual → hoje
+    - Se é um mês passado → último dia daquele mês
+    - Se é um mês futuro → primeiro dia daquele mês
+    """
+    now = datetime.now()
+    if sel_mo == now.month and sel_yr == now.year:
+        return now.date()
+    elif (sel_yr < now.year) or (sel_yr == now.year and sel_mo < now.month):
+        last_day = calendar.monthrange(sel_yr, sel_mo)[1]
+        return date(sel_yr, sel_mo, last_day)
+    else:
+        return date(sel_yr, sel_mo, 1)
+
 def calc_delta(current: float, previous: float) -> float | None:
     if previous == 0:
         return None
@@ -451,7 +520,7 @@ def validate_transaction(entry: dict) -> tuple[bool, str]:
     if not desc or not str(desc).strip():
         return False, "Descrição obrigatória"
     if len(str(desc)) > CFG.MAX_DESC_LENGTH:
-        return False, f"Descrição muito longa (máx {CFG.MAX_DESC_LENGTH} caracteres)"
+        return False, f"Descrição muito longa (máx {CFG.MAX_DESC_LENGTH})"
     val = entry.get("Valor")
     if not isinstance(val, (int, float)) or val <= 0:
         return False, "Valor deve ser maior que zero"
@@ -466,7 +535,7 @@ def validate_asset(entry: dict) -> tuple[bool, str]:
     if not item or not str(item).strip():
         return False, "Nome do ativo obrigatório"
     if len(str(item)) > CFG.MAX_DESC_LENGTH:
-        return False, f"Nome muito longo (máx {CFG.MAX_DESC_LENGTH} caracteres)"
+        return False, f"Nome muito longo (máx {CFG.MAX_DESC_LENGTH})"
     val = entry.get("Valor")
     if not isinstance(val, (int, float)) or val <= 0:
         return False, "Valor deve ser maior que zero"
@@ -560,13 +629,11 @@ def update_sheet(df_edited: pd.DataFrame, worksheet: str) -> bool:
 # ==============================================================================
 
 def filter_by_user(df: pd.DataFrame, user_filter: str) -> pd.DataFrame:
-    """Filtra DataFrame por responsável."""
     if user_filter != "Casal" and "Responsavel" in df.columns:
         return df[df["Responsavel"] == user_filter].copy()
     return df.copy()
 
 def filter_by_month(df: pd.DataFrame, month: int, year: int) -> pd.DataFrame:
-    """Filtra DataFrame por mês/ano."""
     if df.empty:
         return df
     return df[
@@ -581,18 +648,9 @@ def compute_metrics(
     target_month: int,
     target_year: int,
 ) -> dict:
-    """Calcula métricas financeiras.
-    
-    Retorna:
-        df_user: DataFrame filtrado por responsável (TODOS os meses)
-        df_month: DataFrame filtrado por responsável E mês (só o mês selecionado)
-    """
 
-    # --- Filtro por responsável ---
     df_t = filter_by_user(df_trans, user_filter)
     df_a = filter_by_user(df_assets, user_filter)
-
-    # --- Fatia do mês selecionado ---
     df_mo = filter_by_month(df_t, target_month, target_year)
 
     m: dict = {
@@ -603,15 +661,18 @@ def compute_metrics(
         "nec_delta": 0.0, "des_delta": 0.0, "inv_delta": 0.0,
         "top_cat": "—", "top_cat_val": 0.0,
         "top_gasto_desc": "—", "top_gasto_val": 0.0,
-        # df_user = todos os meses do responsável (para merge no save)
         "df_user": df_t,
-        # df_month = apenas o mês selecionado (para exibição no histórico)
         "df_month": df_mo,
         "insight_ls": "", "insight_renda": "",
         "d_renda": None, "d_lifestyle": None,
         "d_investido": None, "d_disponivel": None,
         "cat_breakdown": {},
+        "renda_breakdown": {},
         "month_tx_count": len(df_mo),
+        "month_entradas": 0,
+        "month_saidas": 0,
+        "month_investimentos": 0,
+        "health": "neutral",
     }
 
     if df_t.empty:
@@ -619,7 +680,6 @@ def compute_metrics(
         m["insight_renda"] = "Nenhum dado registrado."
         return m
 
-    # --- Valores do mês ---
     if not df_mo.empty:
         m["renda"] = df_mo[df_mo["Tipo"] == "Entrada"]["Valor"].sum()
         despesas = df_mo[
@@ -631,6 +691,17 @@ def compute_metrics(
             (df_mo["Tipo"] == "Saída") &
             (df_mo["Categoria"] == "Investimento")
         ]["Valor"].sum()
+
+        # Contagens do mês
+        m["month_entradas"] = len(df_mo[df_mo["Tipo"] == "Entrada"])
+        m["month_saidas"] = len(df_mo[
+            (df_mo["Tipo"] == "Saída") &
+            (df_mo["Categoria"] != "Investimento")
+        ])
+        m["month_investimentos"] = len(df_mo[
+            (df_mo["Tipo"] == "Saída") &
+            (df_mo["Categoria"] == "Investimento")
+        ])
 
     m["disponivel"] = m["renda"] - m["lifestyle"] - m["investido_mes"]
 
@@ -645,7 +716,7 @@ def compute_metrics(
     # --- Taxa de Aporte ---
     m["taxa_aporte"] = (m["investido_mes"] / m["renda"] * 100) if m["renda"] > 0 else 0.0
 
-    # --- Autonomia (referência = final do mês selecionado) ---
+    # --- Autonomia ---
     ref_date = end_of_month(target_year, target_month)
     inicio_3m = ref_date - timedelta(days=90)
     df_burn = df_t[
@@ -679,7 +750,7 @@ def compute_metrics(
         m["des_delta"] = m["des_pct"] - CFG.META_DESEJOS
         m["inv_delta"] = m["inv_pct"] - CFG.META_INVESTIMENTO
 
-    # --- Breakdown por Categoria ---
+    # --- Breakdown por Categoria (Saídas) ---
     if not df_mo.empty:
         cat_grp = df_mo[
             (df_mo["Tipo"] == "Saída") &
@@ -699,7 +770,15 @@ def compute_metrics(
             m["top_gasto_desc"] = str(top_row["Descricao"].values[0])
             m["top_gasto_val"] = float(top_row["Valor"].values[0])
 
-    # --- Comparativo: Mês Anterior ---
+        # --- Breakdown por Categoria (Entradas) ---
+        renda_grp = df_mo[df_mo["Tipo"] == "Entrada"].groupby("Categoria")["Valor"].sum()
+        if not renda_grp.empty:
+            m["renda_breakdown"] = renda_grp.sort_values(ascending=False).to_dict()
+
+    # --- Health Score ---
+    m["health"] = _compute_health(m)
+
+    # --- Comparativo ---
     prev_mo = target_month - 1 if target_month > 1 else 12
     prev_yr = target_year if target_month > 1 else target_year - 1
     df_prev = filter_by_month(df_t, prev_mo, prev_yr)
@@ -721,7 +800,7 @@ def compute_metrics(
         m["d_investido"] = calc_delta(m["investido_mes"], prev_investido)
         m["d_disponivel"] = calc_delta(m["disponivel"], prev_disponivel)
 
-    # --- Insights (sanitizados) ---
+    # --- Insights ---
     if m["lifestyle"] > 0:
         m["insight_ls"] = (
             f"Impacto: <strong>{sanitize(m['top_cat'])}</strong> "
@@ -738,6 +817,38 @@ def compute_metrics(
         m["insight_renda"] = "Nenhuma entrada registrada."
 
     return m
+
+
+def _compute_health(m: dict) -> str:
+    """Calcula a saúde financeira do mês."""
+    if m["renda"] == 0:
+        return "neutral"
+
+    score = 0
+
+    # Disponível positivo
+    if m["disponivel"] > 0:
+        score += 1
+
+    # Investiu algo
+    if m["investido_mes"] > 0:
+        score += 1
+
+    # Lifestyle < 80% da renda
+    if m["renda"] > 0 and (m["lifestyle"] / m["renda"]) < 0.8:
+        score += 1
+
+    # Desvio da regra 50/30/20 razoável
+    if abs(m["nec_delta"]) <= 15 and abs(m["des_delta"]) <= 15:
+        score += 1
+
+    if score >= 4:
+        return "excellent"
+    elif score >= 3:
+        return "good"
+    elif score >= 2:
+        return "warning"
+    return "danger"
 
 
 def compute_evolution(
@@ -759,16 +870,14 @@ def compute_evolution(
             mo, yr = 12, yr - 1
     start_date = datetime(yr, mo, 1)
 
-    mask = (
-        (df["Data"] >= start_date) &
-        (df["Data"] <= ref_end) &
-        (df["Tipo"] == "Saída")
-    )
-    df_filtered = df[mask].copy()
-    if df_filtered.empty:
+    df_range = df[(df["Data"] >= start_date) & (df["Data"] <= ref_end)].copy()
+    if df_range.empty:
         return []
 
-    df_filtered["period"] = df_filtered["Data"].dt.to_period("M")
+    df_range["period"] = df_range["Data"].dt.to_period("M")
+
+    # Saídas por grupo
+    df_saidas = df_range[df_range["Tipo"] == "Saída"].copy()
 
     def classify(cat: str) -> str:
         if cat in CFG.NECESSIDADES:
@@ -777,20 +886,49 @@ def compute_evolution(
             return "investido"
         return "desejos"
 
-    df_filtered["group"] = df_filtered["Categoria"].apply(classify)
-    pivot = df_filtered.pivot_table(
-        values="Valor", index="period", columns="group",
-        aggfunc="sum", fill_value=0
-    )
-
     data = []
-    for period in sorted(pivot.index):
-        data.append({
+
+    if not df_saidas.empty:
+        df_saidas["group"] = df_saidas["Categoria"].apply(classify)
+        pivot_s = df_saidas.pivot_table(
+            values="Valor", index="period", columns="group",
+            aggfunc="sum", fill_value=0
+        )
+    else:
+        pivot_s = pd.DataFrame()
+
+    # Entradas por período
+    df_entradas = df_range[df_range["Tipo"] == "Entrada"].copy()
+    if not df_entradas.empty:
+        renda_por_periodo = df_entradas.groupby(
+            df_entradas["Data"].dt.to_period("M")
+        )["Valor"].sum()
+    else:
+        renda_por_periodo = pd.Series(dtype=float)
+
+    # Coletar todos os períodos
+    all_periods = set()
+    if not pivot_s.empty:
+        all_periods.update(pivot_s.index)
+    if not renda_por_periodo.empty:
+        all_periods.update(renda_por_periodo.index)
+
+    for period in sorted(all_periods):
+        entry = {
             "label": f"{MESES_PT[period.month]}/{period.year}",
-            "necessidades": float(pivot.loc[period].get("necessidades", 0)),
-            "desejos": float(pivot.loc[period].get("desejos", 0)),
-            "investido": float(pivot.loc[period].get("investido", 0)),
-        })
+            "necessidades": 0.0,
+            "desejos": 0.0,
+            "investido": 0.0,
+            "renda": 0.0,
+        }
+        if not pivot_s.empty and period in pivot_s.index:
+            entry["necessidades"] = float(pivot_s.loc[period].get("necessidades", 0))
+            entry["desejos"] = float(pivot_s.loc[period].get("desejos", 0))
+            entry["investido"] = float(pivot_s.loc[period].get("investido", 0))
+        if period in renda_por_periodo.index:
+            entry["renda"] = float(renda_por_periodo[period])
+        data.append(entry)
+
     return data
 
 
@@ -814,6 +952,22 @@ def render_autonomia(val: float, sobrevivencia: float) -> None:
         <div class="autonomia-sub">Patrimônio líquido: {fmt_brl(sobrevivencia)}</div>
     </div>
     """, unsafe_allow_html=True)
+
+
+def render_health_badge(health: str, month_label: str) -> None:
+    """Indicador visual rápido da saúde financeira do mês."""
+    config = {
+        "excellent": ("● Mês excelente", "health-excellent"),
+        "good":      ("● Mês saudável", "health-good"),
+        "warning":   ("● Atenção necessária", "health-warning"),
+        "danger":    ("● Mês crítico", "health-danger"),
+        "neutral":   ("○ Sem dados suficientes", "health-good"),
+    }
+    label, cls = config.get(health, config["neutral"])
+    st.markdown(
+        f'<div class="health-badge {cls}">{label} — {sanitize(month_label)}</div>',
+        unsafe_allow_html=True
+    )
 
 
 def render_kpi(
@@ -910,7 +1064,45 @@ def render_cat_breakdown(cat_dict: dict) -> None:
     st.markdown(html, unsafe_allow_html=True)
 
 
+def render_hist_summary(mx: dict) -> None:
+    """Resumo rápido no topo do histórico: Entradas | Saídas | Investido."""
+    entradas = mx["renda"]
+    saidas = mx["lifestyle"]
+    investido = mx["investido_mes"]
+    saldo = mx["disponivel"]
+    saldo_color = "#00FFCC" if saldo >= 0 else "#FF4444"
+
+    st.markdown(f"""
+    <div class="hist-summary">
+        <div class="hist-summary-item">
+            <div class="hist-dot" style="background:#00FFCC;"></div>
+            <span style="color:#888;">Entradas</span>
+            <span style="color:#F0F0F0;">{fmt_brl(entradas)}</span>
+            <span style="color:#555;">({mx['month_entradas']})</span>
+        </div>
+        <div class="hist-summary-item">
+            <div class="hist-dot" style="background:#FF4444;"></div>
+            <span style="color:#888;">Saídas</span>
+            <span style="color:#F0F0F0;">{fmt_brl(saidas)}</span>
+            <span style="color:#555;">({mx['month_saidas']})</span>
+        </div>
+        <div class="hist-summary-item">
+            <div class="hist-dot" style="background:#FFAA00;"></div>
+            <span style="color:#888;">Investido</span>
+            <span style="color:#F0F0F0;">{fmt_brl(investido)}</span>
+            <span style="color:#555;">({mx['month_investimentos']})</span>
+        </div>
+        <div class="hist-summary-item">
+            <div class="hist-dot" style="background:{saldo_color};"></div>
+            <span style="color:#888;">Saldo</span>
+            <span style="color:{saldo_color};">{fmt_brl(saldo)}</span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+
 def render_evolution_chart(evo_data: list[dict]) -> None:
+    """Gráfico de evolução com barras empilhadas + linha de renda."""
     if not evo_data:
         render_intel("Evolução", "Dados insuficientes para gráfico.")
         return
@@ -919,11 +1111,30 @@ def render_evolution_chart(evo_data: list[dict]) -> None:
     nec = [d["necessidades"] for d in evo_data]
     des = [d["desejos"] for d in evo_data]
     inv = [d["investido"] for d in evo_data]
+    renda = [d["renda"] for d in evo_data]
 
     fig = go.Figure()
-    fig.add_trace(go.Bar(name="Necessidades", x=labels, y=nec, marker_color="#F0F0F0"))
-    fig.add_trace(go.Bar(name="Desejos", x=labels, y=des, marker_color="#FFAA00"))
-    fig.add_trace(go.Bar(name="Investido", x=labels, y=inv, marker_color="#00FFCC"))
+
+    # Barras empilhadas (saídas)
+    fig.add_trace(go.Bar(
+        name="Necessidades", x=labels, y=nec, marker_color="#F0F0F0"
+    ))
+    fig.add_trace(go.Bar(
+        name="Desejos", x=labels, y=des, marker_color="#FFAA00"
+    ))
+    fig.add_trace(go.Bar(
+        name="Investido", x=labels, y=inv, marker_color="#00FFCC"
+    ))
+
+    # Linha de renda sobreposta
+    fig.add_trace(go.Scatter(
+        name="Renda",
+        x=labels, y=renda,
+        mode="lines+markers",
+        line=dict(color="#00FFCC", width=2, dash="dot"),
+        marker=dict(size=6, color="#00FFCC"),
+        yaxis="y",
+    ))
 
     fig.update_layout(
         barmode="stack",
@@ -935,7 +1146,7 @@ def render_evolution_chart(evo_data: list[dict]) -> None:
             xanchor="center", x=0.5, font=dict(size=10)
         ),
         margin=dict(l=0, r=0, t=30, b=0),
-        height=280,
+        height=300,
         xaxis=dict(gridcolor="#111", showline=False),
         yaxis=dict(gridcolor="#111", showline=False, tickformat=",.0f"),
     )
@@ -963,9 +1174,13 @@ def transaction_form(
     submit_label: str = "REGISTRAR",
     desc_placeholder: str = "Descrição",
     default_step: float = 10.0,
+    sel_mo: int = None, sel_yr: int = None,
 ) -> None:
+    """Formulário de transação com data inteligente baseada no mês selecionado."""
+    form_date = default_form_date(sel_mo, sel_yr) if sel_mo and sel_yr else datetime.now().date()
+
     with st.form(form_key, clear_on_submit=True):
-        d = st.date_input("Data", datetime.now(), format="DD/MM/YYYY")
+        d = st.date_input("Data", form_date, format="DD/MM/YYYY")
         desc = st.text_input(
             "Descrição", placeholder=desc_placeholder,
             max_chars=CFG.MAX_DESC_LENGTH,
@@ -987,9 +1202,11 @@ def transaction_form(
                 st.rerun()
 
 
-def wealth_form() -> None:
+def wealth_form(sel_mo: int = None, sel_yr: int = None) -> None:
+    form_date = default_form_date(sel_mo, sel_yr) if sel_mo and sel_yr else datetime.now().date()
+
     with st.form("f_wealth", clear_on_submit=True):
-        d = st.date_input("Data", datetime.now(), format="DD/MM/YYYY")
+        d = st.date_input("Data", form_date, format="DD/MM/YYYY")
         desc = st.text_input(
             "Ativo / Corretora", placeholder="Ex: IVVB11, Bitcoin, CDB",
             max_chars=CFG.MAX_DESC_LENGTH,
@@ -1030,7 +1247,7 @@ def patrimonio_form() -> None:
 
 
 # ==============================================================================
-# 10. HISTÓRICO — FILTRADO POR MÊS + MERGE SEGURO
+# 10. HISTÓRICO
 # ==============================================================================
 
 def _render_historico(
@@ -1040,9 +1257,6 @@ def _render_historico(
     sel_mo: int,
     sel_yr: int,
 ) -> None:
-    """Renderiza histórico filtrado pelo mês selecionado na navegação."""
-    
-    # Usa df_month (já filtrado por responsável + mês)
     df_hist = mx["df_month"].copy()
     month_label = fmt_month_year(sel_mo, sel_yr)
 
@@ -1053,37 +1267,59 @@ def _render_historico(
         )
         return
 
-    # Ordenar por data decrescente
     df_hist["Data"] = pd.to_datetime(df_hist["Data"], errors="coerce")
     df_hist = df_hist.sort_values("Data", ascending=False).reset_index(drop=True)
 
-    # Header com contagem do mês
+    # Header
     render_intel(
         f"Histórico — {sanitize(month_label)}",
         f"<strong>{len(df_hist)}</strong> transações neste mês"
     )
 
-    # Botões de export (apenas dados do mês)
+    # Resumo visual Entradas vs Saídas
+    render_hist_summary(mx)
+
+    # Busca
+    search = st.text_input(
+        "🔍 Buscar",
+        placeholder="Filtrar por descrição, categoria...",
+        label_visibility="collapsed",
+        key="hist_search",
+    )
+
+    df_display = df_hist.copy()
+    if search and search.strip():
+        search_lower = search.strip().lower()
+        mask = (
+            df_display["Descricao"].str.lower().str.contains(search_lower, na=False) |
+            df_display["Categoria"].str.lower().str.contains(search_lower, na=False) |
+            df_display["Tipo"].str.lower().str.contains(search_lower, na=False) |
+            df_display["Responsavel"].str.lower().str.contains(search_lower, na=False)
+        )
+        df_display = df_display[mask].reset_index(drop=True)
+
+        if df_display.empty:
+            render_intel("", f"Nenhum resultado para '<em>{sanitize(search)}</em>'")
+            return
+
+    # Export
     col_csv, col_excel, col_spacer = st.columns([1, 1, 4])
     with col_csv:
-        csv_data = df_hist.to_csv(index=False).encode("utf-8-sig")
+        csv_data = df_display.to_csv(index=False).encode("utf-8-sig")
         st.download_button(
-            "⬇ CSV",
-            csv_data,
+            "⬇ CSV", csv_data,
             f"financas_{sel_mo:02d}_{sel_yr}_{user}.csv",
-            "text/csv",
-            use_container_width=True,
+            "text/csv", use_container_width=True,
         )
     with col_excel:
         try:
             buffer = BytesIO()
-            df_export = df_hist.copy()
+            df_export = df_display.copy()
             if "Data" in df_export.columns:
                 df_export["Data"] = df_export["Data"].dt.strftime("%d/%m/%Y")
             df_export.to_excel(buffer, index=False, engine="openpyxl")
             st.download_button(
-                "⬇ EXCEL",
-                buffer.getvalue(),
+                "⬇ EXCEL", buffer.getvalue(),
                 f"financas_{sel_mo:02d}_{sel_yr}_{user}.xlsx",
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True,
@@ -1091,11 +1327,11 @@ def _render_historico(
         except ImportError:
             pass
 
-    # Editor
+    # Editor — usa df_hist original (não o filtrado pela busca)
     edited = st.data_editor(
         df_hist,
         use_container_width=True,
-        num_rows="dynamic",
+        num_rows="fixed",
         column_config={
             "Data": st.column_config.DateColumn(
                 "Data", format="DD/MM/YYYY", required=True
@@ -1118,7 +1354,6 @@ def _render_historico(
         key="editor_historico",
     )
 
-    # Detectar mudanças
     if not df_hist.reset_index(drop=True).equals(edited.reset_index(drop=True)):
         st.warning(f"⚠ Alterações pendentes em {month_label}")
         c_save, c_discard = st.columns(2)
@@ -1137,20 +1372,9 @@ def _save_historico_mensal(
     sel_mo: int,
     sel_yr: int,
 ) -> None:
-    """Salva edições do mês com merge seguro.
-    
-    Estratégia:
-    1. Pega a planilha completa (fresca)
-    2. Remove apenas as linhas do mês/responsável editado
-    3. Concatena com os dados editados
-    4. Salva tudo
-    """
-    # Recarregar dados frescos da planilha
     st.cache_data.clear()
     df_full_fresh, _ = load_data()
 
-    # Identificar quais linhas REMOVER da planilha
-    # (as do mês selecionado + responsável filtrado)
     mask_month = (
         (df_full_fresh["Data"].dt.month == sel_mo) &
         (df_full_fresh["Data"].dt.year == sel_yr)
@@ -1162,13 +1386,8 @@ def _save_historico_mensal(
     else:
         mask_remove = mask_month
 
-    # Manter tudo que NÃO é o mês/user editado
     df_kept = df_full_fresh[~mask_remove].copy()
-
-    # Concatenar com os dados editados
     df_merged = pd.concat([df_kept, edited_month], ignore_index=True)
-
-    # Ordenar por data
     df_merged["Data"] = pd.to_datetime(df_merged["Data"], errors="coerce")
     df_merged = df_merged.sort_values("Data").reset_index(drop=True)
 
@@ -1202,7 +1421,7 @@ def main() -> None:
         user = "Casal"
     with c_status:
         st.markdown(
-            f'<div class="status-line">L&L TERMINAL v3.1 — {fmt_date(now)}</div>',
+            f'<div class="status-line">L&L TERMINAL v3.2 — {fmt_date(now)}</div>',
             unsafe_allow_html=True
         )
 
@@ -1226,12 +1445,30 @@ def main() -> None:
             st.session_state.nav_year == now.year
         )
         label_suffix = " ●" if is_current else ""
-        st.markdown(
-            f'<div class="month-nav">'
-            f'{fmt_month_year(st.session_state.nav_month, st.session_state.nav_year)}'
-            f'{label_suffix}</div>',
-            unsafe_allow_html=True
-        )
+
+        # Clique no label para voltar ao mês atual
+        if not is_current:
+            col_label, col_today = st.columns([4, 1])
+            with col_label:
+                st.markdown(
+                    f'<div class="month-nav">'
+                    f'{fmt_month_year(st.session_state.nav_month, st.session_state.nav_year)}'
+                    f'</div>',
+                    unsafe_allow_html=True
+                )
+            with col_today:
+                if st.button("●", key="nav_today", help="Voltar ao mês atual"):
+                    st.session_state.nav_month = now.month
+                    st.session_state.nav_year = now.year
+                    st.rerun()
+        else:
+            st.markdown(
+                f'<div class="month-nav">'
+                f'{fmt_month_year(st.session_state.nav_month, st.session_state.nav_year)}'
+                f'{label_suffix}</div>',
+                unsafe_allow_html=True
+            )
+
     with nav_next:
         if st.button("▶", key="nav_next", use_container_width=True):
             if not is_current:
@@ -1254,11 +1491,16 @@ def main() -> None:
     # ===== HERO =====
     render_autonomia(mx["autonomia"], mx["sobrevivencia"])
 
+    # ===== HEALTH BADGE =====
+    render_health_badge(mx["health"], month_label)
+
     if not has_data:
         render_empty_month(month_label)
 
-    # ===== KPI STRIP =====
-    k1, k2, k3, k4 = st.columns([1.2, 1, 1, 0.8])
+    # ===== KPI STRIP (responsivo) =====
+    # Mobile: 2 colunas | Desktop: 4 colunas
+    k1, k2 = st.columns(2)
+    k3, k4 = st.columns(2)
     with k1:
         render_kpi(
             "Fluxo Mensal", fmt_brl(mx["disponivel"]),
@@ -1266,18 +1508,18 @@ def main() -> None:
         )
     with k2:
         render_kpi(
-            "Investido", fmt_brl(mx["investido_mes"]),
-            f"Taxa de Aporte: {mx['taxa_aporte']:.1f}%", mx["d_investido"]
+            "Renda", fmt_brl(mx["renda"]),
+            "Entradas do mês", mx["d_renda"]
         )
     with k3:
         render_kpi(
-            "Sobrevivência", fmt_brl(mx["sobrevivencia"]),
-            "Patrimônio líquido total"
+            "Investido", fmt_brl(mx["investido_mes"]),
+            f"Taxa de Aporte: {mx['taxa_aporte']:.1f}%", mx["d_investido"]
         )
     with k4:
         render_kpi(
-            "Renda", fmt_brl(mx["renda"]),
-            "Entradas do mês", mx["d_renda"]
+            "Sobrevivência", fmt_brl(mx["sobrevivencia"]),
+            "Patrimônio líquido total"
         )
 
     # ===== REGRA 50/30/20 =====
@@ -1305,6 +1547,7 @@ def main() -> None:
                 submit_label="REGISTRAR SAÍDA",
                 desc_placeholder="Ex: Mercado, Uber, Jantar",
                 default_step=10.0,
+                sel_mo=sel_mo, sel_yr=sel_yr,
             )
         with col_intel:
             render_intel("Intel — Lifestyle", mx["insight_ls"])
@@ -1319,6 +1562,9 @@ def main() -> None:
                 "Entradas do Mês",
                 f"Total: <strong>{fmt_brl(mx['renda'])}</strong>"
             )
+            # Breakdown de fontes de renda
+            if mx["renda_breakdown"]:
+                render_cat_breakdown(mx["renda_breakdown"])
             transaction_form(
                 form_key="f_renda",
                 tipo="Entrada",
@@ -1326,6 +1572,7 @@ def main() -> None:
                 submit_label="REGISTRAR ENTRADA",
                 desc_placeholder="Ex: Salário, Freelance",
                 default_step=100.0,
+                sel_mo=sel_mo, sel_yr=sel_yr,
             )
         with col_intel:
             render_intel("Intel — Renda", mx["insight_renda"])
@@ -1339,7 +1586,7 @@ def main() -> None:
                 f"Mês: <strong>{fmt_brl(mx['investido_mes'])}</strong><br>"
                 f"Acumulado: <strong>{fmt_brl(mx['investido_total'])}</strong>"
             )
-            wealth_form()
+            wealth_form(sel_mo=sel_mo, sel_yr=sel_yr)
         with col_intel:
             render_intel(
                 "Intel — Patrimônio",
@@ -1401,7 +1648,7 @@ def main() -> None:
             else:
                 render_intel("", "Adicione ativos usando o formulário ao lado.")
 
-    # --- HISTÓRICO (filtrado por mês) ---
+    # --- HISTÓRICO ---
     with tab_hist:
         _render_historico(mx, df_trans, user, sel_mo, sel_yr)
 
