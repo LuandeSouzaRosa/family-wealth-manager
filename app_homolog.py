@@ -7,7 +7,8 @@ import calendar
 import html as html_lib
 from dataclasses import dataclass
 from io import BytesIO
-import time  # [FIX #16] Movido para o topo
+import time
+
 
 # ==============================================================================
 # 1. CONFIGURAÇÃO CENTRALIZADA
@@ -41,6 +42,7 @@ class Config:
     SAVE_RETRIES: int = 3
     MESES_EVOLUCAO: int = 6
 
+
 CFG = Config()
 
 MESES_PT: dict[int, str] = {
@@ -53,6 +55,7 @@ MESES_FULL: dict[int, str] = {
     9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"
 }
 
+
 # ==============================================================================
 # 2. SYSTEM BOOT
 # ==============================================================================
@@ -63,6 +66,7 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed"
 )
+
 
 # ==============================================================================
 # 3. CSS
@@ -309,7 +313,6 @@ def inject_css() -> None:
             padding: 6px 0;
         }
 
-        /* ===== HEALTH BADGE ===== */
         .health-badge {
             font-family: 'JetBrains Mono', monospace;
             font-size: 0.7rem;
@@ -338,7 +341,6 @@ def inject_css() -> None:
             background: rgba(255,68,68,0.05);
         }
 
-        /* ===== ALERTAS ===== */
         .alerts-container {
             margin-bottom: 16px;
         }
@@ -385,7 +387,6 @@ def inject_css() -> None:
             flex: 1;
         }
 
-        /* ===== PROJEÇÃO ===== */
         .projection-box {
             background: #0a0a0a;
             border: 1px solid #1a1a1a;
@@ -442,7 +443,6 @@ def inject_css() -> None:
             margin-top: 4px;
         }
 
-        /* ===== HIST SUMMARY ===== */
         .hist-summary {
             display: flex;
             gap: 16px;
@@ -574,9 +574,6 @@ def inject_css() -> None:
         }
     </style>
     """, unsafe_allow_html=True)
-
-# [FIX #17] inject_css() removida daqui — será chamada dentro de main()
-
 # ==============================================================================
 # 4. UTILITÁRIOS
 # ==============================================================================
@@ -585,22 +582,27 @@ def sanitize(text: str) -> str:
     """Escapa HTML para prevenir injeção."""
     return html_lib.escape(str(text))
 
+
 def fmt_brl(val: float) -> str:
     """Formata valor float para padrão BRL: R$ 1.234,56"""
     return f"R$ {val:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
 
 def fmt_date(dt: datetime) -> str:
     """Formata datetime para '01 Jan 2025'."""
     return f"{dt.day:02d} {MESES_PT[dt.month]} {dt.year}"
 
+
 def fmt_month_year(mo: int, yr: int) -> str:
     """Retorna 'Janeiro 2025'."""
     return f"{MESES_FULL[mo]} {yr}"
+
 
 def end_of_month(year: int, month: int) -> datetime:
     """Retorna datetime do último segundo do mês."""
     last_day = calendar.monthrange(year, month)[1]
     return datetime(year, month, last_day, 23, 59, 59)
+
 
 def default_form_date(sel_mo: int, sel_yr: int) -> date:
     """Data default para formulários baseada no mês selecionado."""
@@ -611,23 +613,23 @@ def default_form_date(sel_mo: int, sel_yr: int) -> date:
         last_day = calendar.monthrange(sel_yr, sel_mo)[1]
         return date(sel_yr, sel_mo, last_day)
     else:
-        # [FIX #10] Não deveria chegar aqui com bloqueio de navegação futura,
-        # mas por segurança retorna hoje
         return now.date()
+
 
 def calc_delta(current: float, previous: float) -> float | None:
     """Calcula variação percentual entre dois valores."""
     if previous == 0:
-        # [FIX #9] Se anterior é 0 e atual > 0, indica "novo"
         if current > 0:
             return float("inf")
         return None
     return ((current - previous) / abs(previous)) * 100
 
+
 def _is_future_month(month: int, year: int) -> bool:
-    """[FIX #1] Verifica se mês/ano é futuro em relação a agora."""
+    """Verifica se mês/ano é futuro em relação a agora."""
     now = datetime.now()
     return (year > now.year) or (year == now.year and month > now.month)
+
 
 # ==============================================================================
 # 5. VALIDAÇÃO
@@ -635,19 +637,55 @@ def _is_future_month(month: int, year: int) -> bool:
 
 def validate_transaction(entry: dict) -> tuple[bool, str]:
     """Valida dados de uma transação antes de salvar."""
+    # --- Descrição ---
     desc = entry.get("Descricao", "")
     if not desc or not str(desc).strip():
         return False, "Descrição obrigatória"
     if len(str(desc)) > CFG.MAX_DESC_LENGTH:
         return False, f"Descrição muito longa (máx {CFG.MAX_DESC_LENGTH})"
+
+    # --- Valor ---
     val = entry.get("Valor")
     if not isinstance(val, (int, float)) or val <= 0:
         return False, "Valor deve ser maior que zero"
-    if entry.get("Tipo") not in CFG.TIPOS:
+
+    # --- Tipo ---
+    tipo = entry.get("Tipo")
+    if tipo not in CFG.TIPOS:
         return False, "Tipo inválido"
+
+    # --- Categoria [FIX B3] ---
+    cat = entry.get("Categoria", "")
+    if tipo == "Saída":
+        cats_validas = set(CFG.CATEGORIAS_SAIDA) | {"Investimento"}
+    else:
+        cats_validas = set(CFG.CATEGORIAS_ENTRADA)
+    if cat not in cats_validas:
+        return False, f"Categoria '{cat}' inválida para tipo '{tipo}'"
+
+    # --- Responsável ---
     if entry.get("Responsavel") not in CFG.RESPONSAVEIS:
         return False, "Responsável inválido"
+
+    # --- Data [FIX B4] ---
+    dt = entry.get("Data")
+    if dt is not None:
+        if isinstance(dt, date) and not isinstance(dt, datetime):
+            dt_check = datetime.combine(dt, datetime.min.time())
+        elif isinstance(dt, datetime):
+            dt_check = dt
+        else:
+            return False, "Data inválida"
+        now = datetime.now()
+        # Não permite datas mais de 30 dias no futuro
+        if dt_check > now + timedelta(days=30):
+            return False, "Data muito distante no futuro"
+        # Não permite datas antes de 2020
+        if dt_check.year < 2020:
+            return False, "Data muito antiga (anterior a 2020)"
+
     return True, ""
+
 
 def validate_asset(entry: dict) -> tuple[bool, str]:
     """Valida dados de um ativo patrimonial antes de salvar."""
@@ -663,6 +701,7 @@ def validate_asset(entry: dict) -> tuple[bool, str]:
         return False, "Responsável inválido"
     return True, ""
 
+
 # ==============================================================================
 # 6. CAMADA DE DADOS
 # ==============================================================================
@@ -671,12 +710,14 @@ def get_conn() -> GSheetsConnection:
     """Retorna conexão com Google Sheets."""
     return st.connection("gsheets", type=GSheetsConnection)
 
+
 def _normalize_strings(df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
-    """[FIX #11] Normaliza strings de colunas categóricas."""
+    """Normaliza strings de colunas categóricas."""
     for col in columns:
         if col in df.columns:
             df[col] = df[col].astype(str).str.strip()
     return df
+
 
 @st.cache_data(ttl=CFG.CACHE_TTL)
 def load_data() -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -694,7 +735,6 @@ def load_data() -> tuple[pd.DataFrame, pd.DataFrame]:
             df_trans["Data"] = pd.to_datetime(df_trans["Data"], errors="coerce")
             df_trans["Valor"] = pd.to_numeric(df_trans["Valor"], errors="coerce").fillna(0.0)
             df_trans = df_trans.dropna(subset=["Data"])
-            # [FIX #11] Normalizar strings
             df_trans = _normalize_strings(df_trans, ["Tipo", "Categoria", "Responsavel", "Descricao"])
     except Exception:
         df_trans = pd.DataFrame(columns=expected_trans)
@@ -708,17 +748,17 @@ def load_data() -> tuple[pd.DataFrame, pd.DataFrame]:
             df_assets[col] = None
         if not df_assets.empty:
             df_assets["Valor"] = pd.to_numeric(df_assets["Valor"], errors="coerce").fillna(0.0)
-            # [FIX #11] Normalizar strings
             df_assets = _normalize_strings(df_assets, ["Item", "Responsavel"])
     except Exception:
         df_assets = pd.DataFrame(columns=expected_pat)
 
     return df_trans, df_assets
 
+
 def save_entry(data: dict, worksheet: str) -> bool:
     """Salva uma nova entrada na planilha com retry."""
     conn = get_conn()
-    st.cache_data.clear()  # [FIX #3] Limpar cache uma vez antes do loop
+    # [FIX M2] Removido clear redundante antes do loop
     for attempt in range(CFG.SAVE_RETRIES):
         try:
             try:
@@ -733,15 +773,16 @@ def save_entry(data: dict, worksheet: str) -> bool:
                     df_updated["Data"], errors="coerce"
                 ).dt.strftime("%Y-%m-%d")
             conn.update(worksheet=worksheet, data=df_updated)
-            st.cache_data.clear()  # [FIX #3] Limpar após sucesso
+            st.cache_data.clear()
             return True
         except Exception as e:
             if attempt == CFG.SAVE_RETRIES - 1:
                 st.error(f"Falha ao salvar após {CFG.SAVE_RETRIES} tentativas: {e}")
-                st.cache_data.clear()  # [FIX #14] Limpar cache mesmo em erro
+                st.cache_data.clear()
                 return False
             time.sleep(0.5 * (attempt + 1))
     return False
+
 
 def update_sheet(df_edited: pd.DataFrame, worksheet: str) -> bool:
     """Atualiza planilha inteira com DataFrame editado."""
@@ -757,8 +798,9 @@ def update_sheet(df_edited: pd.DataFrame, worksheet: str) -> bool:
         return True
     except Exception as e:
         st.error(f"Erro ao atualizar: {e}")
-        st.cache_data.clear()  # [FIX #14] Limpar cache mesmo em erro
+        st.cache_data.clear()
         return False
+
 
 # ==============================================================================
 # 7. MOTOR ANALÍTICO
@@ -767,13 +809,14 @@ def update_sheet(df_edited: pd.DataFrame, worksheet: str) -> bool:
 def filter_by_user(df: pd.DataFrame, user_filter: str, include_shared: bool = False) -> pd.DataFrame:
     """Filtra DataFrame por responsável.
 
-    [FIX #2] include_shared=True inclui registros 'Casal' junto com o usuário individual.
+    include_shared=True inclui registros 'Casal' junto com o usuário individual.
     """
     if user_filter != "Casal" and "Responsavel" in df.columns:
         if include_shared:
             return df[df["Responsavel"].isin([user_filter, "Casal"])].copy()
         return df[df["Responsavel"] == user_filter].copy()
     return df.copy()
+
 
 def filter_by_month(df: pd.DataFrame, month: int, year: int) -> pd.DataFrame:
     """Filtra DataFrame por mês/ano."""
@@ -794,8 +837,6 @@ def compute_projection(
 
     Só calcula para o mês ATUAL (meses passados já encerraram).
     Retorna None se dados insuficientes.
-    [FIX #7] Nota: investimentos não são projetados linearmente —
-    assume-se que os aportes já feitos são os do mês inteiro.
     """
     now = datetime.now()
     is_current = (sel_mo == now.month and sel_yr == now.year)
@@ -938,7 +979,6 @@ def compute_metrics(
     """Calcula todas as métricas financeiras para o mês/usuário."""
 
     df_t = filter_by_user(df_trans, user_filter)
-    # [FIX #2] Patrimônio inclui ativos "Casal" na visão individual
     df_a = filter_by_user(df_assets, user_filter, include_shared=True)
     df_mo = filter_by_month(df_t, target_month, target_year)
 
@@ -1191,7 +1231,6 @@ def compute_evolution(
             "investido": inv,
             "renda": ren,
             "total_gastos": nec + des,
-            # [FIX #8] Defaults para trend em todos os itens
             "media_movel": 0.0,
             "trend_pct": 0.0,
             "trend_direction": "stable",
@@ -1222,7 +1261,6 @@ def compute_evolution(
 
 def render_autonomia(val: float, sobrevivencia: float) -> None:
     """Renderiza hero de autonomia financeira."""
-    # [FIX #6] Tratar autonomia infinita / sem burn rate
     if val >= 999:
         display_text = "∞"
         color = "#00FFCC"
@@ -1235,7 +1273,6 @@ def render_autonomia(val: float, sobrevivencia: float) -> None:
         else:
             color = "#FF4444"
 
-    # [FIX #6] Subtítulo contextual
     if val >= 999:
         unit_text = "sem burn rate registrado"
     else:
@@ -1338,7 +1375,7 @@ def render_projection(proj: dict | None, mx: dict) -> None:
 
 
 def _format_delta_html(delta: float | None, delta_invert: bool = False) -> str:
-    """[FIX #9] Formata delta para HTML, tratando inf (novo) e zero."""
+    """Formata delta para HTML, tratando inf (novo) e zero."""
     if delta is None:
         return ""
     if delta == float("inf"):
@@ -1585,7 +1622,7 @@ def transaction_form(
     desc_placeholder: str = "Descrição",
     default_step: float = 10.0,
     sel_mo: int | None = None, sel_yr: int | None = None,
-    default_resp: str = "Casal",  # [MELHORIA 1.4]
+    default_resp: str = "Casal",
 ) -> None:
     """Formulário genérico de transação."""
     form_date = default_form_date(sel_mo, sel_yr) if sel_mo and sel_yr else datetime.now().date()
@@ -1597,7 +1634,6 @@ def transaction_form(
         )
         val = st.number_input("Valor (R$)", min_value=0.01, step=default_step)
         cat = st.selectbox("Categoria", categorias)
-                # [MELHORIA 1.4] Responsável default baseado no filtro ativo
         resp_options = list(CFG.RESPONSAVEIS)
         resp_index = resp_options.index(default_resp) if default_resp in resp_options else 0
         resp = st.selectbox("Responsável", resp_options, index=resp_index)
@@ -1614,7 +1650,11 @@ def transaction_form(
                 st.rerun()
 
 
-def wealth_form(sel_mo: int | None = None, sel_yr: int | None = None) -> None:
+def wealth_form(
+    sel_mo: int | None = None,
+    sel_yr: int | None = None,
+    default_resp: str = "Casal",  # [FIX B1] Adicionado parâmetro
+) -> None:
     """Formulário de aporte / investimento."""
     form_date = default_form_date(sel_mo, sel_yr) if sel_mo and sel_yr else datetime.now().date()
     with st.form("f_wealth", clear_on_submit=True):
@@ -1624,7 +1664,10 @@ def wealth_form(sel_mo: int | None = None, sel_yr: int | None = None) -> None:
             max_chars=CFG.MAX_DESC_LENGTH,
         )
         val = st.number_input("Valor (R$)", min_value=0.01, step=100.0)
-        resp = st.selectbox("Titular", list(CFG.RESPONSAVEIS))
+        # [FIX B1] Usar default_resp
+        resp_options = list(CFG.RESPONSAVEIS)
+        resp_index = resp_options.index(default_resp) if default_resp in resp_options else 0
+        resp = st.selectbox("Titular", resp_options, index=resp_index)
         if st.form_submit_button("CONFIRMAR APORTE"):
             entry = {
                 "Data": d, "Descricao": desc.strip(), "Valor": val,
@@ -1638,7 +1681,9 @@ def wealth_form(sel_mo: int | None = None, sel_yr: int | None = None) -> None:
                 st.rerun()
 
 
-def patrimonio_form() -> None:
+def patrimonio_form(
+    default_resp: str = "Casal",  # [FIX M3] Adicionado parâmetro
+) -> None:
     """Formulário de ativo patrimonial."""
     with st.form("f_patrimonio", clear_on_submit=True):
         item = st.text_input(
@@ -1646,7 +1691,10 @@ def patrimonio_form() -> None:
             max_chars=CFG.MAX_DESC_LENGTH,
         )
         val = st.number_input("Valor (R$)", min_value=0.01, step=100.0)
-        resp = st.selectbox("Titular", list(CFG.RESPONSAVEIS))
+        # [FIX M3] Usar default_resp
+        resp_options = list(CFG.RESPONSAVEIS)
+        resp_index = resp_options.index(default_resp) if default_resp in resp_options else 0
+        resp = st.selectbox("Titular", resp_options, index=resp_index)
         if st.form_submit_button("ADICIONAR ATIVO"):
             entry = {"Item": item.strip(), "Valor": val, "Responsavel": resp}
             ok, err = validate_asset(entry)
@@ -1662,7 +1710,7 @@ def patrimonio_form() -> None:
 # ==============================================================================
 
 def _df_equals_safe(df1: pd.DataFrame, df2: pd.DataFrame) -> bool:
-    """[FIX #5] Comparação segura de DataFrames normalizando tipos."""
+    """Comparação segura de DataFrames normalizando tipos."""
     try:
         d1 = df1.reset_index(drop=True).copy()
         d2 = df2.reset_index(drop=True).copy()
@@ -1680,8 +1728,7 @@ def _df_equals_safe(df1: pd.DataFrame, df2: pd.DataFrame) -> bool:
 
 def _render_historico(
     mx: dict,
-    df_trans_full: pd.DataFrame,
-    user: str,
+    user: str,  # [FIX B2] Removido df_trans_full (não era usado)
     sel_mo: int,
     sel_yr: int,
 ) -> None:
@@ -1705,7 +1752,6 @@ def _render_historico(
     )
     render_hist_summary(mx)
 
-    # [FIX #19] Busca e edição separadas visualmente
     search = st.text_input(
         "🔍 Buscar",
         placeholder="Filtrar visualização por descrição, categoria...",
@@ -1727,7 +1773,7 @@ def _render_historico(
             render_intel("", f"Nenhum resultado para '<em>{sanitize(search)}</em>'")
             return
 
-    col_csv, col_excel, _ = st.columns([1, 1, 4])  # [FIX #18] _ no spacer
+    col_csv, col_excel, _ = st.columns([1, 1, 4])
     with col_csv:
         csv_data = df_display.to_csv(index=False).encode("utf-8-sig")
         st.download_button(
@@ -1736,7 +1782,6 @@ def _render_historico(
             "text/csv", use_container_width=True,
         )
     with col_excel:
-        # [FIX #15] Feedback quando openpyxl não disponível
         try:
             buffer = BytesIO()
             df_export = df_display.copy()
@@ -1752,11 +1797,9 @@ def _render_historico(
         except ImportError:
             st.caption("Excel indisponível (instale openpyxl)")
 
-    # [FIX #19] Aviso de que edição é sobre todos os registros
     if search and search.strip():
         st.caption("⚠ A busca filtra apenas a visualização/export. A edição abaixo mostra todos os registros do mês.")
 
-    # [MELHORIA 1.1] Permitir exclusão de linhas
     st.caption("💡 Para excluir transações, selecione a linha e pressione Delete.")
 
     edited = st.data_editor(
@@ -1785,9 +1828,7 @@ def _render_historico(
         key="editor_historico",
     )
 
-    # [FIX #5] Comparação segura
     if not _df_equals_safe(df_hist, edited):
-        # [MELHORIA 1.1] Detectar exclusões e mostrar aviso apropriado
         rows_removed = len(df_hist) - len(edited)
         if rows_removed > 0:
             st.warning(f"⚠ {rows_removed} transação(ões) será(ão) excluída(s) em {month_label}")
@@ -1797,7 +1838,6 @@ def _render_historico(
         c_save, c_discard = st.columns(2)
         with c_save:
             if st.button("✓ SALVAR ALTERAÇÕES", key="save_hist", use_container_width=True):
-                # Validar que não ficou vazio acidentalmente
                 if edited.empty and len(df_hist) > 3:
                     st.error("⚠ Não é possível excluir todas as transações de uma vez. Descarte e tente novamente.")
                 else:
@@ -1809,7 +1849,7 @@ def _render_historico(
 
 def _save_historico_mensal(
     edited_month: pd.DataFrame,
-    user: str,  # [FIX #4] Removido df_trans_full
+    user: str,
     sel_mo: int,
     sel_yr: int,
 ) -> None:
@@ -1842,13 +1882,12 @@ def _save_historico_mensal(
 # ==============================================================================
 
 def main() -> None:
-    # [FIX #17] CSS injetado dentro de main()
     inject_css()
 
     now = datetime.now()
 
     # --- Barra de Controle ---
-    c_filter, _, c_status = st.columns([1, 2, 1])  # [FIX #18] _ no spacer
+    c_filter, _, c_status = st.columns([1, 2, 1])
     with c_filter:
         try:
             user = st.pills(
@@ -1865,7 +1904,7 @@ def main() -> None:
         user = "Casal"
     with c_status:
         st.markdown(
-            f'<div class="status-line">L&L TERMINAL v4.1 — {fmt_date(now)}</div>',
+            f'<div class="status-line">L&L TERMINAL v4.2 — {fmt_date(now)}</div>',
             unsafe_allow_html=True
         )
 
@@ -1875,7 +1914,6 @@ def main() -> None:
     if "nav_year" not in st.session_state:
         st.session_state.nav_year = now.year
 
-    # [FIX #1] Clamp para impedir meses futuros ao carregar
     if _is_future_month(st.session_state.nav_month, st.session_state.nav_year):
         st.session_state.nav_month = now.month
         st.session_state.nav_year = now.year
@@ -1918,7 +1956,6 @@ def main() -> None:
 
     with nav_next:
         if st.button("▶", key="nav_next", use_container_width=True):
-            # [FIX #1] Verificar se o próximo mês não é futuro
             next_mo = st.session_state.nav_month + 1
             next_yr = st.session_state.nav_year
             if next_mo == 13:
@@ -2007,7 +2044,7 @@ def main() -> None:
                 desc_placeholder="Ex: Mercado, Uber, Jantar",
                 default_step=10.0,
                 sel_mo=sel_mo, sel_yr=sel_yr,
-                default_resp=user,  # [MELHORIA 1.4]
+                default_resp=user,
             )
         with col_intel:
             render_intel("Intel — Lifestyle", mx["insight_ls"])
@@ -2031,7 +2068,7 @@ def main() -> None:
                 desc_placeholder="Ex: Salário, Freelance",
                 default_step=100.0,
                 sel_mo=sel_mo, sel_yr=sel_yr,
-                default_resp=user,  # [MELHORIA 1.4]
+                default_resp=user,
             )
         with col_intel:
             render_intel("Intel — Renda", mx["insight_renda"])
@@ -2044,7 +2081,8 @@ def main() -> None:
                 f"Mês: <strong>{fmt_brl(mx['investido_mes'])}</strong><br>"
                 f"Acumulado: <strong>{fmt_brl(mx['investido_total'])}</strong>"
             )
-            wealth_form(sel_mo=sel_mo, sel_yr=sel_yr, default_resp=user)  # [MELHORIA 1.4]
+            # [FIX B1] Agora passa default_resp corretamente
+            wealth_form(sel_mo=sel_mo, sel_yr=sel_yr, default_resp=user)
         with col_intel:
             render_intel(
                 "Intel — Patrimônio",
@@ -2054,28 +2092,33 @@ def main() -> None:
 
     with tab_pat:
         col_form, col_list = st.columns([1, 1])
+
+        # [FIX B5] Filtrar patrimônio pelo usuário ativo (incluindo Casal)
+        df_assets_view = filter_by_user(df_assets, user, include_shared=True)
+
         with col_form:
-            if not df_assets.empty and "Responsavel" in df_assets.columns:
-                totais = df_assets.groupby("Responsavel")["Valor"].sum()
+            if not df_assets_view.empty and "Responsavel" in df_assets_view.columns:
+                totais = df_assets_view.groupby("Responsavel")["Valor"].sum()
                 partes = " | ".join(
                     [f"{sanitize(str(r))}: <strong>{fmt_brl(v)}</strong>" for r, v in totais.items()]
                 )
             else:
                 partes = "Nenhum ativo registrado"
-            total_pat = df_assets["Valor"].sum() if not df_assets.empty else 0
+            total_pat = df_assets_view["Valor"].sum() if not df_assets_view.empty else 0
             render_intel(
                 "Patrimônio Base",
                 f"Total: <strong>{fmt_brl(total_pat)}</strong><br>{partes}"
             )
-            patrimonio_form()
+            # [FIX M3] Agora passa default_resp
+            patrimonio_form(default_resp=user)
         with col_list:
             render_intel(
                 "Ativos Registrados",
-                f"{len(df_assets)} itens no patrimônio base"
+                f"{len(df_assets_view)} itens no patrimônio base"
             )
-            if not df_assets.empty:
+            if not df_assets_view.empty:
                 edited_assets = st.data_editor(
-                    df_assets,
+                    df_assets_view,
                     use_container_width=True,
                     num_rows="dynamic",
                     column_config={
@@ -2090,12 +2133,22 @@ def main() -> None:
                     hide_index=True,
                     key="editor_patrimonio",
                 )
-                # [FIX #5] Comparação segura
-                if not _df_equals_safe(df_assets, edited_assets):
+                if not _df_equals_safe(df_assets_view, edited_assets):
                     c_save, c_cancel = st.columns(2)
                     with c_save:
                         if st.button("✓ SALVAR PATRIMÔNIO", use_container_width=True):
-                            if update_sheet(edited_assets, "Patrimonio"):
+                            # [FIX B5] Reconstruir df completo: manter ativos
+                            # de outros usuários + salvar editados
+                            if user != "Casal":
+                                df_others = df_assets[
+                                    ~df_assets["Responsavel"].isin([user, "Casal"])
+                                ].copy()
+                                df_final = pd.concat(
+                                    [df_others, edited_assets], ignore_index=True
+                                )
+                            else:
+                                df_final = edited_assets
+                            if update_sheet(df_final, "Patrimonio"):
                                 st.toast("✓ Patrimônio atualizado")
                                 st.rerun()
                     with c_cancel:
@@ -2105,7 +2158,8 @@ def main() -> None:
                 render_intel("", "Adicione ativos usando o formulário ao lado.")
 
     with tab_hist:
-        _render_historico(mx, df_trans, user, sel_mo, sel_yr)
+        # [FIX B2] Removido df_trans da chamada
+        _render_historico(mx, user, sel_mo, sel_yr)
 
 
 # ==============================================================================
