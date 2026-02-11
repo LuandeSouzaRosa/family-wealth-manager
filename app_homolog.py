@@ -5,7 +5,7 @@ from streamlit_gsheets import GSheetsConnection
 from datetime import datetime, timedelta
 import calendar
 import html as html_lib
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from io import BytesIO
 
 # ==============================================================================
@@ -14,7 +14,6 @@ from io import BytesIO
 
 @dataclass(frozen=True)
 class Config:
-    """Todas as constantes do sistema em um único lugar."""
     NECESSIDADES: tuple = ("Moradia", "Alimentação", "Saúde", "Transporte")
     DESEJOS: tuple = ("Lazer", "Assinaturas", "Educação", "Outros")
     CATEGORIAS_SAIDA: tuple = (
@@ -65,11 +64,10 @@ st.set_page_config(
 )
 
 # ==============================================================================
-# 3. CSS — DESIGN SYSTEM ANTIGRAVITY v3.0
+# 3. CSS
 # ==============================================================================
 
 def inject_css() -> None:
-    """Injeta todo o CSS do sistema."""
     st.markdown("""
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
@@ -420,42 +418,35 @@ def inject_css() -> None:
 inject_css()
 
 # ==============================================================================
-# 4. UTILITÁRIOS DE FORMATAÇÃO E SANITIZAÇÃO
+# 4. UTILITÁRIOS
 # ==============================================================================
 
 def sanitize(text: str) -> str:
-    """Escapa caracteres HTML para prevenir XSS."""
     return html_lib.escape(str(text))
 
 def fmt_brl(val: float) -> str:
-    """Formata valor monetário em Reais."""
     return f"R$ {val:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 def fmt_date(dt: datetime) -> str:
-    """Formata data no padrão brasileiro."""
     return f"{dt.day:02d} {MESES_PT[dt.month]} {dt.year}"
 
 def fmt_month_year(mo: int, yr: int) -> str:
-    """Formata mês/ano por extenso."""
     return f"{MESES_FULL[mo]} {yr}"
 
 def end_of_month(year: int, month: int) -> datetime:
-    """Retorna o último dia do mês como datetime."""
     last_day = calendar.monthrange(year, month)[1]
     return datetime(year, month, last_day, 23, 59, 59)
 
 def calc_delta(current: float, previous: float) -> float | None:
-    """Calcula variação percentual entre dois valores."""
     if previous == 0:
         return None
     return ((current - previous) / abs(previous)) * 100
 
 # ==============================================================================
-# 5. VALIDAÇÃO DE DADOS
+# 5. VALIDAÇÃO
 # ==============================================================================
 
 def validate_transaction(entry: dict) -> tuple[bool, str]:
-    """Valida uma transação antes de persistir."""
     desc = entry.get("Descricao", "")
     if not desc or not str(desc).strip():
         return False, "Descrição obrigatória"
@@ -471,7 +462,6 @@ def validate_transaction(entry: dict) -> tuple[bool, str]:
     return True, ""
 
 def validate_asset(entry: dict) -> tuple[bool, str]:
-    """Valida um ativo patrimonial antes de persistir."""
     item = entry.get("Item", "")
     if not item or not str(item).strip():
         return False, "Nome do ativo obrigatório"
@@ -485,49 +475,37 @@ def validate_asset(entry: dict) -> tuple[bool, str]:
     return True, ""
 
 # ==============================================================================
-# 6. CAMADA DE DADOS — GOOGLE SHEETS
+# 6. CAMADA DE DADOS
 # ==============================================================================
 
 def get_conn() -> GSheetsConnection:
-    """Obtém conexão com Google Sheets."""
     return st.connection("gsheets", type=GSheetsConnection)
 
 @st.cache_data(ttl=CFG.CACHE_TTL)
 def load_data() -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Carrega e valida dados de Transações e Patrimônio."""
     conn = get_conn()
 
-    # --- Transações ---
     expected_trans = list(CFG.COLS_TRANSACAO)
     try:
         df_trans = conn.read(worksheet="Transacoes")
         df_trans = df_trans.dropna(how="all")
-
         missing = set(expected_trans) - set(df_trans.columns)
-        if missing:
-            for col in missing:
-                df_trans[col] = None
-
+        for col in missing:
+            df_trans[col] = None
         if not df_trans.empty:
             df_trans["Data"] = pd.to_datetime(df_trans["Data"], errors="coerce")
             df_trans["Valor"] = pd.to_numeric(df_trans["Valor"], errors="coerce").fillna(0.0)
-            invalid_dates = df_trans["Data"].isna().sum()
-            if invalid_dates > 0:
-                df_trans = df_trans.dropna(subset=["Data"])
+            df_trans = df_trans.dropna(subset=["Data"])
     except Exception:
         df_trans = pd.DataFrame(columns=expected_trans)
 
-    # --- Patrimônio ---
     expected_pat = list(CFG.COLS_PATRIMONIO)
     try:
         df_assets = conn.read(worksheet="Patrimonio")
         df_assets = df_assets.dropna(how="all")
-
         missing = set(expected_pat) - set(df_assets.columns)
-        if missing:
-            for col in missing:
-                df_assets[col] = None
-
+        for col in missing:
+            df_assets[col] = None
         if not df_assets.empty:
             df_assets["Valor"] = pd.to_numeric(df_assets["Valor"], errors="coerce").fillna(0.0)
     except Exception:
@@ -536,10 +514,8 @@ def load_data() -> tuple[pd.DataFrame, pd.DataFrame]:
     return df_trans, df_assets
 
 def save_entry(data: dict, worksheet: str) -> bool:
-    """Salva nova entrada com retry e invalidação de cache."""
     import time
     conn = get_conn()
-
     for attempt in range(CFG.SAVE_RETRIES):
         try:
             st.cache_data.clear()
@@ -548,15 +524,12 @@ def save_entry(data: dict, worksheet: str) -> bool:
                 df_curr = df_curr.dropna(how="all")
             except Exception:
                 df_curr = pd.DataFrame()
-
             df_new = pd.DataFrame([data])
             df_updated = pd.concat([df_curr, df_new], ignore_index=True)
-
             if "Data" in df_updated.columns:
                 df_updated["Data"] = pd.to_datetime(
                     df_updated["Data"], errors="coerce"
                 ).dt.strftime("%Y-%m-%d")
-
             conn.update(worksheet=worksheet, data=df_updated)
             st.cache_data.clear()
             return True
@@ -568,7 +541,6 @@ def save_entry(data: dict, worksheet: str) -> bool:
     return False
 
 def update_sheet(df_edited: pd.DataFrame, worksheet: str) -> bool:
-    """Atualiza planilha completa com dados editados."""
     conn = get_conn()
     try:
         df_to_save = df_edited.copy()
@@ -587,6 +559,21 @@ def update_sheet(df_edited: pd.DataFrame, worksheet: str) -> bool:
 # 7. MOTOR ANALÍTICO
 # ==============================================================================
 
+def filter_by_user(df: pd.DataFrame, user_filter: str) -> pd.DataFrame:
+    """Filtra DataFrame por responsável."""
+    if user_filter != "Casal" and "Responsavel" in df.columns:
+        return df[df["Responsavel"] == user_filter].copy()
+    return df.copy()
+
+def filter_by_month(df: pd.DataFrame, month: int, year: int) -> pd.DataFrame:
+    """Filtra DataFrame por mês/ano."""
+    if df.empty:
+        return df
+    return df[
+        (df["Data"].dt.month == month) &
+        (df["Data"].dt.year == year)
+    ].copy()
+
 def compute_metrics(
     df_trans: pd.DataFrame,
     df_assets: pd.DataFrame,
@@ -594,18 +581,19 @@ def compute_metrics(
     target_month: int,
     target_year: int,
 ) -> dict:
-    """Calcula todas as métricas financeiras para o período selecionado."""
+    """Calcula métricas financeiras.
+    
+    Retorna:
+        df_user: DataFrame filtrado por responsável (TODOS os meses)
+        df_month: DataFrame filtrado por responsável E mês (só o mês selecionado)
+    """
 
     # --- Filtro por responsável ---
-    if user_filter != "Casal" and "Responsavel" in df_trans.columns:
-        df_t = df_trans[df_trans["Responsavel"] == user_filter].copy()
-    else:
-        df_t = df_trans.copy()
+    df_t = filter_by_user(df_trans, user_filter)
+    df_a = filter_by_user(df_assets, user_filter)
 
-    if user_filter != "Casal" and "Responsavel" in df_assets.columns:
-        df_a = df_assets[df_assets["Responsavel"] == user_filter].copy()
-    else:
-        df_a = df_assets.copy()
+    # --- Fatia do mês selecionado ---
+    df_mo = filter_by_month(df_t, target_month, target_year)
 
     m: dict = {
         "renda": 0.0, "lifestyle": 0.0, "investido_mes": 0.0,
@@ -615,9 +603,15 @@ def compute_metrics(
         "nec_delta": 0.0, "des_delta": 0.0, "inv_delta": 0.0,
         "top_cat": "—", "top_cat_val": 0.0,
         "top_gasto_desc": "—", "top_gasto_val": 0.0,
-        "df": df_t, "insight_ls": "", "insight_renda": "",
-        "d_renda": None, "d_lifestyle": None, "d_investido": None, "d_disponivel": None,
+        # df_user = todos os meses do responsável (para merge no save)
+        "df_user": df_t,
+        # df_month = apenas o mês selecionado (para exibição no histórico)
+        "df_month": df_mo,
+        "insight_ls": "", "insight_renda": "",
+        "d_renda": None, "d_lifestyle": None,
+        "d_investido": None, "d_disponivel": None,
         "cat_breakdown": {},
+        "month_tx_count": len(df_mo),
     }
 
     if df_t.empty:
@@ -625,12 +619,7 @@ def compute_metrics(
         m["insight_renda"] = "Nenhum dado registrado."
         return m
 
-    # --- Fatia do mês selecionado ---
-    df_mo = df_t[
-        (df_t["Data"].dt.month == target_month) &
-        (df_t["Data"].dt.year == target_year)
-    ]
-
+    # --- Valores do mês ---
     if not df_mo.empty:
         m["renda"] = df_mo[df_mo["Tipo"] == "Entrada"]["Valor"].sum()
         despesas = df_mo[
@@ -643,10 +632,9 @@ def compute_metrics(
             (df_mo["Categoria"] == "Investimento")
         ]["Valor"].sum()
 
-    # --- Disponível ---
     m["disponivel"] = m["renda"] - m["lifestyle"] - m["investido_mes"]
 
-    # --- Sobrevivência (Patrimônio Líquido Total) ---
+    # --- Sobrevivência ---
     base_patrimonio = df_a["Valor"].sum()
     m["investido_total"] = df_t[
         (df_t["Tipo"] == "Saída") &
@@ -657,7 +645,7 @@ def compute_metrics(
     # --- Taxa de Aporte ---
     m["taxa_aporte"] = (m["investido_mes"] / m["renda"] * 100) if m["renda"] > 0 else 0.0
 
-    # --- Autonomia: usa final do mês selecionado como referência ---
+    # --- Autonomia (referência = final do mês selecionado) ---
     ref_date = end_of_month(target_year, target_month)
     inicio_3m = ref_date - timedelta(days=90)
     df_burn = df_t[
@@ -714,10 +702,7 @@ def compute_metrics(
     # --- Comparativo: Mês Anterior ---
     prev_mo = target_month - 1 if target_month > 1 else 12
     prev_yr = target_year if target_month > 1 else target_year - 1
-    df_prev = df_t[
-        (df_t["Data"].dt.month == prev_mo) &
-        (df_t["Data"].dt.year == prev_yr)
-    ]
+    df_prev = filter_by_month(df_t, prev_mo, prev_yr)
 
     if not df_prev.empty:
         prev_renda = df_prev[df_prev["Tipo"] == "Entrada"]["Valor"].sum()
@@ -762,16 +747,10 @@ def compute_evolution(
     ref_year: int,
     months_back: int = CFG.MESES_EVOLUCAO,
 ) -> list[dict]:
-    """Calcula evolução mensal otimizada (agrupamento único)."""
-    if user_filter != "Casal" and "Responsavel" in df_trans.columns:
-        df = df_trans[df_trans["Responsavel"] == user_filter].copy()
-    else:
-        df = df_trans.copy()
-
+    df = filter_by_user(df_trans, user_filter)
     if df.empty:
         return []
 
-    # Calcular range de datas
     ref_end = end_of_month(ref_year, ref_month)
     mo, yr = ref_month, ref_year
     for _ in range(months_back - 1):
@@ -780,14 +759,12 @@ def compute_evolution(
             mo, yr = 12, yr - 1
     start_date = datetime(yr, mo, 1)
 
-    # Filtrar uma vez
     mask = (
         (df["Data"] >= start_date) &
         (df["Data"] <= ref_end) &
         (df["Tipo"] == "Saída")
     )
     df_filtered = df[mask].copy()
-
     if df_filtered.empty:
         return []
 
@@ -801,7 +778,6 @@ def compute_evolution(
         return "desejos"
 
     df_filtered["group"] = df_filtered["Categoria"].apply(classify)
-
     pivot = df_filtered.pivot_table(
         values="Valor", index="period", columns="group",
         aggfunc="sum", fill_value=0
@@ -823,7 +799,6 @@ def compute_evolution(
 # ==============================================================================
 
 def render_autonomia(val: float, sobrevivencia: float) -> None:
-    """Hero principal — Autonomia Financeira."""
     display = min(val, 999)
     if val >= CFG.AUTONOMIA_OK:
         color = "#00FFCC"
@@ -831,7 +806,6 @@ def render_autonomia(val: float, sobrevivencia: float) -> None:
         color = "#FFAA00"
     else:
         color = "#FF4444"
-
     st.markdown(f"""
     <div class="autonomia-hero">
         <div class="autonomia-tag">▮ Autonomia Financeira</div>
@@ -843,13 +817,9 @@ def render_autonomia(val: float, sobrevivencia: float) -> None:
 
 
 def render_kpi(
-    label: str,
-    value: str,
-    sub: str = "",
-    delta: float | None = None,
-    delta_invert: bool = False,
+    label: str, value: str, sub: str = "",
+    delta: float | None = None, delta_invert: bool = False,
 ) -> None:
-    """KPI com borda lateral, hover glow e delta vs mês anterior."""
     delta_html = ""
     if delta is not None:
         if delta_invert:
@@ -860,7 +830,6 @@ def render_kpi(
             cls = "kpi-delta-neutral"
         sinal = "+" if delta > 0 else ""
         delta_html = f'<div class="kpi-delta {cls}">vs anterior: {sinal}{delta:.0f}%</div>'
-
     st.markdown(f"""
     <div class="kpi-mono">
         <div class="kpi-mono-label">{sanitize(label)}</div>
@@ -872,7 +841,6 @@ def render_kpi(
 
 
 def render_intel(title: str, body: str) -> None:
-    """Caixa de inteligência com borda esmeralda. Body aceita HTML seguro."""
     st.markdown(f"""
     <div class="intel-box">
         <div class="intel-title">{sanitize(title)}</div>
@@ -882,7 +850,6 @@ def render_intel(title: str, body: str) -> None:
 
 
 def render_regra_503020(mx: dict) -> None:
-    """Bloco completo da Regra 50/30/20 como um único componente HTML."""
     total = mx["nec_pct"] + mx["des_pct"] + mx["inv_pct"]
     if total == 0:
         n_w, d_w, i_w = 33, 33, 34
@@ -924,7 +891,6 @@ def render_regra_503020(mx: dict) -> None:
 
 
 def render_cat_breakdown(cat_dict: dict) -> None:
-    """Barras horizontais de breakdown por categoria."""
     if not cat_dict:
         return
     total = sum(cat_dict.values())
@@ -945,7 +911,6 @@ def render_cat_breakdown(cat_dict: dict) -> None:
 
 
 def render_evolution_chart(evo_data: list[dict]) -> None:
-    """Gráfico de barras empilhadas — evolução mensal (Plotly)."""
     if not evo_data:
         render_intel("Evolução", "Dados insuficientes para gráfico.")
         return
@@ -978,7 +943,6 @@ def render_evolution_chart(evo_data: list[dict]) -> None:
 
 
 def render_empty_month(month_label: str) -> None:
-    """Indicador visual de mês sem dados."""
     st.markdown(f"""
     <div class="intel-box empty-month">
         <div class="intel-title">Mês sem registros</div>
@@ -991,23 +955,19 @@ def render_empty_month(month_label: str) -> None:
 
 
 # ==============================================================================
-# 9. FORMULÁRIOS REUTILIZÁVEIS
+# 9. FORMULÁRIOS
 # ==============================================================================
 
 def transaction_form(
-    form_key: str,
-    tipo: str,
-    categorias: list[str],
+    form_key: str, tipo: str, categorias: list[str],
     submit_label: str = "REGISTRAR",
     desc_placeholder: str = "Descrição",
     default_step: float = 10.0,
 ) -> None:
-    """Formulário genérico para transações."""
     with st.form(form_key, clear_on_submit=True):
         d = st.date_input("Data", datetime.now(), format="DD/MM/YYYY")
         desc = st.text_input(
-            "Descrição",
-            placeholder=desc_placeholder,
+            "Descrição", placeholder=desc_placeholder,
             max_chars=CFG.MAX_DESC_LENGTH,
         )
         val = st.number_input("Valor (R$)", min_value=0.01, step=default_step)
@@ -1016,12 +976,8 @@ def transaction_form(
 
         if st.form_submit_button(submit_label):
             entry = {
-                "Data": d,
-                "Descricao": desc.strip(),
-                "Valor": val,
-                "Categoria": cat,
-                "Tipo": tipo,
-                "Responsavel": resp,
+                "Data": d, "Descricao": desc.strip(), "Valor": val,
+                "Categoria": cat, "Tipo": tipo, "Responsavel": resp,
             }
             ok, err = validate_transaction(entry)
             if not ok:
@@ -1032,12 +988,10 @@ def transaction_form(
 
 
 def wealth_form() -> None:
-    """Formulário para aportes de investimento."""
     with st.form("f_wealth", clear_on_submit=True):
         d = st.date_input("Data", datetime.now(), format="DD/MM/YYYY")
         desc = st.text_input(
-            "Ativo / Corretora",
-            placeholder="Ex: IVVB11, Bitcoin, CDB",
+            "Ativo / Corretora", placeholder="Ex: IVVB11, Bitcoin, CDB",
             max_chars=CFG.MAX_DESC_LENGTH,
         )
         val = st.number_input("Valor (R$)", min_value=0.01, step=100.0)
@@ -1045,12 +999,8 @@ def wealth_form() -> None:
 
         if st.form_submit_button("CONFIRMAR APORTE"):
             entry = {
-                "Data": d,
-                "Descricao": desc.strip(),
-                "Valor": val,
-                "Categoria": "Investimento",
-                "Tipo": "Saída",
-                "Responsavel": resp,
+                "Data": d, "Descricao": desc.strip(), "Valor": val,
+                "Categoria": "Investimento", "Tipo": "Saída", "Responsavel": resp,
             }
             ok, err = validate_transaction(entry)
             if not ok:
@@ -1061,11 +1011,9 @@ def wealth_form() -> None:
 
 
 def patrimonio_form() -> None:
-    """Formulário para registrar ativos patrimoniais."""
     with st.form("f_patrimonio", clear_on_submit=True):
         item = st.text_input(
-            "Ativo / Conta",
-            placeholder="Ex: Poupança Nubank, Apartamento",
+            "Ativo / Conta", placeholder="Ex: Poupança Nubank, Apartamento",
             max_chars=CFG.MAX_DESC_LENGTH,
         )
         val = st.number_input("Valor (R$)", min_value=0.01, step=100.0)
@@ -1082,7 +1030,155 @@ def patrimonio_form() -> None:
 
 
 # ==============================================================================
-# 10. APLICAÇÃO PRINCIPAL
+# 10. HISTÓRICO — FILTRADO POR MÊS + MERGE SEGURO
+# ==============================================================================
+
+def _render_historico(
+    mx: dict,
+    df_trans_full: pd.DataFrame,
+    user: str,
+    sel_mo: int,
+    sel_yr: int,
+) -> None:
+    """Renderiza histórico filtrado pelo mês selecionado na navegação."""
+    
+    # Usa df_month (já filtrado por responsável + mês)
+    df_hist = mx["df_month"].copy()
+    month_label = fmt_month_year(sel_mo, sel_yr)
+
+    if df_hist.empty:
+        render_intel(
+            f"Histórico — {sanitize(month_label)}",
+            "Nenhuma transação registrada neste mês."
+        )
+        return
+
+    # Ordenar por data decrescente
+    df_hist["Data"] = pd.to_datetime(df_hist["Data"], errors="coerce")
+    df_hist = df_hist.sort_values("Data", ascending=False).reset_index(drop=True)
+
+    # Header com contagem do mês
+    render_intel(
+        f"Histórico — {sanitize(month_label)}",
+        f"<strong>{len(df_hist)}</strong> transações neste mês"
+    )
+
+    # Botões de export (apenas dados do mês)
+    col_csv, col_excel, col_spacer = st.columns([1, 1, 4])
+    with col_csv:
+        csv_data = df_hist.to_csv(index=False).encode("utf-8-sig")
+        st.download_button(
+            "⬇ CSV",
+            csv_data,
+            f"financas_{sel_mo:02d}_{sel_yr}_{user}.csv",
+            "text/csv",
+            use_container_width=True,
+        )
+    with col_excel:
+        try:
+            buffer = BytesIO()
+            df_export = df_hist.copy()
+            if "Data" in df_export.columns:
+                df_export["Data"] = df_export["Data"].dt.strftime("%d/%m/%Y")
+            df_export.to_excel(buffer, index=False, engine="openpyxl")
+            st.download_button(
+                "⬇ EXCEL",
+                buffer.getvalue(),
+                f"financas_{sel_mo:02d}_{sel_yr}_{user}.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+            )
+        except ImportError:
+            pass
+
+    # Editor
+    edited = st.data_editor(
+        df_hist,
+        use_container_width=True,
+        num_rows="dynamic",
+        column_config={
+            "Data": st.column_config.DateColumn(
+                "Data", format="DD/MM/YYYY", required=True
+            ),
+            "Valor": st.column_config.NumberColumn(
+                "Valor", format="R$ %.2f", required=True, min_value=0.0
+            ),
+            "Tipo": st.column_config.SelectboxColumn(
+                "Tipo", options=list(CFG.TIPOS), required=True
+            ),
+            "Categoria": st.column_config.SelectboxColumn(
+                "Categoria", options=list(CFG.CATEGORIAS_TODAS), required=True,
+            ),
+            "Descricao": st.column_config.TextColumn("Descrição", required=True),
+            "Responsavel": st.column_config.SelectboxColumn(
+                "Responsável", options=list(CFG.RESPONSAVEIS)
+            ),
+        },
+        hide_index=True,
+        key="editor_historico",
+    )
+
+    # Detectar mudanças
+    if not df_hist.reset_index(drop=True).equals(edited.reset_index(drop=True)):
+        st.warning(f"⚠ Alterações pendentes em {month_label}")
+        c_save, c_discard = st.columns(2)
+        with c_save:
+            if st.button("✓ SALVAR ALTERAÇÕES", key="save_hist", use_container_width=True):
+                _save_historico_mensal(edited, df_trans_full, user, sel_mo, sel_yr)
+        with c_discard:
+            if st.button("✗ DESCARTAR", key="discard_hist", use_container_width=True):
+                st.rerun()
+
+
+def _save_historico_mensal(
+    edited_month: pd.DataFrame,
+    df_trans_full: pd.DataFrame,
+    user: str,
+    sel_mo: int,
+    sel_yr: int,
+) -> None:
+    """Salva edições do mês com merge seguro.
+    
+    Estratégia:
+    1. Pega a planilha completa (fresca)
+    2. Remove apenas as linhas do mês/responsável editado
+    3. Concatena com os dados editados
+    4. Salva tudo
+    """
+    # Recarregar dados frescos da planilha
+    st.cache_data.clear()
+    df_full_fresh, _ = load_data()
+
+    # Identificar quais linhas REMOVER da planilha
+    # (as do mês selecionado + responsável filtrado)
+    mask_month = (
+        (df_full_fresh["Data"].dt.month == sel_mo) &
+        (df_full_fresh["Data"].dt.year == sel_yr)
+    )
+
+    if user != "Casal":
+        mask_user = df_full_fresh["Responsavel"] == user
+        mask_remove = mask_month & mask_user
+    else:
+        mask_remove = mask_month
+
+    # Manter tudo que NÃO é o mês/user editado
+    df_kept = df_full_fresh[~mask_remove].copy()
+
+    # Concatenar com os dados editados
+    df_merged = pd.concat([df_kept, edited_month], ignore_index=True)
+
+    # Ordenar por data
+    df_merged["Data"] = pd.to_datetime(df_merged["Data"], errors="coerce")
+    df_merged = df_merged.sort_values("Data").reset_index(drop=True)
+
+    if update_sheet(df_merged, "Transacoes"):
+        st.toast("✓ Histórico atualizado")
+        st.rerun()
+
+
+# ==============================================================================
+# 11. APLICAÇÃO PRINCIPAL
 # ==============================================================================
 
 def main() -> None:
@@ -1152,11 +1248,10 @@ def main() -> None:
     df_trans, df_assets = load_data()
     mx = compute_metrics(df_trans, df_assets, user, sel_mo, sel_yr)
 
-    # --- Indicador de mês vazio ---
     month_label = fmt_month_year(sel_mo, sel_yr)
     has_data = mx["renda"] > 0 or mx["lifestyle"] > 0 or mx["investido_mes"] > 0
 
-    # ===== HERO: AUTONOMIA =====
+    # ===== HERO =====
     render_autonomia(mx["autonomia"], mx["sobrevivencia"])
 
     if not has_data:
@@ -1185,7 +1280,7 @@ def main() -> None:
             "Entradas do mês", mx["d_renda"]
         )
 
-    # ===== REGRA 50/30/20 (componente único) =====
+    # ===== REGRA 50/30/20 =====
     render_regra_503020(mx)
 
     # ===== ABAS =====
@@ -1269,7 +1364,6 @@ def main() -> None:
                 f"Total: <strong>{fmt_brl(total_pat)}</strong><br>{partes}"
             )
             patrimonio_form()
-
         with col_list:
             render_intel(
                 "Ativos Registrados",
@@ -1307,125 +1401,9 @@ def main() -> None:
             else:
                 render_intel("", "Adicione ativos usando o formulário ao lado.")
 
-    # --- HISTÓRICO ---
+    # --- HISTÓRICO (filtrado por mês) ---
     with tab_hist:
-        _render_historico(mx, df_trans, user)
-
-
-def _render_historico(
-    mx: dict,
-    df_trans_full: pd.DataFrame,
-    user: str,
-) -> None:
-    """Renderiza aba de histórico com merge seguro para edições filtradas."""
-    df_hist = mx["df"].copy()
-
-    if df_hist.empty:
-        render_intel("Histórico", "Nenhuma transação registrada.")
-        return
-
-    # Ordenar
-    df_hist["Data"] = pd.to_datetime(df_hist["Data"], errors="coerce")
-    df_hist = df_hist.sort_values("Data", ascending=False).reset_index(drop=True)
-
-    # Botão de export
-    col_csv, col_excel, col_spacer = st.columns([1, 1, 4])
-    with col_csv:
-        csv_data = df_hist.to_csv(index=False).encode("utf-8-sig")
-        st.download_button(
-            "⬇ CSV",
-            csv_data,
-            f"financas_{user}.csv",
-            "text/csv",
-            use_container_width=True,
-        )
-    with col_excel:
-        try:
-            buffer = BytesIO()
-            df_export = df_hist.copy()
-            if "Data" in df_export.columns:
-                df_export["Data"] = df_export["Data"].dt.strftime("%d/%m/%Y")
-            df_export.to_excel(buffer, index=False, engine="openpyxl")
-            st.download_button(
-                "⬇ EXCEL",
-                buffer.getvalue(),
-                f"financas_{user}.xlsx",
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True,
-            )
-        except ImportError:
-            pass  # openpyxl não instalado
-
-    # Editor
-    edited = st.data_editor(
-        df_hist,
-        use_container_width=True,
-        num_rows="dynamic",
-        column_config={
-            "Data": st.column_config.DateColumn(
-                "Data", format="DD/MM/YYYY", required=True
-            ),
-            "Valor": st.column_config.NumberColumn(
-                "Valor", format="R$ %.2f", required=True, min_value=0.0
-            ),
-            "Tipo": st.column_config.SelectboxColumn(
-                "Tipo", options=list(CFG.TIPOS), required=True
-            ),
-            "Categoria": st.column_config.SelectboxColumn(
-                "Categoria",
-                options=list(CFG.CATEGORIAS_TODAS),
-                required=True,
-            ),
-            "Descricao": st.column_config.TextColumn("Descrição", required=True),
-            "Responsavel": st.column_config.SelectboxColumn(
-                "Responsável", options=list(CFG.RESPONSAVEIS)
-            ),
-        },
-        hide_index=True,
-        key="editor_historico",
-    )
-
-    # Verificar mudanças
-    if not df_hist.reset_index(drop=True).equals(edited.reset_index(drop=True)):
-        st.warning(
-            f"⚠ Alterações pendentes — "
-            f"{'edição global' if user == 'Casal' else f'merge com dados de outros titulares'}"
-        )
-        c_save, c_discard = st.columns(2)
-        with c_save:
-            if st.button("✓ SALVAR ALTERAÇÕES", key="save_hist", use_container_width=True):
-                _save_historico(edited, df_trans_full, user)
-        with c_discard:
-            if st.button("✗ DESCARTAR", key="discard_hist", use_container_width=True):
-                st.rerun()
-
-
-def _save_historico(
-    edited: pd.DataFrame,
-    df_trans_full: pd.DataFrame,
-    user: str,
-) -> None:
-    """Salva histórico editado com merge seguro (não apaga dados de outros)."""
-    if user == "Casal":
-        # Edição global — salvar direto
-        if update_sheet(edited, "Transacoes"):
-            st.toast("✓ Histórico atualizado")
-            st.rerun()
-    else:
-        # Merge seguro: manter dados de OUTROS responsáveis intactos
-        df_full_fresh, _ = load_data()
-        df_outros = df_full_fresh[
-            df_full_fresh["Responsavel"] != user
-        ].copy()
-
-        df_merged = pd.concat(
-            [df_outros, edited],
-            ignore_index=True
-        )
-
-        if update_sheet(df_merged, "Transacoes"):
-            st.toast("✓ Histórico atualizado (merge seguro)")
-            st.rerun()
+        _render_historico(mx, df_trans, user, sel_mo, sel_yr)
 
 
 # ==============================================================================
