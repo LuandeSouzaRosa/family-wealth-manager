@@ -7,6 +7,7 @@ import calendar
 import html as html_lib
 from dataclasses import dataclass
 from io import BytesIO
+import time  # [FIX #16] Movido para o topo
 
 # ==============================================================================
 # 1. CONFIGURAÇÃO CENTRALIZADA
@@ -574,29 +575,35 @@ def inject_css() -> None:
     </style>
     """, unsafe_allow_html=True)
 
-inject_css()
+# [FIX #17] inject_css() removida daqui — será chamada dentro de main()
 
 # ==============================================================================
 # 4. UTILITÁRIOS
 # ==============================================================================
 
 def sanitize(text: str) -> str:
+    """Escapa HTML para prevenir injeção."""
     return html_lib.escape(str(text))
 
 def fmt_brl(val: float) -> str:
+    """Formata valor float para padrão BRL: R$ 1.234,56"""
     return f"R$ {val:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 def fmt_date(dt: datetime) -> str:
+    """Formata datetime para '01 Jan 2025'."""
     return f"{dt.day:02d} {MESES_PT[dt.month]} {dt.year}"
 
 def fmt_month_year(mo: int, yr: int) -> str:
+    """Retorna 'Janeiro 2025'."""
     return f"{MESES_FULL[mo]} {yr}"
 
 def end_of_month(year: int, month: int) -> datetime:
+    """Retorna datetime do último segundo do mês."""
     last_day = calendar.monthrange(year, month)[1]
     return datetime(year, month, last_day, 23, 59, 59)
 
 def default_form_date(sel_mo: int, sel_yr: int) -> date:
+    """Data default para formulários baseada no mês selecionado."""
     now = datetime.now()
     if sel_mo == now.month and sel_yr == now.year:
         return now.date()
@@ -604,18 +611,30 @@ def default_form_date(sel_mo: int, sel_yr: int) -> date:
         last_day = calendar.monthrange(sel_yr, sel_mo)[1]
         return date(sel_yr, sel_mo, last_day)
     else:
-        return date(sel_yr, sel_mo, 1)
+        # [FIX #10] Não deveria chegar aqui com bloqueio de navegação futura,
+        # mas por segurança retorna hoje
+        return now.date()
 
 def calc_delta(current: float, previous: float) -> float | None:
+    """Calcula variação percentual entre dois valores."""
     if previous == 0:
+        # [FIX #9] Se anterior é 0 e atual > 0, indica "novo"
+        if current > 0:
+            return float("inf")
         return None
     return ((current - previous) / abs(previous)) * 100
+
+def _is_future_month(month: int, year: int) -> bool:
+    """[FIX #1] Verifica se mês/ano é futuro em relação a agora."""
+    now = datetime.now()
+    return (year > now.year) or (year == now.year and month > now.month)
 
 # ==============================================================================
 # 5. VALIDAÇÃO
 # ==============================================================================
 
 def validate_transaction(entry: dict) -> tuple[bool, str]:
+    """Valida dados de uma transação antes de salvar."""
     desc = entry.get("Descricao", "")
     if not desc or not str(desc).strip():
         return False, "Descrição obrigatória"
@@ -631,6 +650,7 @@ def validate_transaction(entry: dict) -> tuple[bool, str]:
     return True, ""
 
 def validate_asset(entry: dict) -> tuple[bool, str]:
+    """Valida dados de um ativo patrimonial antes de salvar."""
     item = entry.get("Item", "")
     if not item or not str(item).strip():
         return False, "Nome do ativo obrigatório"
@@ -648,10 +668,19 @@ def validate_asset(entry: dict) -> tuple[bool, str]:
 # ==============================================================================
 
 def get_conn() -> GSheetsConnection:
+    """Retorna conexão com Google Sheets."""
     return st.connection("gsheets", type=GSheetsConnection)
+
+def _normalize_strings(df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
+    """[FIX #11] Normaliza strings de colunas categóricas."""
+    for col in columns:
+        if col in df.columns:
+            df[col] = df[col].astype(str).str.strip()
+    return df
 
 @st.cache_data(ttl=CFG.CACHE_TTL)
 def load_data() -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Carrega transações e patrimônio do Google Sheets."""
     conn = get_conn()
 
     expected_trans = list(CFG.COLS_TRANSACAO)
@@ -665,6 +694,8 @@ def load_data() -> tuple[pd.DataFrame, pd.DataFrame]:
             df_trans["Data"] = pd.to_datetime(df_trans["Data"], errors="coerce")
             df_trans["Valor"] = pd.to_numeric(df_trans["Valor"], errors="coerce").fillna(0.0)
             df_trans = df_trans.dropna(subset=["Data"])
+            # [FIX #11] Normalizar strings
+            df_trans = _normalize_strings(df_trans, ["Tipo", "Categoria", "Responsavel", "Descricao"])
     except Exception:
         df_trans = pd.DataFrame(columns=expected_trans)
 
@@ -677,17 +708,19 @@ def load_data() -> tuple[pd.DataFrame, pd.DataFrame]:
             df_assets[col] = None
         if not df_assets.empty:
             df_assets["Valor"] = pd.to_numeric(df_assets["Valor"], errors="coerce").fillna(0.0)
+            # [FIX #11] Normalizar strings
+            df_assets = _normalize_strings(df_assets, ["Item", "Responsavel"])
     except Exception:
         df_assets = pd.DataFrame(columns=expected_pat)
 
     return df_trans, df_assets
 
 def save_entry(data: dict, worksheet: str) -> bool:
-    import time
+    """Salva uma nova entrada na planilha com retry."""
     conn = get_conn()
+    st.cache_data.clear()  # [FIX #3] Limpar cache uma vez antes do loop
     for attempt in range(CFG.SAVE_RETRIES):
         try:
-            st.cache_data.clear()
             try:
                 df_curr = conn.read(worksheet=worksheet)
                 df_curr = df_curr.dropna(how="all")
@@ -700,16 +733,18 @@ def save_entry(data: dict, worksheet: str) -> bool:
                     df_updated["Data"], errors="coerce"
                 ).dt.strftime("%Y-%m-%d")
             conn.update(worksheet=worksheet, data=df_updated)
-            st.cache_data.clear()
+            st.cache_data.clear()  # [FIX #3] Limpar após sucesso
             return True
         except Exception as e:
             if attempt == CFG.SAVE_RETRIES - 1:
                 st.error(f"Falha ao salvar após {CFG.SAVE_RETRIES} tentativas: {e}")
+                st.cache_data.clear()  # [FIX #14] Limpar cache mesmo em erro
                 return False
             time.sleep(0.5 * (attempt + 1))
     return False
 
 def update_sheet(df_edited: pd.DataFrame, worksheet: str) -> bool:
+    """Atualiza planilha inteira com DataFrame editado."""
     conn = get_conn()
     try:
         df_to_save = df_edited.copy()
@@ -722,18 +757,26 @@ def update_sheet(df_edited: pd.DataFrame, worksheet: str) -> bool:
         return True
     except Exception as e:
         st.error(f"Erro ao atualizar: {e}")
+        st.cache_data.clear()  # [FIX #14] Limpar cache mesmo em erro
         return False
 
 # ==============================================================================
 # 7. MOTOR ANALÍTICO
 # ==============================================================================
 
-def filter_by_user(df: pd.DataFrame, user_filter: str) -> pd.DataFrame:
+def filter_by_user(df: pd.DataFrame, user_filter: str, include_shared: bool = False) -> pd.DataFrame:
+    """Filtra DataFrame por responsável.
+
+    [FIX #2] include_shared=True inclui registros 'Casal' junto com o usuário individual.
+    """
     if user_filter != "Casal" and "Responsavel" in df.columns:
+        if include_shared:
+            return df[df["Responsavel"].isin([user_filter, "Casal"])].copy()
         return df[df["Responsavel"] == user_filter].copy()
     return df.copy()
 
 def filter_by_month(df: pd.DataFrame, month: int, year: int) -> pd.DataFrame:
+    """Filtra DataFrame por mês/ano."""
     if df.empty:
         return df
     return df[
@@ -748,9 +791,11 @@ def compute_projection(
     sel_yr: int,
 ) -> dict | None:
     """Projeção linear de gastos para o fim do mês.
-    
+
     Só calcula para o mês ATUAL (meses passados já encerraram).
     Retorna None se dados insuficientes.
+    [FIX #7] Nota: investimentos não são projetados linearmente —
+    assume-se que os aportes já feitos são os do mês inteiro.
     """
     now = datetime.now()
     is_current = (sel_mo == now.month and sel_yr == now.year)
@@ -764,20 +809,11 @@ def compute_projection(
     if day_of_month < 3 or mx["lifestyle"] == 0:
         return None
 
-    # Projeção linear
     daily_rate = mx["lifestyle"] / day_of_month
     projected_lifestyle = daily_rate * days_in_month
-
-    # Projeção de investimentos (assume que os já feitos são os do mês)
     projected_investido = mx["investido_mes"]
-
-    # Projeção de saldo
     projected_available = mx["renda"] - projected_lifestyle - projected_investido
-
-    # Barra de progresso: quanto do mês já passou
     progress_pct = (day_of_month / days_in_month) * 100
-
-    # Quanto da renda já foi consumido
     renda_consumed_pct = (mx["lifestyle"] / mx["renda"] * 100) if mx["renda"] > 0 else 0
     renda_projected_pct = (projected_lifestyle / mx["renda"] * 100) if mx["renda"] > 0 else 0
 
@@ -808,7 +844,6 @@ def compute_alerts(
     now = datetime.now()
     is_current = (sel_mo == now.month and sel_yr == now.year)
 
-    # ── POSITIVO: Mês saudável ──
     if mx["disponivel"] > 0 and mx["investido_mes"] > 0 and mx["renda"] > 0:
         alerts.append({
             "level": "ok",
@@ -816,7 +851,6 @@ def compute_alerts(
             "msg": f"Mês positivo — {mx['taxa_aporte']:.0f}% investido, saldo de {fmt_brl(mx['disponivel'])}",
         })
 
-    # ── DANGER: Gastos > Renda ──
     if mx["renda"] > 0 and mx["lifestyle"] > mx["renda"]:
         pct = (mx["lifestyle"] / mx["renda"]) * 100
         alerts.append({
@@ -824,8 +858,6 @@ def compute_alerts(
             "icon": "▲",
             "msg": f"Gastos em {pct:.0f}% da renda — mês no vermelho",
         })
-
-    # ── DANGER: Margem crítica (>80%) ──
     elif mx["renda"] > 0 and mx["lifestyle"] > mx["renda"] * 0.8:
         pct = (mx["lifestyle"] / mx["renda"]) * 100
         alerts.append({
@@ -834,15 +866,12 @@ def compute_alerts(
             "msg": f"Gastos em {pct:.0f}% da renda — margem crítica",
         })
 
-    # ── WARN: Projeção de déficit ──
     if projection and projection["projected_deficit"]:
         alerts.append({
             "level": "warn",
             "icon": "◆",
             "msg": f"Projeção: gastos de {fmt_brl(projection['projected_lifestyle'])} — acima da renda",
         })
-
-    # ── WARN: Projeção aperta (>90% da renda) ──
     elif projection and not projection["projected_deficit"] and projection["renda_projected_pct"] > 90:
         alerts.append({
             "level": "warn",
@@ -850,7 +879,6 @@ def compute_alerts(
             "msg": f"Projeção aperta: gastos consumirão {projection['renda_projected_pct']:.0f}% da renda",
         })
 
-    # ── WARN: Categoria dominante (>40%) ──
     if mx["cat_breakdown"] and mx["lifestyle"] > 0:
         for cat, val in mx["cat_breakdown"].items():
             pct = (val / mx["lifestyle"]) * 100
@@ -860,17 +888,15 @@ def compute_alerts(
                     "icon": "◈",
                     "msg": f"{sanitize(str(cat))} concentra {pct:.0f}% dos gastos ({fmt_brl(val)})",
                 })
-                break  # Só o maior
+                break
 
-    # ── WARN: Gastos subiram muito vs mês anterior ──
-    if mx["d_lifestyle"] is not None and mx["d_lifestyle"] > 30:
+    if mx["d_lifestyle"] is not None and mx["d_lifestyle"] != float("inf") and mx["d_lifestyle"] > 30:
         alerts.append({
             "level": "warn",
             "icon": "▲",
             "msg": f"Gastos {mx['d_lifestyle']:.0f}% acima do mês anterior",
         })
 
-    # ── INFO: Sem renda registrada (mês atual, após dia 5) ──
     if is_current and now.day >= 5 and mx["renda"] == 0:
         alerts.append({
             "level": "info",
@@ -878,7 +904,6 @@ def compute_alerts(
             "msg": "Nenhuma entrada registrada este mês",
         })
 
-    # ── INFO: Sem investimento (mês atual após dia 20, ou mês passado) ──
     if mx["renda"] > 0 and mx["investido_mes"] == 0:
         if is_current and now.day >= 20:
             alerts.append({
@@ -893,7 +918,6 @@ def compute_alerts(
                 "msg": "Mês encerrado sem aportes de investimento",
             })
 
-    # ── INFO: Budget diário ──
     if projection and projection["daily_budget"] > 0 and not projection["projected_deficit"]:
         alerts.append({
             "level": "info",
@@ -911,9 +935,11 @@ def compute_metrics(
     target_month: int,
     target_year: int,
 ) -> dict:
+    """Calcula todas as métricas financeiras para o mês/usuário."""
 
     df_t = filter_by_user(df_trans, user_filter)
-    df_a = filter_by_user(df_assets, user_filter)
+    # [FIX #2] Patrimônio inclui ativos "Casal" na visão individual
+    df_a = filter_by_user(df_assets, user_filter, include_shared=True)
     df_mo = filter_by_month(df_t, target_month, target_year)
 
     m: dict = {
@@ -1072,6 +1098,7 @@ def compute_metrics(
 
 
 def _compute_health(m: dict) -> str:
+    """Classifica saúde financeira do mês."""
     if m["renda"] == 0:
         return "neutral"
     score = 0
@@ -1099,6 +1126,7 @@ def compute_evolution(
     ref_year: int,
     months_back: int = CFG.MESES_EVOLUCAO,
 ) -> list[dict]:
+    """Calcula dados de evolução mensal para gráfico."""
     df = filter_by_user(df_trans, user_filter)
     if df.empty:
         return []
@@ -1163,6 +1191,10 @@ def compute_evolution(
             "investido": inv,
             "renda": ren,
             "total_gastos": nec + des,
+            # [FIX #8] Defaults para trend em todos os itens
+            "media_movel": 0.0,
+            "trend_pct": 0.0,
+            "trend_direction": "stable",
         })
 
     # --- Média Móvel 3 meses (gastos consumo, sem investimento) ---
@@ -1172,19 +1204,14 @@ def compute_evolution(
 
     # --- Tendência: comparar primeira e última média ---
     if len(data) >= 3:
-        first_ma = data[2]["media_movel"]  # Primeira MA válida (3 pontos)
+        first_ma = data[2]["media_movel"]
         last_ma = data[-1]["media_movel"]
         if first_ma > 0:
             trend_pct = ((last_ma - first_ma) / first_ma) * 100
         else:
-            trend_pct = 0
-        # Guardar no último item
+            trend_pct = 0.0
         data[-1]["trend_pct"] = trend_pct
         data[-1]["trend_direction"] = "up" if trend_pct > 5 else "down" if trend_pct < -5 else "stable"
-    else:
-        if data:
-            data[-1]["trend_pct"] = 0
-            data[-1]["trend_direction"] = "stable"
 
     return data
 
@@ -1194,24 +1221,38 @@ def compute_evolution(
 # ==============================================================================
 
 def render_autonomia(val: float, sobrevivencia: float) -> None:
-    display = min(val, 999)
-    if val >= CFG.AUTONOMIA_OK:
+    """Renderiza hero de autonomia financeira."""
+    # [FIX #6] Tratar autonomia infinita / sem burn rate
+    if val >= 999:
+        display_text = "∞"
         color = "#00FFCC"
-    elif val >= CFG.AUTONOMIA_WARN:
-        color = "#FFAA00"
     else:
-        color = "#FF4444"
+        display_text = f"{min(val, 999):.1f}"
+        if val >= CFG.AUTONOMIA_OK:
+            color = "#00FFCC"
+        elif val >= CFG.AUTONOMIA_WARN:
+            color = "#FFAA00"
+        else:
+            color = "#FF4444"
+
+    # [FIX #6] Subtítulo contextual
+    if val >= 999:
+        unit_text = "sem burn rate registrado"
+    else:
+        unit_text = "meses de sobrevivência"
+
     st.markdown(f"""
     <div class="autonomia-hero">
         <div class="autonomia-tag">▮ Autonomia Financeira</div>
-        <div class="autonomia-number" style="color: {color};">{display:.1f}</div>
-        <div class="autonomia-unit">meses de sobrevivência</div>
+        <div class="autonomia-number" style="color: {color};">{display_text}</div>
+        <div class="autonomia-unit">{unit_text}</div>
         <div class="autonomia-sub">Patrimônio líquido: {fmt_brl(sobrevivencia)}</div>
     </div>
     """, unsafe_allow_html=True)
 
 
 def render_health_badge(health: str, month_label: str) -> None:
+    """Renderiza badge de saúde do mês."""
     config = {
         "excellent": ("● Mês excelente", "health-excellent"),
         "good":      ("● Mês saudável", "health-good"),
@@ -1247,7 +1288,6 @@ def render_projection(proj: dict | None, mx: dict) -> None:
     if proj is None:
         return
 
-    # Cor baseada na projeção
     if proj["projected_deficit"]:
         fill_color = "#FF4444"
         proj_color = "#FF4444"
@@ -1258,11 +1298,8 @@ def render_projection(proj: dict | None, mx: dict) -> None:
         fill_color = "#00FFCC"
         proj_color = "#00FFCC"
 
-    # Posição da barra: quanto da renda já consumiu
     actual_pct = min(100, proj["renda_consumed_pct"])
     projected_pct = min(100, proj["renda_projected_pct"])
-
-    # Marcador de posição temporal (dia do mês)
     time_pct = proj["progress_pct"]
 
     main_text = f"Projeção: {fmt_brl(proj['projected_lifestyle'])}"
@@ -1300,20 +1337,30 @@ def render_projection(proj: dict | None, mx: dict) -> None:
     """, unsafe_allow_html=True)
 
 
+def _format_delta_html(delta: float | None, delta_invert: bool = False) -> str:
+    """[FIX #9] Formata delta para HTML, tratando inf (novo) e zero."""
+    if delta is None:
+        return ""
+    if delta == float("inf"):
+        return '<div class="kpi-delta kpi-delta-up">vs anterior: novo</div>'
+    if delta == float("-inf"):
+        return '<div class="kpi-delta kpi-delta-down">vs anterior: zerou</div>'
+    if delta_invert:
+        cls = "kpi-delta-up" if delta <= 0 else "kpi-delta-down"
+    else:
+        cls = "kpi-delta-up" if delta >= 0 else "kpi-delta-down"
+    if delta == 0:
+        cls = "kpi-delta-neutral"
+    sinal = "+" if delta > 0 else ""
+    return f'<div class="kpi-delta {cls}">vs anterior: {sinal}{delta:.0f}%</div>'
+
+
 def render_kpi(
     label: str, value: str, sub: str = "",
     delta: float | None = None, delta_invert: bool = False,
 ) -> None:
-    delta_html = ""
-    if delta is not None:
-        if delta_invert:
-            cls = "kpi-delta-up" if delta <= 0 else "kpi-delta-down"
-        else:
-            cls = "kpi-delta-up" if delta >= 0 else "kpi-delta-down"
-        if delta == 0:
-            cls = "kpi-delta-neutral"
-        sinal = "+" if delta > 0 else ""
-        delta_html = f'<div class="kpi-delta {cls}">vs anterior: {sinal}{delta:.0f}%</div>'
+    """Renderiza card KPI."""
+    delta_html = _format_delta_html(delta, delta_invert)
     st.markdown(f"""
     <div class="kpi-mono">
         <div class="kpi-mono-label">{sanitize(label)}</div>
@@ -1325,6 +1372,7 @@ def render_kpi(
 
 
 def render_intel(title: str, body: str) -> None:
+    """Renderiza box de inteligência/insight."""
     st.markdown(f"""
     <div class="intel-box">
         <div class="intel-title">{sanitize(title)}</div>
@@ -1334,6 +1382,7 @@ def render_intel(title: str, body: str) -> None:
 
 
 def render_regra_503020(mx: dict) -> None:
+    """Renderiza barra e badges da regra 50/30/20."""
     total = mx["nec_pct"] + mx["des_pct"] + mx["inv_pct"]
     if total == 0:
         n_w, d_w, i_w = 33, 33, 34
@@ -1375,6 +1424,7 @@ def render_regra_503020(mx: dict) -> None:
 
 
 def render_cat_breakdown(cat_dict: dict) -> None:
+    """Renderiza barras de breakdown por categoria."""
     if not cat_dict:
         return
     total = sum(cat_dict.values())
@@ -1395,6 +1445,7 @@ def render_cat_breakdown(cat_dict: dict) -> None:
 
 
 def render_hist_summary(mx: dict) -> None:
+    """Renderiza resumo do histórico mensal."""
     entradas = mx["renda"]
     saidas = mx["lifestyle"]
     investido = mx["investido_mes"]
@@ -1444,7 +1495,6 @@ def render_evolution_chart(evo_data: list[dict]) -> None:
 
     fig = go.Figure()
 
-    # Barras empilhadas
     fig.add_trace(go.Bar(
         name="Necessidades", x=labels, y=nec, marker_color="#F0F0F0"
     ))
@@ -1455,7 +1505,6 @@ def render_evolution_chart(evo_data: list[dict]) -> None:
         name="Investido", x=labels, y=inv, marker_color="#00FFCC"
     ))
 
-    # Linha de renda
     fig.add_trace(go.Scatter(
         name="Renda",
         x=labels, y=renda,
@@ -1464,7 +1513,6 @@ def render_evolution_chart(evo_data: list[dict]) -> None:
         marker=dict(size=5, color="#00FFCC"),
     ))
 
-    # Linha de média móvel 3 meses
     fig.add_trace(go.Scatter(
         name="Média 3m",
         x=labels, y=media_movel,
@@ -1489,33 +1537,33 @@ def render_evolution_chart(evo_data: list[dict]) -> None:
     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
     # --- Indicador de tendência ---
-    if evo_data:
-        last = evo_data[-1]
-        trend_pct = last.get("trend_pct", 0)
-        trend_dir = last.get("trend_direction", "stable")
+    last = evo_data[-1]
+    trend_pct = last.get("trend_pct", 0)
+    trend_dir = last.get("trend_direction", "stable")
 
-        if trend_dir == "up":
-            trend_icon = "▲"
-            trend_color = "#FF4444"
-            trend_text = f"Tendência: gastos subindo {abs(trend_pct):.0f}% (média 3m)"
-        elif trend_dir == "down":
-            trend_icon = "▼"
-            trend_color = "#00FFCC"
-            trend_text = f"Tendência: gastos caindo {abs(trend_pct):.0f}% (média 3m)"
-        else:
-            trend_icon = "●"
-            trend_color = "#555"
-            trend_text = "Tendência: gastos estáveis (média 3m)"
+    if trend_dir == "up":
+        trend_icon = "▲"
+        trend_color = "#FF4444"
+        trend_text = f"Tendência: gastos subindo {abs(trend_pct):.0f}% (média 3m)"
+    elif trend_dir == "down":
+        trend_icon = "▼"
+        trend_color = "#00FFCC"
+        trend_text = f"Tendência: gastos caindo {abs(trend_pct):.0f}% (média 3m)"
+    else:
+        trend_icon = "●"
+        trend_color = "#555"
+        trend_text = "Tendência: gastos estáveis (média 3m)"
 
-        st.markdown(
-            f'<div style="font-family:JetBrains Mono,monospace; font-size:0.65rem; '
-            f'color:{trend_color}; padding:4px 0; letter-spacing:0.05em;">'
-            f'{trend_icon} {trend_text}</div>',
-            unsafe_allow_html=True
-        )
+    st.markdown(
+        f'<div style="font-family:JetBrains Mono,monospace; font-size:0.65rem; '
+        f'color:{trend_color}; padding:4px 0; letter-spacing:0.05em;">'
+        f'{trend_icon} {trend_text}</div>',
+        unsafe_allow_html=True
+    )
 
 
 def render_empty_month(month_label: str) -> None:
+    """Renderiza mensagem de mês vazio."""
     st.markdown(f"""
     <div class="intel-box empty-month">
         <div class="intel-title">Mês sem registros</div>
@@ -1536,8 +1584,9 @@ def transaction_form(
     submit_label: str = "REGISTRAR",
     desc_placeholder: str = "Descrição",
     default_step: float = 10.0,
-    sel_mo: int = None, sel_yr: int = None,
+    sel_mo: int | None = None, sel_yr: int | None = None,
 ) -> None:
+    """Formulário genérico de transação."""
     form_date = default_form_date(sel_mo, sel_yr) if sel_mo and sel_yr else datetime.now().date()
     with st.form(form_key, clear_on_submit=True):
         d = st.date_input("Data", form_date, format="DD/MM/YYYY")
@@ -1561,7 +1610,8 @@ def transaction_form(
                 st.rerun()
 
 
-def wealth_form(sel_mo: int = None, sel_yr: int = None) -> None:
+def wealth_form(sel_mo: int | None = None, sel_yr: int | None = None) -> None:
+    """Formulário de aporte / investimento."""
     form_date = default_form_date(sel_mo, sel_yr) if sel_mo and sel_yr else datetime.now().date()
     with st.form("f_wealth", clear_on_submit=True):
         d = st.date_input("Data", form_date, format="DD/MM/YYYY")
@@ -1585,6 +1635,7 @@ def wealth_form(sel_mo: int = None, sel_yr: int = None) -> None:
 
 
 def patrimonio_form() -> None:
+    """Formulário de ativo patrimonial."""
     with st.form("f_patrimonio", clear_on_submit=True):
         item = st.text_input(
             "Ativo / Conta", placeholder="Ex: Poupança Nubank, Apartamento",
@@ -1606,6 +1657,23 @@ def patrimonio_form() -> None:
 # 10. HISTÓRICO
 # ==============================================================================
 
+def _df_equals_safe(df1: pd.DataFrame, df2: pd.DataFrame) -> bool:
+    """[FIX #5] Comparação segura de DataFrames normalizando tipos."""
+    try:
+        d1 = df1.reset_index(drop=True).copy()
+        d2 = df2.reset_index(drop=True).copy()
+        if d1.shape != d2.shape:
+            return False
+        if list(d1.columns) != list(d2.columns):
+            return False
+        for col in d1.columns:
+            d1[col] = d1[col].astype(str)
+            d2[col] = d2[col].astype(str)
+        return d1.equals(d2)
+    except Exception:
+        return False
+
+
 def _render_historico(
     mx: dict,
     df_trans_full: pd.DataFrame,
@@ -1613,6 +1681,7 @@ def _render_historico(
     sel_mo: int,
     sel_yr: int,
 ) -> None:
+    """Renderiza aba de histórico com busca, export e edição."""
     df_hist = mx["df_month"].copy()
     month_label = fmt_month_year(sel_mo, sel_yr)
 
@@ -1632,9 +1701,10 @@ def _render_historico(
     )
     render_hist_summary(mx)
 
+    # [FIX #19] Busca e edição separadas visualmente
     search = st.text_input(
         "🔍 Buscar",
-        placeholder="Filtrar por descrição, categoria...",
+        placeholder="Filtrar visualização por descrição, categoria...",
         label_visibility="collapsed",
         key="hist_search",
     )
@@ -1653,7 +1723,7 @@ def _render_historico(
             render_intel("", f"Nenhum resultado para '<em>{sanitize(search)}</em>'")
             return
 
-    col_csv, col_excel, col_spacer = st.columns([1, 1, 4])
+    col_csv, col_excel, _ = st.columns([1, 1, 4])  # [FIX #18] _ no spacer
     with col_csv:
         csv_data = df_display.to_csv(index=False).encode("utf-8-sig")
         st.download_button(
@@ -1662,6 +1732,7 @@ def _render_historico(
             "text/csv", use_container_width=True,
         )
     with col_excel:
+        # [FIX #15] Feedback quando openpyxl não disponível
         try:
             buffer = BytesIO()
             df_export = df_display.copy()
@@ -1675,7 +1746,11 @@ def _render_historico(
                 use_container_width=True,
             )
         except ImportError:
-            pass
+            st.caption("Excel indisponível (instale openpyxl)")
+
+    # [FIX #19] Aviso de que edição é sobre todos os registros
+    if search and search.strip():
+        st.caption("⚠ A busca filtra apenas a visualização/export. A edição abaixo mostra todos os registros do mês.")
 
     edited = st.data_editor(
         df_hist,
@@ -1703,12 +1778,14 @@ def _render_historico(
         key="editor_historico",
     )
 
-    if not df_hist.reset_index(drop=True).equals(edited.reset_index(drop=True)):
+    # [FIX #5] Comparação segura
+    if not _df_equals_safe(df_hist, edited):
         st.warning(f"⚠ Alterações pendentes em {month_label}")
         c_save, c_discard = st.columns(2)
         with c_save:
             if st.button("✓ SALVAR ALTERAÇÕES", key="save_hist", use_container_width=True):
-                _save_historico_mensal(edited, df_trans_full, user, sel_mo, sel_yr)
+                # [FIX #4] Removido parâmetro df_trans_full não utilizado
+                _save_historico_mensal(edited, user, sel_mo, sel_yr)
         with c_discard:
             if st.button("✗ DESCARTAR", key="discard_hist", use_container_width=True):
                 st.rerun()
@@ -1716,11 +1793,11 @@ def _render_historico(
 
 def _save_historico_mensal(
     edited_month: pd.DataFrame,
-    df_trans_full: pd.DataFrame,
-    user: str,
+    user: str,  # [FIX #4] Removido df_trans_full
     sel_mo: int,
     sel_yr: int,
 ) -> None:
+    """Salva edições do histórico mensal na planilha completa."""
     st.cache_data.clear()
     df_full_fresh, _ = load_data()
 
@@ -1749,10 +1826,13 @@ def _save_historico_mensal(
 # ==============================================================================
 
 def main() -> None:
+    # [FIX #17] CSS injetado dentro de main()
+    inject_css()
+
     now = datetime.now()
 
     # --- Barra de Controle ---
-    c_filter, c_spacer, c_status = st.columns([1, 2, 1])
+    c_filter, _, c_status = st.columns([1, 2, 1])  # [FIX #18] _ no spacer
     with c_filter:
         try:
             user = st.pills(
@@ -1769,7 +1849,7 @@ def main() -> None:
         user = "Casal"
     with c_status:
         st.markdown(
-            f'<div class="status-line">L&L TERMINAL v4.0 — {fmt_date(now)}</div>',
+            f'<div class="status-line">L&L TERMINAL v4.1 — {fmt_date(now)}</div>',
             unsafe_allow_html=True
         )
 
@@ -1777,6 +1857,11 @@ def main() -> None:
     if "nav_month" not in st.session_state:
         st.session_state.nav_month = now.month
     if "nav_year" not in st.session_state:
+        st.session_state.nav_year = now.year
+
+    # [FIX #1] Clamp para impedir meses futuros ao carregar
+    if _is_future_month(st.session_state.nav_month, st.session_state.nav_year):
+        st.session_state.nav_month = now.month
         st.session_state.nav_year = now.year
 
     nav_prev, nav_label, nav_next = st.columns([1, 3, 1])
@@ -1817,11 +1902,15 @@ def main() -> None:
 
     with nav_next:
         if st.button("▶", key="nav_next", use_container_width=True):
-            if not is_current:
-                st.session_state.nav_month += 1
-                if st.session_state.nav_month == 13:
-                    st.session_state.nav_month = 1
-                    st.session_state.nav_year += 1
+            # [FIX #1] Verificar se o próximo mês não é futuro
+            next_mo = st.session_state.nav_month + 1
+            next_yr = st.session_state.nav_year
+            if next_mo == 13:
+                next_mo = 1
+                next_yr += 1
+            if not _is_future_month(next_mo, next_yr):
+                st.session_state.nav_month = next_mo
+                st.session_state.nav_year = next_yr
                 st.rerun()
 
     sel_mo = st.session_state.nav_month
@@ -1983,9 +2072,8 @@ def main() -> None:
                     hide_index=True,
                     key="editor_patrimonio",
                 )
-                if not df_assets.reset_index(drop=True).equals(
-                    edited_assets.reset_index(drop=True)
-                ):
+                # [FIX #5] Comparação segura
+                if not _df_equals_safe(df_assets, edited_assets):
                     c_save, c_cancel = st.columns(2)
                     with c_save:
                         if st.button("✓ SALVAR PATRIMÔNIO", use_container_width=True):
