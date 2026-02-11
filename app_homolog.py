@@ -1585,6 +1585,7 @@ def transaction_form(
     desc_placeholder: str = "Descrição",
     default_step: float = 10.0,
     sel_mo: int | None = None, sel_yr: int | None = None,
+    default_resp: str = "Casal",  # [MELHORIA 1.4]
 ) -> None:
     """Formulário genérico de transação."""
     form_date = default_form_date(sel_mo, sel_yr) if sel_mo and sel_yr else datetime.now().date()
@@ -1596,7 +1597,10 @@ def transaction_form(
         )
         val = st.number_input("Valor (R$)", min_value=0.01, step=default_step)
         cat = st.selectbox("Categoria", categorias)
-        resp = st.selectbox("Responsável", list(CFG.RESPONSAVEIS))
+                # [MELHORIA 1.4] Responsável default baseado no filtro ativo
+        resp_options = list(CFG.RESPONSAVEIS)
+        resp_index = resp_options.index(default_resp) if default_resp in resp_options else 0
+        resp = st.selectbox("Responsável", resp_options, index=resp_index)
         if st.form_submit_button(submit_label):
             entry = {
                 "Data": d, "Descricao": desc.strip(), "Valor": val,
@@ -1752,10 +1756,13 @@ def _render_historico(
     if search and search.strip():
         st.caption("⚠ A busca filtra apenas a visualização/export. A edição abaixo mostra todos os registros do mês.")
 
+    # [MELHORIA 1.1] Permitir exclusão de linhas
+    st.caption("💡 Para excluir transações, selecione a linha e pressione Delete.")
+
     edited = st.data_editor(
         df_hist,
         use_container_width=True,
-        num_rows="fixed",
+        num_rows="dynamic",
         column_config={
             "Data": st.column_config.DateColumn(
                 "Data", format="DD/MM/YYYY", required=True
@@ -1780,12 +1787,21 @@ def _render_historico(
 
     # [FIX #5] Comparação segura
     if not _df_equals_safe(df_hist, edited):
-        st.warning(f"⚠ Alterações pendentes em {month_label}")
+        # [MELHORIA 1.1] Detectar exclusões e mostrar aviso apropriado
+        rows_removed = len(df_hist) - len(edited)
+        if rows_removed > 0:
+            st.warning(f"⚠ {rows_removed} transação(ões) será(ão) excluída(s) em {month_label}")
+        else:
+            st.warning(f"⚠ Alterações pendentes em {month_label}")
+
         c_save, c_discard = st.columns(2)
         with c_save:
             if st.button("✓ SALVAR ALTERAÇÕES", key="save_hist", use_container_width=True):
-                # [FIX #4] Removido parâmetro df_trans_full não utilizado
-                _save_historico_mensal(edited, user, sel_mo, sel_yr)
+                # Validar que não ficou vazio acidentalmente
+                if edited.empty and len(df_hist) > 3:
+                    st.error("⚠ Não é possível excluir todas as transações de uma vez. Descarte e tente novamente.")
+                else:
+                    _save_historico_mensal(edited, user, sel_mo, sel_yr)
         with c_discard:
             if st.button("✗ DESCARTAR", key="discard_hist", use_container_width=True):
                 st.rerun()
@@ -1991,6 +2007,7 @@ def main() -> None:
                 desc_placeholder="Ex: Mercado, Uber, Jantar",
                 default_step=10.0,
                 sel_mo=sel_mo, sel_yr=sel_yr,
+                default_resp=user,  # [MELHORIA 1.4]
             )
         with col_intel:
             render_intel("Intel — Lifestyle", mx["insight_ls"])
@@ -2014,6 +2031,7 @@ def main() -> None:
                 desc_placeholder="Ex: Salário, Freelance",
                 default_step=100.0,
                 sel_mo=sel_mo, sel_yr=sel_yr,
+                default_resp=user,  # [MELHORIA 1.4]
             )
         with col_intel:
             render_intel("Intel — Renda", mx["insight_renda"])
@@ -2026,7 +2044,7 @@ def main() -> None:
                 f"Mês: <strong>{fmt_brl(mx['investido_mes'])}</strong><br>"
                 f"Acumulado: <strong>{fmt_brl(mx['investido_total'])}</strong>"
             )
-            wealth_form(sel_mo=sel_mo, sel_yr=sel_yr)
+            wealth_form(sel_mo=sel_mo, sel_yr=sel_yr, default_resp=user)  # [MELHORIA 1.4]
         with col_intel:
             render_intel(
                 "Intel — Patrimônio",
