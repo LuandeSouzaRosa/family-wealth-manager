@@ -1387,12 +1387,13 @@ def compute_metrics(
 
     df_t = filter_by_user(df_trans, user_filter)
     df_a = filter_by_user(df_assets, user_filter, include_shared=True)
-    df_mo = filter_by_month(df_t, target_month, target_year)
 
-    # Garantir que 'Data' é datetime após filtros
+    # Garantir que 'Data' é datetime ANTES de filter_by_month
     if not df_t.empty and not pd.api.types.is_datetime64_any_dtype(df_t["Data"]):
         df_t["Data"] = pd.to_datetime(df_t["Data"], errors="coerce")
         df_t = df_t.dropna(subset=["Data"])
+
+    df_mo = filter_by_month(df_t, target_month, target_year)
 
     m: dict = {
         "renda": 0.0, "lifestyle": 0.0, "investido_mes": 0.0,
@@ -2229,6 +2230,7 @@ def transaction_form(
             entry = {
                 "Data": d, "Descricao": desc.strip(), "Valor": val,
                 "Categoria": cat, "Tipo": tipo, "Responsavel": resp,
+                "Origem": "Manual",
             }
             ok, err = validate_transaction(entry)
             if not ok:
@@ -2260,6 +2262,7 @@ def wealth_form(
             entry = {
                 "Data": d, "Descricao": desc.strip(), "Valor": val,
                 "Categoria": "Investimento", "Tipo": "Saída", "Responsavel": resp,
+                "Origem": "Manual",
             }
             ok, err = validate_transaction(entry)
             if not ok:
@@ -2302,7 +2305,11 @@ def recorrente_form(default_resp: str = "Casal") -> None:
             max_chars=CFG.MAX_DESC_LENGTH,
         )
         val = st.number_input("Valor (R$)", min_value=0.01, step=50.0)
-        cat = st.selectbox("Categoria", list(CFG.CATEGORIAS_TODAS))
+        if tipo == "Saída":
+            cat_options = list(CFG.CATEGORIAS_SAIDA) + ["Investimento"]
+        else:
+            cat_options = list(CFG.CATEGORIAS_ENTRADA)
+        cat = st.selectbox("Categoria", cat_options)
         dia = st.number_input(
             "Dia do vencimento", min_value=1, max_value=28, value=1, step=1
         )
@@ -2546,7 +2553,7 @@ def main() -> None:
         user = "Casal"
     with c_status:
         st.markdown(
-            f'<div class="status-line">L&L TERMINAL v4.4 — {fmt_date(now)}</div>',
+            f'<div class="status-line">L&L TERMINAL v4.5 — {fmt_date(now)}</div>',
             unsafe_allow_html=True
         )
 
