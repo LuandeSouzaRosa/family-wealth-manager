@@ -1,3 +1,4 @@
+from __future__ import annotations
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
@@ -74,9 +75,6 @@ st.set_page_config(
 
 def inject_css() -> None:
     st.markdown("""
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap');
 
@@ -707,9 +705,10 @@ def sanitize(text: str) -> str:
 
 
 def fmt_brl(val: float) -> str:
-    """Formata valor float para padrão BRL: R$ 1.234,56"""
+    """Formata valor float para padrão BRL: R$ 1.234,56 / -R$ 1.234,56"""
+    if val < 0:
+        return f"-R$ {abs(val):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
     return f"R$ {val:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-
 
 def fmt_date(dt: datetime) -> str:
     """Formata datetime para '01 Jan 2025'."""
@@ -793,7 +792,12 @@ def validate_transaction(entry: dict) -> tuple[bool, str]:
     # --- Data [FIX B4] ---
     dt = entry.get("Data")
     if dt is not None:
-        if isinstance(dt, date) and not isinstance(dt, datetime):
+        # Tratar NaT do pandas (vem do data_editor)
+        if isinstance(dt, pd.Timestamp) and pd.isna(dt):
+            return False, "Data obrigatória"
+        if isinstance(dt, pd.Timestamp):
+            dt_check = dt.to_pydatetime()
+        elif isinstance(dt, date) and not isinstance(dt, datetime):
             dt_check = datetime.combine(dt, datetime.min.time())
         elif isinstance(dt, datetime):
             dt_check = dt
@@ -1104,6 +1108,11 @@ def compute_metrics(
     df_t = filter_by_user(df_trans, user_filter)
     df_a = filter_by_user(df_assets, user_filter, include_shared=True)
     df_mo = filter_by_month(df_t, target_month, target_year)
+
+    # Garantir que 'Data' é datetime após filtros
+    if not df_t.empty and not pd.api.types.is_datetime64_any_dtype(df_t["Data"]):
+        df_t["Data"] = pd.to_datetime(df_t["Data"], errors="coerce")
+        df_t = df_t.dropna(subset=["Data"])
 
     m: dict = {
         "renda": 0.0, "lifestyle": 0.0, "investido_mes": 0.0,
@@ -2039,7 +2048,7 @@ def _render_historico(
         "🔍 Buscar",
         placeholder="Filtrar visualização por descrição, categoria...",
         label_visibility="collapsed",
-        key="hist_search",
+        key=f"hist_search_{user}_{sel_mo}_{sel_yr}",
     )
 
     df_display = df_hist.copy()
@@ -2108,7 +2117,7 @@ def _render_historico(
             ),
         },
         hide_index=True,
-        key="editor_historico",
+        key=f"editor_historico_{user}_{sel_mo}_{sel_yr}",
     )
 
     if not _df_equals_safe(df_hist, edited):
@@ -2120,13 +2129,33 @@ def _render_historico(
 
         c_save, c_discard = st.columns(2)
         with c_save:
-            if st.button("✓ SALVAR ALTERAÇÕES", key="save_hist", use_container_width=True):
-                if edited.empty and len(df_hist) > 3:
-                    st.error("⚠ Não é possível excluir todas as transações de uma vez. Descarte e tente novamente.")
+            if st.button("✓ SALVAR ALTERAÇÕES", key=f"save_hist_{user}_{sel_mo}_{sel_yr}", use_container_width=True):
+                if edited.empty and len(df_hist) > 0:
+                    st.error("⚠ Não é possível excluir todas as transações de uma vez.")
                 else:
-                    _save_historico_mensal(edited, user, sel_mo, sel_yr)
+                    # Validar cada linha editada
+                    validation_errors = []
+                    for idx, row in edited.iterrows():
+                        entry = {
+                            "Data": row.get("Data"),
+                            "Descricao": row.get("Descricao", ""),
+                            "Valor": row.get("Valor", 0),
+                            "Categoria": row.get("Categoria", ""),
+                            "Tipo": row.get("Tipo", ""),
+                            "Responsavel": row.get("Responsavel", ""),
+                        }
+                        ok, err = validate_transaction(entry)
+                        if not ok:
+                            validation_errors.append(f"Linha {idx + 1}: {err}")
+                    if validation_errors:
+                        for ve in validation_errors[:5]:
+                            st.error(f"⚠ {ve}")
+                        if len(validation_errors) > 5:
+                            st.error(f"... e mais {len(validation_errors) - 5} erro(s)")
+                    else:
+                        _save_historico_mensal(edited, user, sel_mo, sel_yr)
         with c_discard:
-            if st.button("✗ DESCARTAR", key="discard_hist", use_container_width=True):
+            if st.button("✗ DESCARTAR", key=f"discard_hist_{user}_{sel_mo}_{sel_yr}", use_container_width=True):
                 st.rerun()
 
 
@@ -2187,7 +2216,7 @@ def main() -> None:
         user = "Casal"
     with c_status:
         st.markdown(
-            f'<div class="status-line">L&L TERMINAL v4.3 — {fmt_date(now)}</div>',
+            f'<div class="status-line">L&L TERMINAL v4.4 — {fmt_date(now)}</div>',
             unsafe_allow_html=True
         )
 
@@ -2424,28 +2453,41 @@ def main() -> None:
                         ),
                     },
                     hide_index=True,
-                    key="editor_patrimonio",
+                    key=f"editor_patrimonio_{user}",
                 )
                 if not _df_equals_safe(df_assets_view, edited_assets):
                     c_save, c_cancel = st.columns(2)
                     with c_save:
-                        if st.button("✓ SALVAR PATRIMÔNIO", use_container_width=True):
-                            # [FIX B5] Reconstruir df completo: manter ativos
-                            # de outros usuários + salvar editados
-                            if user != "Casal":
-                                df_others = df_assets[
-                                    ~df_assets["Responsavel"].isin([user, "Casal"])
-                                ].copy()
-                                df_final = pd.concat(
-                                    [df_others, edited_assets], ignore_index=True
-                                )
+                        if st.button("✓ SALVAR PATRIMÔNIO", key=f"save_pat_{user}", use_container_width=True):
+                            # Validar cada ativo editado
+                            pat_errors = []
+                            for idx, row in edited_assets.iterrows():
+                                entry = {
+                                    "Item": row.get("Item", ""),
+                                    "Valor": row.get("Valor", 0),
+                                    "Responsavel": row.get("Responsavel", ""),
+                                }
+                                ok, err = validate_asset(entry)
+                                if not ok:
+                                    pat_errors.append(f"Linha {idx + 1}: {err}")
+                            if pat_errors:
+                                for pe in pat_errors[:5]:
+                                    st.error(f"⚠ {pe}")
                             else:
-                                df_final = edited_assets
-                            if update_sheet(df_final, "Patrimonio"):
-                                st.toast("✓ Patrimônio atualizado")
-                                st.rerun()
+                                if user != "Casal":
+                                    df_others = df_assets[
+                                        ~df_assets["Responsavel"].isin([user, "Casal"])
+                                    ].copy()
+                                    df_final = pd.concat(
+                                        [df_others, edited_assets], ignore_index=True
+                                    )
+                                else:
+                                    df_final = edited_assets
+                                if update_sheet(df_final, "Patrimonio"):
+                                    st.toast("✓ Patrimônio atualizado")
+                                    st.rerun()
                     with c_cancel:
-                        if st.button("✗ DESCARTAR", use_container_width=True):
+                        if st.button("✗ DESCARTAR", key=f"discard_pat_{user}", use_container_width=True):
                             st.rerun()
             else:
                 render_intel("", "Adicione ativos usando o formulário ao lado.")
