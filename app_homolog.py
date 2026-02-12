@@ -1040,10 +1040,14 @@ def load_recorrentes() -> pd.DataFrame:
             df["DiaVencimento"] = pd.to_numeric(
                 df["DiaVencimento"], errors="coerce"
             ).fillna(1).astype(int)
-            df["Ativo"] = (
-                df["Ativo"].astype(str).str.strip().str.lower()
-                .isin(["true", "1", "sim", "s", "yes"])
-            )
+            def _parse_ativo(val) -> bool:
+                if isinstance(val, bool):
+                    return val
+                if isinstance(val, (int, float)):
+                    return bool(val)
+                return str(val).strip().lower() in ("true", "1", "1.0", "sim", "s", "yes")
+
+            df["Ativo"] = df["Ativo"].apply(_parse_ativo)
             df = _normalize_strings(df, ["Descricao", "Tipo", "Categoria", "Responsavel"])
     except Exception:
         df = pd.DataFrame(columns=expected)
