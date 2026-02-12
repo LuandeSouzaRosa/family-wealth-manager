@@ -572,6 +572,129 @@ def inject_css() -> None:
             .autonomia-hero { animation: none; }
             .autonomia-number { animation: none; }
         }
+
+        /* ===== SCORE FINANCEIRO ===== */
+        .score-panel {
+            background: #0a0a0a;
+            border: 1px solid #1a1a1a;
+            border-radius: 0px;
+            padding: 16px 20px;
+            margin-bottom: 12px;
+            display: flex;
+            gap: 24px;
+            align-items: center;
+            flex-wrap: wrap;
+            transition: border-color 0.3s ease;
+        }
+        .score-panel:hover { border-color: #00FFCC; }
+        .score-left {
+            text-align: center;
+            min-width: 90px;
+            flex-shrink: 0;
+        }
+        .score-label {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.55rem;
+            color: #555;
+            text-transform: uppercase;
+            letter-spacing: 0.25em;
+            margin-bottom: 4px;
+        }
+        .score-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 2.5rem;
+            font-weight: 700;
+            line-height: 1.1;
+        }
+        .score-grade {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.65rem;
+            letter-spacing: 0.1em;
+            margin-top: 2px;
+        }
+        .score-right {
+            flex: 1;
+            min-width: 200px;
+        }
+        .score-detail-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.62rem;
+        }
+        .score-detail-label {
+            width: 110px;
+            color: #666;
+            flex-shrink: 0;
+        }
+        .score-detail-track {
+            flex: 1;
+            height: 4px;
+            background: #111;
+            margin: 0 8px;
+        }
+        .score-detail-fill {
+            height: 100%;
+            transition: width 0.5s ease;
+        }
+        .score-detail-pts {
+            width: 45px;
+            color: #555;
+            text-align: right;
+            flex-shrink: 0;
+        }
+
+        /* ===== RESUMO ANUAL ===== */
+        .annual-strip {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.68rem;
+            padding: 10px 16px;
+            margin-bottom: 12px;
+            border: 1px solid #1a1a1a;
+            background: #0a0a0a;
+            flex-wrap: wrap;
+            transition: border-color 0.2s ease;
+        }
+        .annual-strip:hover { border-color: #00FFCC; }
+        .annual-year {
+            color: #00FFCC;
+            font-weight: 700;
+            font-size: 0.75rem;
+            letter-spacing: 0.05em;
+            flex-shrink: 0;
+        }
+        .annual-divider {
+            width: 1px;
+            height: 16px;
+            background: #1a1a1a;
+            flex-shrink: 0;
+        }
+        .annual-item {
+            color: #888;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .annual-item strong {
+            color: #F0F0F0;
+        }
+        .annual-meta {
+            color: #444;
+            font-size: 0.6rem;
+            margin-left: auto;
+        }
+
+        @media (max-width: 768px) {
+            .score-panel { flex-direction: column; gap: 12px; }
+            .score-value { font-size: 2rem; }
+            .score-detail-label { width: 80px; font-size: 0.55rem; }
+            .annual-strip { gap: 8px; font-size: 0.6rem; }
+            .annual-meta { margin-left: 0; width: 100%; }
+        }
     </style>
     """, unsafe_allow_html=True)
 # ==============================================================================
@@ -1159,6 +1282,107 @@ def _compute_health(m: dict) -> str:
     return "danger"
 
 
+def compute_score(mx: dict) -> dict:
+    """Calcula score financeiro de 0-100 com breakdown."""
+    details: list[tuple[str, float, int]] = []
+    score = 0.0
+
+    # 1. Aderência 50/30/20 (25 pts)
+    if mx["renda"] > 0:
+        avg_diff = (abs(mx["nec_delta"]) + abs(mx["des_delta"]) + abs(mx["inv_delta"])) / 3
+        regra_pts = max(0.0, 25.0 - avg_diff)
+        score += regra_pts
+        details.append(("Regra 50/30/20", regra_pts, 25))
+    else:
+        details.append(("Regra 50/30/20", 0.0, 25))
+
+    # 2. Taxa de Aporte (25 pts)
+    if mx["renda"] > 0:
+        aporte_pts = min(25.0, (mx["taxa_aporte"] / CFG.META_INVESTIMENTO) * 25)
+        score += aporte_pts
+        details.append(("Taxa de Aporte", aporte_pts, 25))
+    else:
+        details.append(("Taxa de Aporte", 0.0, 25))
+
+    # 3. Autonomia (25 pts)
+    autonomia = mx.get("autonomia", 0)
+    if autonomia >= 999:
+        auto_pts = 25.0
+    else:
+        auto_pts = min(25.0, (autonomia / CFG.AUTONOMIA_OK) * 25)
+    score += auto_pts
+    details.append(("Autonomia", auto_pts, 25))
+
+    # 4. Saldo Mensal (25 pts)
+    if mx["renda"] > 0:
+        if mx["disponivel"] > 0:
+            ratio = mx["disponivel"] / mx["renda"]
+            saldo_pts = min(25.0, ratio * 100)
+        else:
+            saldo_pts = 0.0
+        score += saldo_pts
+        details.append(("Saldo Mensal", saldo_pts, 25))
+    else:
+        details.append(("Saldo Mensal", 0.0, 25))
+
+    # Classificação
+    score = min(100.0, max(0.0, score))
+    if score >= 90:
+        grade, color = "Excelente", "#00FFCC"
+    elif score >= 70:
+        grade, color = "Saudável", "#00FFCC"
+    elif score >= 50:
+        grade, color = "Atenção", "#FFAA00"
+    else:
+        grade, color = "Crítico", "#FF4444"
+
+    return {
+        "score": score,
+        "grade": grade,
+        "color": color,
+        "details": details,
+    }
+
+
+def compute_annual_summary(
+    df_trans: pd.DataFrame,
+    user_filter: str,
+    year: int,
+) -> dict | None:
+    """Calcula resumo anual para o strip compacto."""
+    df = filter_by_user(df_trans, user_filter)
+    if df.empty:
+        return None
+
+    df_year = df[df["Data"].dt.year == year]
+    if df_year.empty:
+        return None
+
+    renda = df_year[df_year["Tipo"] == "Entrada"]["Valor"].sum()
+    gastos = df_year[
+        (df_year["Tipo"] == "Saída") &
+        (df_year["Categoria"] != "Investimento")
+    ]["Valor"].sum()
+    investido = df_year[
+        (df_year["Tipo"] == "Saída") &
+        (df_year["Categoria"] == "Investimento")
+    ]["Valor"].sum()
+    saldo = renda - gastos - investido
+    meses_ativos = df_year["Data"].dt.month.nunique()
+
+    return {
+        "year": year,
+        "renda": renda,
+        "gastos": gastos,
+        "investido": investido,
+        "saldo": saldo,
+        "meses_ativos": meses_ativos,
+        "media_gastos": gastos / max(1, meses_ativos),
+        "media_renda": renda / max(1, meses_ativos),
+        "taxa_aporte": (investido / renda * 100) if renda > 0 else 0.0,
+    }
+
+
 def compute_evolution(
     df_trans: pd.DataFrame,
     user_filter: str,
@@ -1274,16 +1498,16 @@ def render_autonomia(val: float, sobrevivencia: float) -> None:
             color = "#FF4444"
 
     if val >= 999:
-        unit_text = "sem burn rate registrado"
+        unit_text = "sem gastos recorrentes"
     else:
-        unit_text = "meses de sobrevivência"
+        unit_text = "meses de tranquilidade"
 
     st.markdown(f"""
     <div class="autonomia-hero">
         <div class="autonomia-tag">▮ Autonomia Financeira</div>
         <div class="autonomia-number" style="color: {color};">{display_text}</div>
         <div class="autonomia-unit">{unit_text}</div>
-        <div class="autonomia-sub">Patrimônio líquido: {fmt_brl(sobrevivencia)}</div>
+        <div class="autonomia-sub">Patrimônio acumulado: {fmt_brl(sobrevivencia)}</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -1612,6 +1836,65 @@ def render_empty_month(month_label: str) -> None:
     """, unsafe_allow_html=True)
 
 
+def render_score(score_data: dict) -> None:
+    """Renderiza painel de score financeiro."""
+    s = score_data
+    details_html = ""
+    for label, pts, max_pts in s["details"]:
+        pct = (pts / max_pts * 100) if max_pts > 0 else 0
+        if pct >= 80:
+            fill_color = "#00FFCC"
+        elif pct >= 50:
+            fill_color = "#FFAA00"
+        else:
+            fill_color = "#FF4444"
+        details_html += f"""
+        <div class="score-detail-row">
+            <span class="score-detail-label">{sanitize(label)}</span>
+            <div class="score-detail-track">
+                <div class="score-detail-fill" style="width:{pct:.0f}%; background:{fill_color};"></div>
+            </div>
+            <span class="score-detail-pts">{pts:.0f}/{max_pts}</span>
+        </div>"""
+
+    st.markdown(f"""
+    <div class="score-panel">
+        <div class="score-left">
+            <div class="score-label">Score</div>
+            <div class="score-value" style="color:{s['color']};">{s['score']:.0f}</div>
+            <div class="score-grade" style="color:{s['color']};">{s['grade']}</div>
+        </div>
+        <div class="score-right">
+            {details_html}
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+
+def render_annual_strip(annual: dict | None) -> None:
+    """Renderiza strip compacto de resumo anual."""
+    if annual is None:
+        return
+
+    saldo_color = "#00FFCC" if annual["saldo"] >= 0 else "#FF4444"
+
+    st.markdown(f"""
+    <div class="annual-strip">
+        <span class="annual-year">▮ {annual['year']}</span>
+        <div class="annual-divider"></div>
+        <span class="annual-item">Renda <strong>{fmt_brl(annual['renda'])}</strong></span>
+        <div class="annual-divider"></div>
+        <span class="annual-item">Gastos <strong>{fmt_brl(annual['gastos'])}</strong></span>
+        <div class="annual-divider"></div>
+        <span class="annual-item">Investido <strong>{fmt_brl(annual['investido'])}</strong></span>
+        <div class="annual-divider"></div>
+        <span class="annual-item">Saldo <strong style="color:{saldo_color};">{fmt_brl(annual['saldo'])}</strong></span>
+        <span class="annual-meta">
+            {annual['meses_ativos']} meses · média {fmt_brl(annual['media_gastos'])}/mês · aporte {annual['taxa_aporte']:.0f}%
+        </span>
+    </div>
+    """, unsafe_allow_html=True)
+
 # ==============================================================================
 # 9. FORMULÁRIOS
 # ==============================================================================
@@ -1904,7 +2187,7 @@ def main() -> None:
         user = "Casal"
     with c_status:
         st.markdown(
-            f'<div class="status-line">L&L TERMINAL v4.2 — {fmt_date(now)}</div>',
+            f'<div class="status-line">L&L TERMINAL v4.3 — {fmt_date(now)}</div>',
             unsafe_allow_html=True
         )
 
@@ -1979,19 +2262,29 @@ def main() -> None:
     # --- Alertas ---
     alerts = compute_alerts(mx, sel_mo, sel_yr, projection)
 
+    # --- Score Financeiro ---
+    score_data = compute_score(mx)
+
+    # --- Resumo Anual ---
+    annual = compute_annual_summary(df_trans, user, sel_yr)
+
     month_label = fmt_month_year(sel_mo, sel_yr)
     has_data = mx["renda"] > 0 or mx["lifestyle"] > 0 or mx["investido_mes"] > 0
 
     # ===== HERO =====
     render_autonomia(mx["autonomia"], mx["sobrevivencia"])
 
-    # ===== HEALTH + ALERTAS =====
+    # ===== RESUMO ANUAL =====
+    render_annual_strip(annual)
+
+    # ===== HEALTH + SCORE + ALERTAS =====
     render_health_badge(mx["health"], month_label)
+    render_score(score_data)
     render_alerts(alerts)
 
     if not has_data:
         render_empty_month(month_label)
-
+        
     # ===== PROJEÇÃO (só mês atual) =====
     render_projection(projection, mx)
 
@@ -2015,8 +2308,8 @@ def main() -> None:
         )
     with k4:
         render_kpi(
-            "Sobrevivência", fmt_brl(mx["sobrevivencia"]),
-            "Patrimônio líquido total"
+            "Reserva Total", fmt_brl(mx["sobrevivencia"]),
+            "Patrimônio acumulado"
         )
 
     # ===== REGRA 50/30/20 =====
@@ -2086,11 +2379,11 @@ def main() -> None:
         with col_intel:
             render_intel(
                 "Intel — Patrimônio",
-                f"Sobrevivência: <strong>{fmt_brl(mx['sobrevivencia'])}</strong><br>"
+                f"Reserva Total: <strong>{fmt_brl(mx['sobrevivencia'])}</strong><br>"
                 f"Autonomia: <strong>{mx['autonomia']:.1f} meses</strong>"
             )
 
-    with tab_pat:
+    with tab_pat:        
         col_form, col_list = st.columns([1, 1])
 
         # [FIX B5] Filtrar patrimônio pelo usuário ativo (incluindo Casal)
