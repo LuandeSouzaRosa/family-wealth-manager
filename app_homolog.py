@@ -940,7 +940,9 @@ def calc_delta(current: float, previous: float) -> float | None:
     if previous == 0:
         if current > 0:
             return float("inf")
-        return None
+        if current == 0:
+            return None
+        return float("-inf")
     return ((current - previous) / abs(previous)) * 100
 
 
@@ -1129,6 +1131,15 @@ def load_data() -> tuple[pd.DataFrame, pd.DataFrame]:
     return df_trans, df_assets
 
 
+def _parse_ativo(val) -> bool:
+    """Converte valor para booleano (coluna Ativo)."""
+    if isinstance(val, bool):
+        return val
+    if isinstance(val, (int, float)):
+        return bool(val)
+    return str(val).strip().lower() in ("true", "1", "1.0", "sim", "s", "yes")
+
+
 @st.cache_data(ttl=CFG.CACHE_TTL)
 def load_recorrentes() -> pd.DataFrame:
     """Carrega transações recorrentes do Google Sheets."""
@@ -1145,19 +1156,11 @@ def load_recorrentes() -> pd.DataFrame:
             df["DiaVencimento"] = pd.to_numeric(
                 df["DiaVencimento"], errors="coerce"
             ).fillna(1).astype(int)
-            def _parse_ativo(val) -> bool:
-                if isinstance(val, bool):
-                    return val
-                if isinstance(val, (int, float)):
-                    return bool(val)
-                return str(val).strip().lower() in ("true", "1", "1.0", "sim", "s", "yes")
-
             df["Ativo"] = df["Ativo"].apply(_parse_ativo)
             df = _normalize_strings(df, ["Descricao", "Tipo", "Categoria", "Responsavel"])
     except Exception:
         df = pd.DataFrame(columns=expected)
     return df
-
 
 @st.cache_data(ttl=CFG.CACHE_TTL)
 def load_orcamentos() -> pd.DataFrame:
@@ -1178,10 +1181,23 @@ def load_orcamentos() -> pd.DataFrame:
     return df
 
 
+def _serialize_for_sheet(df: pd.DataFrame) -> pd.DataFrame:
+    """Serializa DataFrame para gravação na planilha."""
+    df_out = df.copy()
+    if "Data" in df_out.columns:
+        df_out["Data"] = pd.to_datetime(
+            df_out["Data"], errors="coerce"
+        ).dt.strftime("%Y-%m-%d")
+    if "Ativo" in df_out.columns:
+        df_out["Ativo"] = df_out["Ativo"].apply(
+            lambda x: "TRUE" if _parse_ativo(x) else "FALSE"
+        )
+    return df_out
+
+
 def save_entry(data: dict, worksheet: str) -> bool:
     """Salva uma nova entrada na planilha com retry."""
     conn = get_conn()
-    # [FIX M2] Removido clear redundante antes do loop
     for attempt in range(CFG.SAVE_RETRIES):
         try:
             try:
@@ -1191,14 +1207,7 @@ def save_entry(data: dict, worksheet: str) -> bool:
                 df_curr = pd.DataFrame()
             df_new = pd.DataFrame([data])
             df_updated = pd.concat([df_curr, df_new], ignore_index=True)
-            if "Data" in df_updated.columns:
-                df_updated["Data"] = pd.to_datetime(
-                    df_updated["Data"], errors="coerce"
-                ).dt.strftime("%Y-%m-%d")
-            if "Ativo" in df_updated.columns:
-                df_updated["Ativo"] = df_updated["Ativo"].apply(
-                    lambda x: "TRUE" if str(x).strip().lower() in ("true", "1", "sim", "s", "yes") else "FALSE"
-                )
+            df_updated = _serialize_for_sheet(df_updated)
             conn.update(worksheet=worksheet, data=df_updated)
             st.cache_data.clear()
             return True
@@ -1212,26 +1221,21 @@ def save_entry(data: dict, worksheet: str) -> bool:
 
 
 def update_sheet(df_edited: pd.DataFrame, worksheet: str) -> bool:
-    """Atualiza planilha inteira com DataFrame editado."""
+    """Atualiza planilha inteira com DataFrame editado (com retry)."""
     conn = get_conn()
-    try:
-        df_to_save = df_edited.copy()
-        if "Data" in df_to_save.columns:
-            df_to_save["Data"] = pd.to_datetime(
-                df_to_save["Data"], errors="coerce"
-            ).dt.strftime("%Y-%m-%d")
-        if "Ativo" in df_to_save.columns:
-            df_to_save["Ativo"] = df_to_save["Ativo"].apply(
-                lambda x: "TRUE" if str(x).strip().lower() in ("true", "1", "sim", "s", "yes") else "FALSE"
-            )
-        conn.update(worksheet=worksheet, data=df_to_save)
-        st.cache_data.clear()
-        return True
-    except Exception as e:
-        st.error(f"Erro ao atualizar: {e}")
-        st.cache_data.clear()
-        return False
-
+    for attempt in range(CFG.SAVE_RETRIES):
+        try:
+            df_to_save = _serialize_for_sheet(df_edited)
+            conn.update(worksheet=worksheet, data=df_to_save)
+            st.cache_data.clear()
+            return True
+        except Exception as e:
+            if attempt == CFG.SAVE_RETRIES - 1:
+                st.error(f"Erro ao atualizar após {CFG.SAVE_RETRIES} tentativas: {e}")
+                st.cache_data.clear()
+                return False
+            time.sleep(0.5 * (attempt + 1))
+    return False
 
 # ==============================================================================
 # 7. MOTOR ANALÍTICO
@@ -1290,31 +1294,30 @@ def detect_pending_recorrentes(
     df_t = filter_by_user(df_trans, user_filter)
     df_mo = filter_by_month(df_t, target_month, target_year)
 
+    # Construir set de chaves incluindo Responsavel para evitar
+    # falso positivo entre usuários com mesma descrição/categoria/tipo
+    geradas_keys: set[tuple[str, str, str, str]] = set()
     if not df_mo.empty and "Origem" in df_mo.columns:
-        df_geradas = df_mo[df_mo["Origem"] == "Recorrente"].copy()
-    else:
-        df_geradas = pd.DataFrame()
+        df_geradas = df_mo[df_mo["Origem"] == "Recorrente"]
+        for _, tr in df_geradas.iterrows():
+            chave = (
+                str(tr["Descricao"]).strip().lower(),
+                str(tr["Categoria"]).strip(),
+                str(tr["Tipo"]).strip(),
+                str(tr["Responsavel"]).strip(),
+            )
+            geradas_keys.add(chave)
 
-    # Identificar pendentes: ativas que não têm match no mês
+    # Identificar pendentes
     pendentes = []
     for _, rec in df_ativas.iterrows():
         chave_rec = (
             str(rec["Descricao"]).strip().lower(),
             str(rec["Categoria"]).strip(),
             str(rec["Tipo"]).strip(),
+            str(rec["Responsavel"]).strip(),
         )
-        ja_gerada = False
-        if not df_geradas.empty:
-            for _, tr in df_geradas.iterrows():
-                chave_tr = (
-                    str(tr["Descricao"]).strip().lower(),
-                    str(tr["Categoria"]).strip(),
-                    str(tr["Tipo"]).strip(),
-                )
-                if chave_rec == chave_tr:
-                    ja_gerada = True
-                    break
-        if not ja_gerada:
+        if chave_rec not in geradas_keys:
             pendentes.append(rec)
 
     if not pendentes:
@@ -1447,8 +1450,8 @@ def compute_projection(
         "projected_deficit": projected_available < 0,
         "renda_consumed_pct": renda_consumed_pct,
         "renda_projected_pct": renda_projected_pct,
-        "remaining_budget": max(0, mx["renda"] - mx["lifestyle"] - mx["investido_mes"]),
-        "daily_budget": max(0, (mx["renda"] - mx["lifestyle"] - mx["investido_mes"]) / max(1, days_in_month - day_of_month)),
+        "remaining_budget": remaining_budget,
+        "daily_budget": remaining_budget / days_remaining,
     }
 
 
