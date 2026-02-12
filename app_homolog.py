@@ -1067,6 +1067,10 @@ def save_entry(data: dict, worksheet: str) -> bool:
                 df_updated["Data"] = pd.to_datetime(
                     df_updated["Data"], errors="coerce"
                 ).dt.strftime("%Y-%m-%d")
+            if "Ativo" in df_updated.columns:
+                df_updated["Ativo"] = df_updated["Ativo"].apply(
+                    lambda x: "TRUE" if str(x).strip().lower() in ("true", "1", "sim", "s", "yes") else "FALSE"
+                )
             conn.update(worksheet=worksheet, data=df_updated)
             st.cache_data.clear()
             return True
@@ -1088,6 +1092,10 @@ def update_sheet(df_edited: pd.DataFrame, worksheet: str) -> bool:
             df_to_save["Data"] = pd.to_datetime(
                 df_to_save["Data"], errors="coerce"
             ).dt.strftime("%Y-%m-%d")
+        if "Ativo" in df_to_save.columns:
+            df_to_save["Ativo"] = df_to_save["Ativo"].apply(
+                lambda x: "TRUE" if str(x).strip().lower() in ("true", "1", "sim", "s", "yes") else "FALSE"
+            )
         conn.update(worksheet=worksheet, data=df_to_save)
         st.cache_data.clear()
         return True
