@@ -34,6 +34,7 @@ class Config:
     COLS_TRANSACAO: tuple = ("Data", "Descricao", "Valor", "Categoria", "Tipo", "Responsavel", "Origem")
     COLS_PATRIMONIO: tuple = ("Item", "Valor", "Responsavel")
     COLS_RECORRENTE: tuple = ("Descricao", "Valor", "Categoria", "Tipo", "Responsavel", "DiaVencimento", "Ativo")
+    COLS_ORCAMENTO: tuple = ("Categoria", "Limite", "Responsavel")
     META_NECESSIDADES: int = 50
     META_DESEJOS: int = 30
     META_INVESTIMENTO: int = 20
@@ -687,6 +688,97 @@ def inject_css() -> None:
             margin-left: auto;
         }
 
+        /* ===== ORÇAMENTO ===== */
+        .budget-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            padding: 6px 0;
+        }
+        .budget-label {
+            width: 100px;
+            color: #888;
+            flex-shrink: 0;
+        }
+        .budget-track {
+            flex: 1;
+            height: 8px;
+            background: #111;
+            margin: 0 10px;
+            position: relative;
+        }
+        .budget-fill {
+            height: 100%;
+            transition: width 0.4s ease;
+            position: absolute;
+            left: 0;
+            top: 0;
+        }
+        .budget-limit-marker {
+            position: absolute;
+            top: -3px;
+            width: 2px;
+            height: 14px;
+            background: #F0F0F0;
+            opacity: 0.5;
+        }
+        .budget-info {
+            width: 180px;
+            color: #666;
+            text-align: right;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 6px;
+        }
+        .budget-pct {
+            font-weight: 700;
+            min-width: 40px;
+            text-align: right;
+        }
+        .budget-pct-ok { color: #00FFCC; }
+        .budget-pct-warn { color: #FFAA00; }
+        .budget-pct-over { color: #FF4444; }
+        .budget-panel {
+            background: #0a0a0a;
+            border: 1px solid #1a1a1a;
+            border-radius: 0px;
+            padding: 14px 16px;
+            margin-bottom: 12px;
+            transition: border-color 0.2s ease;
+        }
+        .budget-panel:hover { border-color: #00FFCC; }
+        .budget-header {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.6rem;
+            color: #555;
+            text-transform: uppercase;
+            letter-spacing: 0.2em;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .budget-total {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.65rem;
+            color: #444;
+            padding-top: 8px;
+            margin-top: 6px;
+            border-top: 1px solid #111;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        @media (max-width: 768px) {
+            .budget-label { width: 70px; font-size: 0.6rem; }
+            .budget-info { width: 140px; font-size: 0.6rem; }
+            .budget-row { font-size: 0.63rem; }
+        }
+
         /* ===== RECORRENTES ===== */
         .rec-card {
             background: #0a0a0a;
@@ -968,6 +1060,19 @@ def validate_recorrente(entry: dict) -> tuple[bool, str]:
     return True, ""
 
 
+def validate_orcamento(entry: dict) -> tuple[bool, str]:
+    """Valida dados de um orçamento por categoria."""
+    cat = entry.get("Categoria", "")
+    if not cat or cat not in CFG.CATEGORIAS_SAIDA:
+        return False, f"Categoria inválida: '{cat}'"
+    limite = entry.get("Limite")
+    if not isinstance(limite, (int, float)) or limite <= 0:
+        return False, "Limite deve ser maior que zero"
+    if entry.get("Responsavel") not in CFG.RESPONSAVEIS:
+        return False, "Responsável inválido"
+    return True, ""
+
+
 # ==============================================================================
 # 6. CAMADA DE DADOS
 # ==============================================================================
@@ -1049,6 +1154,25 @@ def load_recorrentes() -> pd.DataFrame:
 
             df["Ativo"] = df["Ativo"].apply(_parse_ativo)
             df = _normalize_strings(df, ["Descricao", "Tipo", "Categoria", "Responsavel"])
+    except Exception:
+        df = pd.DataFrame(columns=expected)
+    return df
+
+
+@st.cache_data(ttl=CFG.CACHE_TTL)
+def load_orcamentos() -> pd.DataFrame:
+    """Carrega orçamentos por categoria do Google Sheets."""
+    conn = get_conn()
+    expected = list(CFG.COLS_ORCAMENTO)
+    try:
+        df = conn.read(worksheet="Orcamentos")
+        df = df.dropna(how="all")
+        missing = set(expected) - set(df.columns)
+        for col in missing:
+            df[col] = None
+        if not df.empty:
+            df["Limite"] = pd.to_numeric(df["Limite"], errors="coerce").fillna(0.0)
+            df = _normalize_strings(df, ["Categoria", "Responsavel"])
     except Exception:
         df = pd.DataFrame(columns=expected)
     return df
@@ -1197,6 +1321,51 @@ def detect_pending_recorrentes(
         return pd.DataFrame(columns=list(CFG.COLS_RECORRENTE))
 
     return pd.DataFrame(pendentes).reset_index(drop=True)
+
+
+def compute_budget(
+    df_orcamentos: pd.DataFrame,
+    cat_breakdown: dict,
+    user_filter: str,
+) -> list[dict]:
+    """Calcula status do orçamento por categoria.
+
+    Retorna lista de dicts com categoria, limite, gasto, pct e status.
+    """
+    df_orc = filter_by_user(df_orcamentos, user_filter, include_shared=True)
+
+    if df_orc.empty:
+        return []
+
+    results = []
+    for _, row in df_orc.iterrows():
+        cat = str(row.get("Categoria", "")).strip()
+        limite = float(row.get("Limite", 0))
+        if limite <= 0:
+            continue
+
+        gasto = cat_breakdown.get(cat, 0.0)
+        pct = (gasto / limite) * 100 if limite > 0 else 0.0
+
+        if pct >= 100:
+            status = "over"
+        elif pct >= 80:
+            status = "warn"
+        else:
+            status = "ok"
+
+        results.append({
+            "categoria": cat,
+            "limite": limite,
+            "gasto": gasto,
+            "pct": pct,
+            "restante": max(0, limite - gasto),
+            "excedente": max(0, gasto - limite),
+            "status": status,
+        })
+
+    results.sort(key=lambda x: x["pct"], reverse=True)
+    return results
 
 
 def generate_recorrentes(
@@ -1384,6 +1553,30 @@ def compute_alerts(
             "icon": "◎",
             "msg": f"Budget restante: {fmt_brl(projection['daily_budget'])}/dia por {projection['days_remaining']} dias",
         })
+
+    # --- Orçamento estourado ---
+    budget_data = mx.get("budget_data", [])
+    for b in budget_data:
+        if b["status"] == "over":
+            alerts.append({
+                "level": "danger",
+                "icon": "▮",
+                "msg": (
+                    f"{sanitize(b['categoria'])} estourou: "
+                    f"{fmt_brl(b['gasto'])} / {fmt_brl(b['limite'])} "
+                    f"(+{fmt_brl(b['excedente'])})"
+                ),
+            })
+        elif b["status"] == "warn":
+            alerts.append({
+                "level": "warn",
+                "icon": "▯",
+                "msg": (
+                    f"{sanitize(b['categoria'])} em {b['pct']:.0f}%: "
+                    f"{fmt_brl(b['gasto'])} / {fmt_brl(b['limite'])} "
+                    f"(resta {fmt_brl(b['restante'])})"
+                ),
+            })
 
     return alerts
 
@@ -2125,6 +2318,66 @@ def render_evolution_chart(evo_data: list[dict]) -> None:
     )
 
 
+def render_budget_bars(budget_data: list[dict]) -> None:
+    """Renderiza painel de orçamento por categoria com barras de progresso."""
+    if not budget_data:
+        return
+
+    total_limite = sum(b["limite"] for b in budget_data)
+    total_gasto = sum(b["gasto"] for b in budget_data)
+    total_pct = (total_gasto / total_limite * 100) if total_limite > 0 else 0
+
+    rows_html = ""
+    for b in budget_data:
+        fill_pct = min(100, b["pct"])
+
+        if b["status"] == "over":
+            fill_color = "#FF4444"
+            pct_cls = "budget-pct-over"
+        elif b["status"] == "warn":
+            fill_color = "#FFAA00"
+            pct_cls = "budget-pct-warn"
+        else:
+            fill_color = "#00FFCC"
+            pct_cls = "budget-pct-ok"
+
+        rows_html += (
+            f'<div class="budget-row">'
+            f'<span class="budget-label">{sanitize(b["categoria"])}</span>'
+            f'<div class="budget-track">'
+            f'<div class="budget-fill" style="width:{fill_pct:.0f}%;background:{fill_color};"></div>'
+            f'<div class="budget-limit-marker" style="left:100%;"></div>'
+            f'</div>'
+            f'<div class="budget-info">'
+            f'<span>{fmt_brl(b["gasto"])} / {fmt_brl(b["limite"])}</span>'
+            f'<span class="budget-pct {pct_cls}">{b["pct"]:.0f}%</span>'
+            f'</div>'
+            f'</div>'
+        )
+
+    if total_pct >= 100:
+        total_color = "#FF4444"
+    elif total_pct >= 80:
+        total_color = "#FFAA00"
+    else:
+        total_color = "#00FFCC"
+
+    html = (
+        f'<div class="budget-panel">'
+        f'<div class="budget-header">'
+        f'<span>◆ Orçamento Mensal</span>'
+        f'<span style="color:{total_color};">{total_pct:.0f}% consumido</span>'
+        f'</div>'
+        f'{rows_html}'
+        f'<div class="budget-total">'
+        f'<span>Total orçado: {fmt_brl(total_limite)}</span>'
+        f'<span style="color:{total_color};">Gasto: {fmt_brl(total_gasto)}</span>'
+        f'</div>'
+        f'</div>'
+    )
+    st.markdown(html, unsafe_allow_html=True)
+
+
 def render_pending_box(n_pendentes: int, total_pendente: float) -> None:
     """Renderiza box de recorrentes pendentes."""
     if n_pendentes == 0:
@@ -2343,6 +2596,28 @@ def recorrente_form(default_resp: str = "Casal") -> None:
                 st.toast(f"⚠ {err}")
             elif save_entry(entry, "Recorrentes"):
                 st.toast("✓ Recorrente cadastrada")
+                st.rerun()
+
+
+def orcamento_form(default_resp: str = "Casal") -> None:
+    """Formulário para definir limite de orçamento por categoria."""
+    with st.form("f_orcamento", clear_on_submit=True):
+        cat = st.selectbox("Categoria", list(CFG.CATEGORIAS_SAIDA))
+        limite = st.number_input("Limite mensal (R$)", min_value=0.01, step=50.0)
+        resp_options = list(CFG.RESPONSAVEIS)
+        resp_index = resp_options.index(default_resp) if default_resp in resp_options else 0
+        resp = st.selectbox("Responsável", resp_options, index=resp_index)
+        if st.form_submit_button("DEFINIR LIMITE"):
+            entry = {
+                "Categoria": cat,
+                "Limite": limite,
+                "Responsavel": resp,
+            }
+            ok, err = validate_orcamento(entry)
+            if not ok:
+                st.toast(f"⚠ {err}")
+            elif save_entry(entry, "Orcamentos"):
+                st.toast(f"✓ Limite de {fmt_brl(limite)} definido para {cat}")
                 st.rerun()
 
 
@@ -2641,6 +2916,11 @@ def main() -> None:
     df_recorrentes = load_recorrentes()
     pendentes = detect_pending_recorrentes(df_recorrentes, df_trans, user, sel_mo, sel_yr)
 
+    # --- Orçamento ---
+    df_orcamentos = load_orcamentos()
+    budget_data = compute_budget(df_orcamentos, mx["cat_breakdown"], user)
+    mx["budget_data"] = budget_data
+
     # --- Alertas ---
     alerts = compute_alerts(mx, sel_mo, sel_yr, projection, n_pendentes=len(pendentes))
 
@@ -2709,6 +2989,8 @@ def main() -> None:
                 "Consumo Mensal",
                 f"Total: <strong>{fmt_brl(mx['lifestyle'])}</strong>"
             )
+            if budget_data:
+                render_budget_bars(budget_data)
             if mx["cat_breakdown"]:
                 render_cat_breakdown(mx["cat_breakdown"])
             transaction_form(
@@ -2725,6 +3007,80 @@ def main() -> None:
             render_intel("Intel — Lifestyle", mx["insight_ls"])
             evo_data = compute_evolution(df_trans, user, sel_mo, sel_yr)
             render_evolution_chart(evo_data)
+
+            # --- Gestão de Orçamentos ---
+            st.markdown("---")
+            render_intel(
+                "Definir Orçamento",
+                "Defina limites mensais por categoria de gasto"
+            )
+            orcamento_form(default_resp=user)
+
+            df_orc_view = filter_by_user(df_orcamentos, user, include_shared=True)
+            if not df_orc_view.empty:
+                edited_orc = st.data_editor(
+                    df_orc_view,
+                    use_container_width=True,
+                    num_rows="dynamic",
+                    column_config={
+                        "Categoria": st.column_config.SelectboxColumn(
+                            "Categoria", options=list(CFG.CATEGORIAS_SAIDA), required=True
+                        ),
+                        "Limite": st.column_config.NumberColumn(
+                            "Limite", format="R$ %.2f", required=True, min_value=0.01
+                        ),
+                        "Responsavel": st.column_config.SelectboxColumn(
+                            "Responsável", options=list(CFG.RESPONSAVEIS)
+                        ),
+                    },
+                    hide_index=True,
+                    key=f"editor_orcamento_{user}",
+                )
+
+                if not _df_equals_safe(df_orc_view, edited_orc):
+                    c_save, c_cancel = st.columns(2)
+                    with c_save:
+                        if st.button(
+                            "✓ SALVAR ORÇAMENTOS",
+                            key=f"save_orc_{user}",
+                            use_container_width=True,
+                        ):
+                            orc_errors = []
+                            for idx, row in edited_orc.iterrows():
+                                entry = {
+                                    "Categoria": row.get("Categoria", ""),
+                                    "Limite": row.get("Limite", 0),
+                                    "Responsavel": row.get("Responsavel", ""),
+                                }
+                                ok, err = validate_orcamento(entry)
+                                if not ok:
+                                    orc_errors.append(f"Linha {idx + 1}: {err}")
+                            if orc_errors:
+                                for oe in orc_errors[:5]:
+                                    st.error(f"⚠ {oe}")
+                            else:
+                                if user != "Casal":
+                                    df_orc_others = df_orcamentos[
+                                        ~df_orcamentos["Responsavel"].isin(
+                                            [user, "Casal"]
+                                        )
+                                    ].copy()
+                                    df_orc_final = pd.concat(
+                                        [df_orc_others, edited_orc],
+                                        ignore_index=True,
+                                    )
+                                else:
+                                    df_orc_final = edited_orc
+                                if update_sheet(df_orc_final, "Orcamentos"):
+                                    st.toast("✓ Orçamentos atualizados")
+                                    st.rerun()
+                    with c_cancel:
+                        if st.button(
+                            "✗ DESCARTAR",
+                            key=f"discard_orc_{user}",
+                            use_container_width=True,
+                        ):
+                            st.rerun()
 
     with tab_renda:
         col_form, col_intel = st.columns([1, 1])
