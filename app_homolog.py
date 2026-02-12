@@ -1857,27 +1857,27 @@ def render_score(score_data: dict) -> None:
             fill_color = "#FFAA00"
         else:
             fill_color = "#FF4444"
-        details_html += f"""
-        <div class="score-detail-row">
-            <span class="score-detail-label">{sanitize(label)}</span>
-            <div class="score-detail-track">
-                <div class="score-detail-fill" style="width:{pct:.0f}%; background:{fill_color};"></div>
-            </div>
-            <span class="score-detail-pts">{pts:.0f}/{max_pts}</span>
-        </div>"""
+        details_html += (
+            f'<div class="score-detail-row">'
+            f'<span class="score-detail-label">{sanitize(label)}</span>'
+            f'<div class="score-detail-track">'
+            f'<div class="score-detail-fill" style="width:{pct:.0f}%;background:{fill_color};"></div>'
+            f'</div>'
+            f'<span class="score-detail-pts">{pts:.0f}/{max_pts}</span>'
+            f'</div>'
+        )
 
-    st.markdown(f"""
-    <div class="score-panel">
-        <div class="score-left">
-            <div class="score-label">Score</div>
-            <div class="score-value" style="color:{s['color']};">{s['score']:.0f}</div>
-            <div class="score-grade" style="color:{s['color']};">{s['grade']}</div>
-        </div>
-        <div class="score-right">
-            {details_html}
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    html = (
+        f'<div class="score-panel">'
+        f'<div class="score-left">'
+        f'<div class="score-label">Score</div>'
+        f'<div class="score-value" style="color:{s["color"]};">{s["score"]:.0f}</div>'
+        f'<div class="score-grade" style="color:{s["color"]};">{s["grade"]}</div>'
+        f'</div>'
+        f'<div class="score-right">{details_html}</div>'
+        f'</div>'
+    )
+    st.markdown(html, unsafe_allow_html=True)
 
 
 def render_annual_strip(annual: dict | None) -> None:
