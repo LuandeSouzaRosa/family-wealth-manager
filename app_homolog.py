@@ -1292,7 +1292,7 @@ def detect_pending_recorrentes(
 
     # Buscar transações recorrentes já geradas no mês
     df_t = filter_by_user(df_trans, user_filter)
-    df_mo = filter_by_month(df_t, target_month, target_year)
+    df_mo = filter_by_month(df_t, target_month, target_year) if not df_t.empty else pd.DataFrame()
 
     # Construir set de chaves incluindo Responsavel para evitar
     # falso positivo entre usuários com mesma descrição/categoria/tipo
@@ -1438,6 +1438,9 @@ def compute_projection(
     progress_pct = (day_of_month / days_in_month) * 100
     renda_consumed_pct = (mx["lifestyle"] / mx["renda"] * 100) if mx["renda"] > 0 else 0
     renda_projected_pct = (projected_lifestyle / mx["renda"] * 100) if mx["renda"] > 0 else 0
+
+    remaining_budget = max(0, mx["renda"] - mx["lifestyle"] - mx["investido_mes"])
+    days_remaining = max(1, days_in_month - day_of_month)
 
     return {
         "day": day_of_month,
@@ -1650,7 +1653,7 @@ def compute_metrics(
 
     m["disponivel"] = m["renda"] - m["lifestyle"] - m["investido_mes"]
 
-    base_patrimonio = df_a["Valor"].sum()
+    base_patrimonio = df_a["Valor"].sum() if not df_a.empty else 0.0
     m["investido_total"] = df_t[
         (df_t["Tipo"] == "Saída") &
         (df_t["Categoria"] == "Investimento")
@@ -2742,6 +2745,7 @@ def _render_historico(
             "Responsavel": st.column_config.SelectboxColumn(
                 "Responsável", options=list(CFG.RESPONSAVEIS)
             ),
+            "Origem": st.column_config.TextColumn("Origem", disabled=True),
         },
         hide_index=True,
         key=f"editor_historico_{user}_{sel_mo}_{sel_yr}",
@@ -2760,6 +2764,12 @@ def _render_historico(
                 if edited.empty and len(df_hist) > 0:
                     st.error("⚠ Não é possível excluir todas as transações de uma vez.")
                 else:
+                    # Garantir coluna Origem em linhas novas
+                    if "Origem" in edited.columns:
+                        edited["Origem"] = edited["Origem"].fillna("Manual")
+                    else:
+                        edited["Origem"] = "Manual"
+
                     # Validar cada linha editada
                     validation_errors = []
                     for idx, row in edited.iterrows():
@@ -2794,6 +2804,7 @@ def _save_historico_mensal(
 ) -> None:
     """Salva edições do histórico mensal na planilha completa."""
     st.cache_data.clear()
+    time.sleep(0.3)  # Delay para consistência com GSheets
     df_full_fresh, _ = load_data()
 
     mask_month = (
@@ -2817,7 +2828,28 @@ def _save_historico_mensal(
 
 
 # ==============================================================================
-# 11. APLICAÇÃO PRINCIPAL
+# 11. EDIÇÃO SEGURA
+# ==============================================================================
+
+def _save_filtered_sheet(
+    df_full: pd.DataFrame,
+    df_edited: pd.DataFrame,
+    user: str,
+    worksheet: str,
+) -> bool:
+    """Salva edição filtrada preservando registros de outros usuários."""
+    if user != "Casal":
+        df_others = df_full[
+            ~df_full["Responsavel"].isin([user, "Casal"])
+        ].copy()
+        df_final = pd.concat([df_others, df_edited], ignore_index=True)
+    else:
+        df_final = df_edited.copy()
+    return update_sheet(df_final, worksheet)
+
+
+# ==============================================================================
+# 12. APLICAÇÃO PRINCIPAL
 # ==============================================================================
 
 def main() -> None:
@@ -2843,7 +2875,7 @@ def main() -> None:
         user = "Casal"
     with c_status:
         st.markdown(
-            f'<div class="status-line">L&L TERMINAL v4.5 — {fmt_date(now)}</div>',
+            f'<div class="status-line">L&L TERMINAL v4.6 — {fmt_date(now)}</div>',
             unsafe_allow_html=True
         )
 
@@ -3062,19 +3094,7 @@ def main() -> None:
                                 for oe in orc_errors[:5]:
                                     st.error(f"⚠ {oe}")
                             else:
-                                if user != "Casal":
-                                    df_orc_others = df_orcamentos[
-                                        ~df_orcamentos["Responsavel"].isin(
-                                            [user, "Casal"]
-                                        )
-                                    ].copy()
-                                    df_orc_final = pd.concat(
-                                        [df_orc_others, edited_orc],
-                                        ignore_index=True,
-                                    )
-                                else:
-                                    df_orc_final = edited_orc
-                                if update_sheet(df_orc_final, "Orcamentos"):
+                                if _save_filtered_sheet(df_orcamentos, edited_orc, user, "Orcamentos"):
                                     st.toast("✓ Orçamentos atualizados")
                                     st.rerun()
                     with c_cancel:
@@ -3186,16 +3206,7 @@ def main() -> None:
                                 for pe in pat_errors[:5]:
                                     st.error(f"⚠ {pe}")
                             else:
-                                if user != "Casal":
-                                    df_others = df_assets[
-                                        ~df_assets["Responsavel"].isin([user, "Casal"])
-                                    ].copy()
-                                    df_final = pd.concat(
-                                        [df_others, edited_assets], ignore_index=True
-                                    )
-                                else:
-                                    df_final = edited_assets
-                                if update_sheet(df_final, "Patrimonio"):
+                                if _save_filtered_sheet(df_assets, edited_assets, user, "Patrimonio"):
                                     st.toast("✓ Patrimônio atualizado")
                                     st.rerun()
                     with c_cancel:
@@ -3258,7 +3269,7 @@ def main() -> None:
             total_saidas_fix = 0.0
             total_entradas_fix = 0.0
             if not df_rec_view.empty:
-                mask_ativo = df_rec_view["Ativo"] == True
+                mask_ativo = df_rec_view["Ativo"].eq(True)
                 n_ativas = int(mask_ativo.sum())
                 total_saidas_fix = df_rec_view[
                     mask_ativo & (df_rec_view["Tipo"] == "Saída")
@@ -3339,19 +3350,7 @@ def main() -> None:
                                         f"... e mais {len(rec_errors) - 5} erro(s)"
                                     )
                             else:
-                                if user != "Casal":
-                                    df_others = df_recorrentes[
-                                        ~df_recorrentes["Responsavel"].isin(
-                                            [user, "Casal"]
-                                        )
-                                    ].copy()
-                                    df_final = pd.concat(
-                                        [df_others, edited_rec],
-                                        ignore_index=True,
-                                    )
-                                else:
-                                    df_final = edited_rec
-                                if update_sheet(df_final, "Recorrentes"):
+                                if _save_filtered_sheet(df_recorrentes, edited_rec, user, "Recorrentes"):
                                     st.toast("✓ Recorrentes atualizadas")
                                     st.rerun()
                     with c_cancel:
