@@ -31,8 +31,9 @@ class Config:
     )
     RESPONSAVEIS: tuple = ("Casal", "Luan", "Luana")
     TIPOS: tuple = ("Entrada", "Saída")
-    COLS_TRANSACAO: tuple = ("Data", "Descricao", "Valor", "Categoria", "Tipo", "Responsavel")
+    COLS_TRANSACAO: tuple = ("Data", "Descricao", "Valor", "Categoria", "Tipo", "Responsavel", "Origem")
     COLS_PATRIMONIO: tuple = ("Item", "Valor", "Responsavel")
+    COLS_RECORRENTE: tuple = ("Descricao", "Valor", "Categoria", "Tipo", "Responsavel", "DiaVencimento", "Ativo")
     META_NECESSIDADES: int = 50
     META_DESEJOS: int = 30
     META_INVESTIMENTO: int = 20
@@ -686,12 +687,116 @@ def inject_css() -> None:
             margin-left: auto;
         }
 
+        /* ===== RECORRENTES ===== */
+        .rec-card {
+            background: #0a0a0a;
+            border: 1px solid #1a1a1a;
+            border-left: 3px solid #FFAA00;
+            padding: 12px 16px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.72rem;
+            transition: border-color 0.2s ease, transform 0.15s ease;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .rec-card:hover {
+            border-color: #00FFCC;
+            transform: translateX(2px);
+        }
+        .rec-card-left {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            min-width: 150px;
+        }
+        .rec-card-desc {
+            color: #F0F0F0;
+            font-weight: 600;
+        }
+        .rec-card-meta {
+            color: #555;
+            font-size: 0.6rem;
+        }
+        .rec-card-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .rec-card-valor {
+            color: #F0F0F0;
+            font-weight: 700;
+        }
+        .rec-card-badge {
+            font-size: 0.55rem;
+            padding: 2px 6px;
+            letter-spacing: 0.05em;
+        }
+        .rec-badge-ativo {
+            color: #00FFCC;
+            border: 1px solid #00FFCC33;
+        }
+        .rec-badge-inativo {
+            color: #555;
+            border: 1px solid #333;
+        }
+        .rec-badge-entrada {
+            color: #00FFCC;
+            border: 1px solid #00FFCC22;
+        }
+        .rec-badge-saida {
+            color: #FF4444;
+            border: 1px solid #FF444422;
+        }
+        .rec-pending-box {
+            background: #0a0a0a;
+            border: 1px solid #FFAA00;
+            padding: 16px;
+            margin-bottom: 16px;
+            text-align: center;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .rec-pending-count {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #FFAA00;
+            line-height: 1.2;
+        }
+        .rec-pending-label {
+            font-size: 0.6rem;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            margin-top: 4px;
+        }
+        .rec-summary {
+            display: flex;
+            gap: 16px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.68rem;
+            padding: 8px 0;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+        .rec-summary-item {
+            color: #888;
+        }
+        .rec-summary-item strong {
+            color: #F0F0F0;
+        }
+
         @media (max-width: 768px) {
             .score-panel { flex-direction: column; gap: 12px; }
             .score-value { font-size: 2rem; }
             .score-detail-label { width: 80px; font-size: 0.55rem; }
             .annual-strip { gap: 8px; font-size: 0.6rem; }
             .annual-meta { margin-left: 0; width: 100%; }
+            .rec-card { font-size: 0.65rem; }
+            .rec-card-left { min-width: 100px; }
+            .rec-pending-count { font-size: 1.4rem; }
         }
     </style>
     """, unsafe_allow_html=True)
@@ -829,6 +934,40 @@ def validate_asset(entry: dict) -> tuple[bool, str]:
     return True, ""
 
 
+def validate_recorrente(entry: dict) -> tuple[bool, str]:
+    """Valida dados de uma transação recorrente."""
+    desc = entry.get("Descricao", "")
+    if not desc or not str(desc).strip():
+        return False, "Descrição obrigatória"
+    if len(str(desc)) > CFG.MAX_DESC_LENGTH:
+        return False, f"Descrição muito longa (máx {CFG.MAX_DESC_LENGTH})"
+
+    val = entry.get("Valor")
+    if not isinstance(val, (int, float)) or val <= 0:
+        return False, "Valor deve ser maior que zero"
+
+    tipo = entry.get("Tipo")
+    if tipo not in CFG.TIPOS:
+        return False, "Tipo inválido"
+
+    cat = entry.get("Categoria", "")
+    if tipo == "Saída":
+        cats_validas = set(CFG.CATEGORIAS_SAIDA) | {"Investimento"}
+    else:
+        cats_validas = set(CFG.CATEGORIAS_ENTRADA)
+    if cat not in cats_validas:
+        return False, f"Categoria '{cat}' inválida para tipo '{tipo}'"
+
+    if entry.get("Responsavel") not in CFG.RESPONSAVEIS:
+        return False, "Responsável inválido"
+
+    dia = entry.get("DiaVencimento")
+    if not isinstance(dia, int) or dia < 1 or dia > 28:
+        return False, "Dia deve ser entre 1 e 28"
+
+    return True, ""
+
+
 # ==============================================================================
 # 6. CAMADA DE DADOS
 # ==============================================================================
@@ -863,6 +1002,9 @@ def load_data() -> tuple[pd.DataFrame, pd.DataFrame]:
             df_trans["Valor"] = pd.to_numeric(df_trans["Valor"], errors="coerce").fillna(0.0)
             df_trans = df_trans.dropna(subset=["Data"])
             df_trans = _normalize_strings(df_trans, ["Tipo", "Categoria", "Responsavel", "Descricao"])
+            if "Origem" not in df_trans.columns:
+                df_trans["Origem"] = "Manual"
+            df_trans["Origem"] = df_trans["Origem"].fillna("Manual")
     except Exception:
         df_trans = pd.DataFrame(columns=expected_trans)
 
@@ -880,6 +1022,32 @@ def load_data() -> tuple[pd.DataFrame, pd.DataFrame]:
         df_assets = pd.DataFrame(columns=expected_pat)
 
     return df_trans, df_assets
+
+
+@st.cache_data(ttl=CFG.CACHE_TTL)
+def load_recorrentes() -> pd.DataFrame:
+    """Carrega transações recorrentes do Google Sheets."""
+    conn = get_conn()
+    expected = list(CFG.COLS_RECORRENTE)
+    try:
+        df = conn.read(worksheet="Recorrentes")
+        df = df.dropna(how="all")
+        missing = set(expected) - set(df.columns)
+        for col in missing:
+            df[col] = None
+        if not df.empty:
+            df["Valor"] = pd.to_numeric(df["Valor"], errors="coerce").fillna(0.0)
+            df["DiaVencimento"] = pd.to_numeric(
+                df["DiaVencimento"], errors="coerce"
+            ).fillna(1).astype(int)
+            df["Ativo"] = (
+                df["Ativo"].astype(str).str.strip().str.lower()
+                .isin(["true", "1", "sim", "s", "yes"])
+            )
+            df = _normalize_strings(df, ["Descricao", "Tipo", "Categoria", "Responsavel"])
+    except Exception:
+        df = pd.DataFrame(columns=expected)
+    return df
 
 
 def save_entry(data: dict, worksheet: str) -> bool:
@@ -955,6 +1123,108 @@ def filter_by_month(df: pd.DataFrame, month: int, year: int) -> pd.DataFrame:
     ].copy()
 
 
+def detect_pending_recorrentes(
+    df_recorrentes: pd.DataFrame,
+    df_trans: pd.DataFrame,
+    user_filter: str,
+    target_month: int,
+    target_year: int,
+) -> pd.DataFrame:
+    """Detecta recorrentes ativas que ainda não foram geradas no mês.
+
+    Compara recorrentes ativas vs transações com Origem='Recorrente'
+    no mês/ano alvo, cruzando por Descricao + Categoria + Tipo.
+    """
+    if df_recorrentes.empty:
+        return pd.DataFrame(columns=list(CFG.COLS_RECORRENTE))
+
+    # Filtrar apenas ativas
+    df_ativas = df_recorrentes[df_recorrentes["Ativo"] == True].copy()
+    if df_ativas.empty:
+        return pd.DataFrame(columns=list(CFG.COLS_RECORRENTE))
+
+    # Filtrar por responsável
+    if user_filter != "Casal" and "Responsavel" in df_ativas.columns:
+        df_ativas = df_ativas[df_ativas["Responsavel"] == user_filter].copy()
+
+    if df_ativas.empty:
+        return pd.DataFrame(columns=list(CFG.COLS_RECORRENTE))
+
+    # Buscar transações recorrentes já geradas no mês
+    df_t = filter_by_user(df_trans, user_filter)
+    df_mo = filter_by_month(df_t, target_month, target_year)
+
+    if not df_mo.empty and "Origem" in df_mo.columns:
+        df_geradas = df_mo[df_mo["Origem"] == "Recorrente"].copy()
+    else:
+        df_geradas = pd.DataFrame()
+
+    # Identificar pendentes: ativas que não têm match no mês
+    pendentes = []
+    for _, rec in df_ativas.iterrows():
+        chave_rec = (
+            str(rec["Descricao"]).strip().lower(),
+            str(rec["Categoria"]).strip(),
+            str(rec["Tipo"]).strip(),
+        )
+        ja_gerada = False
+        if not df_geradas.empty:
+            for _, tr in df_geradas.iterrows():
+                chave_tr = (
+                    str(tr["Descricao"]).strip().lower(),
+                    str(tr["Categoria"]).strip(),
+                    str(tr["Tipo"]).strip(),
+                )
+                if chave_rec == chave_tr:
+                    ja_gerada = True
+                    break
+        if not ja_gerada:
+            pendentes.append(rec)
+
+    if not pendentes:
+        return pd.DataFrame(columns=list(CFG.COLS_RECORRENTE))
+
+    return pd.DataFrame(pendentes).reset_index(drop=True)
+
+
+def generate_recorrentes(
+    pendentes: pd.DataFrame,
+    target_month: int,
+    target_year: int,
+) -> bool:
+    """Gera transações a partir das recorrentes pendentes.
+
+    Cria uma transação para cada recorrente pendente com
+    Origem='Recorrente' e data baseada no DiaVencimento.
+    """
+    if pendentes.empty:
+        return False
+
+    last_day = calendar.monthrange(target_year, target_month)[1]
+    entries_ok = 0
+
+    for _, rec in pendentes.iterrows():
+        dia = int(rec.get("DiaVencimento", 1))
+        dia_real = min(dia, last_day)
+        data_lancamento = date(target_year, target_month, dia_real)
+
+        entry = {
+            "Data": data_lancamento,
+            "Descricao": str(rec["Descricao"]).strip(),
+            "Valor": float(rec["Valor"]),
+            "Categoria": str(rec["Categoria"]).strip(),
+            "Tipo": str(rec["Tipo"]).strip(),
+            "Responsavel": str(rec["Responsavel"]).strip(),
+            "Origem": "Recorrente",
+        }
+
+        ok, err = validate_transaction(entry)
+        if ok:
+            if save_entry(entry, "Transacoes"):
+                entries_ok += 1
+
+    return entries_ok > 0
+
 def compute_projection(
     mx: dict,
     sel_mo: int,
@@ -1006,11 +1276,21 @@ def compute_alerts(
     sel_mo: int,
     sel_yr: int,
     projection: dict | None,
+    n_pendentes: int = 0,
 ) -> list[dict]:
     """Engine de alertas inteligentes baseado em regras."""
     alerts: list[dict] = []
     now = datetime.now()
     is_current = (sel_mo == now.month and sel_yr == now.year)
+
+    # --- Recorrentes pendentes ---
+    if n_pendentes > 0:
+        plural = "s" if n_pendentes > 1 else ""
+        alerts.append({
+            "level": "warn",
+            "icon": "⟳",
+            "msg": f"{n_pendentes} transação(ões) recorrente{plural} pendente{plural} — gere na aba RECORRENTES",
+        })
 
     if mx["disponivel"] > 0 and mx["investido_mes"] > 0 and mx["renda"] > 0:
         alerts.append({
@@ -1832,6 +2112,22 @@ def render_evolution_chart(evo_data: list[dict]) -> None:
     )
 
 
+def render_pending_box(n_pendentes: int, total_pendente: float) -> None:
+    """Renderiza box de recorrentes pendentes."""
+    if n_pendentes == 0:
+        return
+    plural = "s" if n_pendentes > 1 else ""
+    html = (
+        f'<div class="rec-pending-box">'
+        f'<div class="rec-pending-count">{n_pendentes}</div>'
+        f'<div class="rec-pending-label">'
+        f'recorrente{plural} pendente{plural} — {fmt_brl(total_pendente)}'
+        f'</div>'
+        f'</div>'
+    )
+    st.markdown(html, unsafe_allow_html=True)
+
+
 def render_empty_month(month_label: str) -> None:
     """Renderiza mensagem de mês vazio."""
     st.markdown(f"""
@@ -1994,6 +2290,40 @@ def patrimonio_form(
                 st.toast(f"⚠ {err}")
             elif save_entry(entry, "Patrimonio"):
                 st.toast("✓ Ativo registrado")
+                st.rerun()
+
+
+def recorrente_form(default_resp: str = "Casal") -> None:
+    """Formulário para cadastrar transação recorrente."""
+    with st.form("f_recorrente", clear_on_submit=True):
+        tipo = st.selectbox("Tipo", list(CFG.TIPOS))
+        desc = st.text_input(
+            "Descrição", placeholder="Ex: Aluguel, Netflix, Salário",
+            max_chars=CFG.MAX_DESC_LENGTH,
+        )
+        val = st.number_input("Valor (R$)", min_value=0.01, step=50.0)
+        cat = st.selectbox("Categoria", list(CFG.CATEGORIAS_TODAS))
+        dia = st.number_input(
+            "Dia do vencimento", min_value=1, max_value=28, value=1, step=1
+        )
+        resp_options = list(CFG.RESPONSAVEIS)
+        resp_index = resp_options.index(default_resp) if default_resp in resp_options else 0
+        resp = st.selectbox("Responsável", resp_options, index=resp_index)
+        if st.form_submit_button("CADASTRAR RECORRENTE"):
+            entry = {
+                "Descricao": desc.strip(),
+                "Valor": val,
+                "Categoria": cat,
+                "Tipo": tipo,
+                "Responsavel": resp,
+                "DiaVencimento": int(dia),
+                "Ativo": True,
+            }
+            ok, err = validate_recorrente(entry)
+            if not ok:
+                st.toast(f"⚠ {err}")
+            elif save_entry(entry, "Recorrentes"):
+                st.toast("✓ Recorrente cadastrada")
                 st.rerun()
 
 
@@ -2288,8 +2618,12 @@ def main() -> None:
     # --- Projeção (só mês atual) ---
     projection = compute_projection(mx, sel_mo, sel_yr)
 
+    # --- Recorrentes ---
+    df_recorrentes = load_recorrentes()
+    pendentes = detect_pending_recorrentes(df_recorrentes, df_trans, user, sel_mo, sel_yr)
+
     # --- Alertas ---
-    alerts = compute_alerts(mx, sel_mo, sel_yr, projection)
+    alerts = compute_alerts(mx, sel_mo, sel_yr, projection, n_pendentes=len(pendentes))
 
     # --- Score Financeiro ---
     score_data = compute_score(mx)
@@ -2345,8 +2679,8 @@ def main() -> None:
     render_regra_503020(mx)
 
     # ===== ABAS =====
-    tab_ls, tab_renda, tab_wealth, tab_pat, tab_hist = st.tabs([
-        "LIFESTYLE", "RENDA", "WEALTH", "PATRIMÔNIO", "HISTÓRICO"
+    tab_ls, tab_renda, tab_wealth, tab_pat, tab_rec, tab_hist = st.tabs([
+        "LIFESTYLE", "RENDA", "WEALTH", "PATRIMÔNIO", "RECORRENTES", "HISTÓRICO"
     ])
 
     with tab_ls:
@@ -2491,6 +2825,169 @@ def main() -> None:
                             st.rerun()
             else:
                 render_intel("", "Adicione ativos usando o formulário ao lado.")
+
+    with tab_rec:
+        col_form, col_list = st.columns([1, 1])
+
+        df_rec_view = filter_by_user(df_recorrentes, user, include_shared=True)
+
+        with col_form:
+            if not pendentes.empty:
+                total_pendente = pendentes["Valor"].sum()
+                render_pending_box(len(pendentes), total_pendente)
+
+                for _, rec in pendentes.iterrows():
+                    tipo_cls = "rec-badge-saida" if rec["Tipo"] == "Saída" else "rec-badge-entrada"
+                    st.markdown(
+                        f'<div class="rec-card">'
+                        f'<div class="rec-card-left">'
+                        f'<span class="rec-card-desc">{sanitize(str(rec["Descricao"]))}</span>'
+                        f'<span class="rec-card-meta">'
+                        f'{sanitize(str(rec["Categoria"]))} · Dia {int(rec["DiaVencimento"])}'
+                        f'</span>'
+                        f'</div>'
+                        f'<div class="rec-card-right">'
+                        f'<span class="rec-card-valor">{fmt_brl(float(rec["Valor"]))}</span>'
+                        f'<span class="rec-card-badge {tipo_cls}">{sanitize(str(rec["Tipo"]))}</span>'
+                        f'</div>'
+                        f'</div>',
+                        unsafe_allow_html=True
+                    )
+
+                n_pend = len(pendentes)
+                if st.button(
+                    f"⟳ GERAR {n_pend} RECORRENTE{'S' if n_pend > 1 else ''}",
+                    key=f"gen_rec_{user}_{sel_mo}_{sel_yr}",
+                    use_container_width=True,
+                ):
+                    if generate_recorrentes(pendentes, sel_mo, sel_yr):
+                        st.toast("✓ Recorrentes geradas com sucesso")
+                        st.rerun()
+                    else:
+                        st.error("Falha ao gerar recorrentes")
+            else:
+                render_intel(
+                    "Recorrentes",
+                    f"Nenhuma pendente em <strong>{sanitize(month_label)}</strong>"
+                )
+
+            st.markdown("---")
+            render_intel("Cadastrar Recorrente", "Adicione despesas ou receitas fixas mensais")
+            recorrente_form(default_resp=user)
+
+        with col_list:
+            n_ativas = 0
+            total_saidas_fix = 0.0
+            total_entradas_fix = 0.0
+            if not df_rec_view.empty:
+                mask_ativo = df_rec_view["Ativo"] == True
+                n_ativas = int(mask_ativo.sum())
+                total_saidas_fix = df_rec_view[
+                    mask_ativo & (df_rec_view["Tipo"] == "Saída")
+                ]["Valor"].sum()
+                total_entradas_fix = df_rec_view[
+                    mask_ativo & (df_rec_view["Tipo"] == "Entrada")
+                ]["Valor"].sum()
+
+            render_intel(
+                "Recorrentes Cadastradas",
+                f"<strong>{n_ativas}</strong> ativas · "
+                f"Saídas fixas: <strong>{fmt_brl(total_saidas_fix)}</strong> · "
+                f"Entradas fixas: <strong>{fmt_brl(total_entradas_fix)}</strong>"
+            )
+
+            if not df_rec_view.empty:
+                edited_rec = st.data_editor(
+                    df_rec_view,
+                    use_container_width=True,
+                    num_rows="dynamic",
+                    column_config={
+                        "Descricao": st.column_config.TextColumn(
+                            "Descrição", required=True
+                        ),
+                        "Valor": st.column_config.NumberColumn(
+                            "Valor", format="R$ %.2f", required=True, min_value=0.01
+                        ),
+                        "Categoria": st.column_config.SelectboxColumn(
+                            "Categoria", options=list(CFG.CATEGORIAS_TODAS), required=True
+                        ),
+                        "Tipo": st.column_config.SelectboxColumn(
+                            "Tipo", options=list(CFG.TIPOS), required=True
+                        ),
+                        "Responsavel": st.column_config.SelectboxColumn(
+                            "Responsável", options=list(CFG.RESPONSAVEIS)
+                        ),
+                        "DiaVencimento": st.column_config.NumberColumn(
+                            "Dia", min_value=1, max_value=28, required=True
+                        ),
+                        "Ativo": st.column_config.CheckboxColumn(
+                            "Ativo", default=True
+                        ),
+                    },
+                    hide_index=True,
+                    key=f"editor_recorrentes_{user}",
+                )
+
+                if not _df_equals_safe(df_rec_view, edited_rec):
+                    c_save, c_cancel = st.columns(2)
+                    with c_save:
+                        if st.button(
+                            "✓ SALVAR RECORRENTES",
+                            key=f"save_rec_{user}",
+                            use_container_width=True,
+                        ):
+                            rec_errors = []
+                            for idx, row in edited_rec.iterrows():
+                                try:
+                                    dia_val = int(row.get("DiaVencimento", 1))
+                                except (ValueError, TypeError):
+                                    dia_val = 0
+                                entry = {
+                                    "Descricao": row.get("Descricao", ""),
+                                    "Valor": row.get("Valor", 0),
+                                    "Categoria": row.get("Categoria", ""),
+                                    "Tipo": row.get("Tipo", ""),
+                                    "Responsavel": row.get("Responsavel", ""),
+                                    "DiaVencimento": dia_val,
+                                }
+                                ok, err = validate_recorrente(entry)
+                                if not ok:
+                                    rec_errors.append(f"Linha {idx + 1}: {err}")
+                            if rec_errors:
+                                for re_err in rec_errors[:5]:
+                                    st.error(f"⚠ {re_err}")
+                                if len(rec_errors) > 5:
+                                    st.error(
+                                        f"... e mais {len(rec_errors) - 5} erro(s)"
+                                    )
+                            else:
+                                if user != "Casal":
+                                    df_others = df_recorrentes[
+                                        ~df_recorrentes["Responsavel"].isin(
+                                            [user, "Casal"]
+                                        )
+                                    ].copy()
+                                    df_final = pd.concat(
+                                        [df_others, edited_rec],
+                                        ignore_index=True,
+                                    )
+                                else:
+                                    df_final = edited_rec
+                                if update_sheet(df_final, "Recorrentes"):
+                                    st.toast("✓ Recorrentes atualizadas")
+                                    st.rerun()
+                    with c_cancel:
+                        if st.button(
+                            "✗ DESCARTAR",
+                            key=f"discard_rec_{user}",
+                            use_container_width=True,
+                        ):
+                            st.rerun()
+            else:
+                render_intel(
+                    "",
+                    "Nenhuma recorrente cadastrada. Use o formulário ao lado."
+                )
 
     with tab_hist:
         # [FIX B2] Removido df_trans da chamada
