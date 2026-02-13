@@ -890,6 +890,21 @@ def inject_css() -> None:
             .rec-card-left { min-width: 100px; }
             .rec-pending-count { font-size: 1.4rem; }
         }
+
+        /* ===== EXPANDERS ===== */
+        div[data-testid="stExpander"] {
+            border: 1px solid #1a1a1a !important;
+            border-radius: 0px !important;
+            margin-bottom: 12px;
+        }
+        div[data-testid="stExpander"] details summary {
+            font-family: 'JetBrains Mono', monospace !important;
+            font-size: 0.75rem !important;
+            letter-spacing: 0.05em;
+        }
+        div[data-testid="stExpander"] details summary:hover {
+            color: #00FFCC !important;
+        }
     </style>
     """, unsafe_allow_html=True)
 # ==============================================================================
@@ -1476,7 +1491,7 @@ def compute_alerts(
         alerts.append({
             "level": "warn",
             "icon": "⟳",
-            "msg": f"{n_pendentes} transação(ões) recorrente{plural} pendente{plural} — gere na aba RECORRENTES",
+            "msg": f"{n_pendentes} transação(ões) recorrente{plural} pendente{plural} — gere na aba FIXOS",
         })
 
     if mx["disponivel"] > 0 and mx["investido_mes"] > 0 and mx["renda"] > 0:
@@ -2401,13 +2416,16 @@ def render_pending_box(n_pendentes: int, total_pendente: float) -> None:
 
 
 def render_empty_month(month_label: str) -> None:
-    """Renderiza mensagem de mês vazio."""
+    """Renderiza mensagem de mês vazio com guia de ações."""
     st.markdown(f"""
     <div class="intel-box empty-month">
-        <div class="intel-title">Mês sem registros</div>
+        <div class="intel-title">▮ Comece por aqui</div>
         <div class="intel-body">
-            Nenhuma transação encontrada em <strong>{sanitize(month_label)}</strong>.<br>
-            Use as abas abaixo para adicionar entradas.
+            Nenhuma transação em <strong>{sanitize(month_label)}</strong>.<br><br>
+            <strong>1.</strong> Registre sua renda na aba <strong>RENDA</strong><br>
+            <strong>2.</strong> Cadastre gastos fixos na aba <strong>FIXOS</strong><br>
+            <strong>3.</strong> Lance gastos pelo <strong>⚡ Lançamento Rápido</strong> acima<br>
+            <strong>4.</strong> Acompanhe tudo no <strong>HISTÓRICO</strong>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -2971,12 +2989,8 @@ def main() -> None:
     # ===== HERO =====
     render_autonomia(mx["autonomia"], mx["sobrevivencia"])
 
-    # ===== RESUMO ANUAL =====
-    render_annual_strip(annual)
-
-    # ===== HEALTH + SCORE + ALERTAS =====
+    # ===== HEALTH + ALERTAS =====
     render_health_badge(mx["health"], month_label)
-    render_score(score_data)
     render_alerts(alerts)
 
     if not has_data:
@@ -3009,12 +3023,50 @@ def main() -> None:
             "Patrimônio acumulado"
         )
 
-    # ===== REGRA 50/30/20 =====
-    render_regra_503020(mx)
+    # ===== ANÁLISE DETALHADA (colapsável) =====
+    with st.expander("📊 Análise Detalhada", expanded=False):
+        render_score(score_data)
+        render_regra_503020(mx)
+        render_annual_strip(annual)
+
+    # ===== LANÇAMENTO RÁPIDO =====
+    with st.expander("⚡ Lançamento Rápido"):
+        with st.form("f_quick", clear_on_submit=True):
+            qc1, qc2 = st.columns([3, 1])
+            with qc1:
+                q_desc = st.text_input(
+                    "Descrição", placeholder="Ex: Mercado, Uber, Jantar",
+                    max_chars=CFG.MAX_DESC_LENGTH,
+                )
+            with qc2:
+                q_val = st.number_input("Valor (R$)", min_value=0.01, step=10.0)
+            qc3, qc4 = st.columns(2)
+            with qc3:
+                q_cat = st.selectbox("Categoria", list(CFG.CATEGORIAS_SAIDA))
+            with qc4:
+                q_date = st.date_input(
+                    "Data", default_form_date(sel_mo, sel_yr), format="DD/MM/YYYY"
+                )
+            if st.form_submit_button("REGISTRAR GASTO", use_container_width=True):
+                entry = {
+                    "Data": q_date,
+                    "Descricao": q_desc.strip(),
+                    "Valor": q_val,
+                    "Categoria": q_cat,
+                    "Tipo": "Saída",
+                    "Responsavel": user,
+                    "Origem": "Manual",
+                }
+                ok, err = validate_transaction(entry)
+                if not ok:
+                    st.toast(f"⚠ {err}")
+                elif save_entry(entry, "Transacoes"):
+                    st.toast("✓ Registrado")
+                    st.rerun()
 
     # ===== ABAS =====
     tab_ls, tab_renda, tab_wealth, tab_pat, tab_rec, tab_hist = st.tabs([
-        "LIFESTYLE", "RENDA", "WEALTH", "PATRIMÔNIO", "RECORRENTES", "HISTÓRICO"
+        "GASTOS", "RENDA", "INVESTIR", "PATRIMÔNIO", "FIXOS", "HISTÓRICO"
     ])
 
     with tab_ls:
@@ -3039,7 +3091,7 @@ def main() -> None:
                 default_resp=user,
             )
         with col_intel:
-            render_intel("Intel — Lifestyle", mx["insight_ls"])
+            render_intel("Intel — Gastos", mx["insight_ls"])
             evo_data = compute_evolution(df_trans, user, sel_mo, sel_yr)
             render_evolution_chart(evo_data)
 
