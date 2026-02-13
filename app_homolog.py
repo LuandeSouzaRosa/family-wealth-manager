@@ -3020,39 +3020,39 @@ def main() -> None:
 
     if not has_data:
         render_empty_month(month_label)
-        
-    # ===== PROJEÇÃO (só mês atual) =====
-    render_projection(projection, mx)
+    else:
+        # ===== PROJEÇÃO (só mês atual) =====
+        render_projection(projection, mx)
 
-    # ===== KPI STRIP =====
-    k1, k2 = st.columns(2)
-    k3, k4 = st.columns(2)
-    with k1:
-        render_kpi(
-            "Fluxo Mensal", fmt_brl(mx["disponivel"]),
-            "Entradas − Saídas − Aportes", mx["d_disponivel"]
-        )
-    with k2:
-        render_kpi(
-            "Renda", fmt_brl(mx["renda"]),
-            "Entradas do mês", mx["d_renda"]
-        )
-    with k3:
-        render_kpi(
-            "Investido", fmt_brl(mx["investido_mes"]),
-            f"Taxa de Aporte: {mx['taxa_aporte']:.1f}%", mx["d_investido"]
-        )
-    with k4:
-        render_kpi(
-            "Reserva Total", fmt_brl(mx["sobrevivencia"]),
-            "Patrimônio acumulado"
-        )
+        # ===== KPI STRIP =====
+        k1, k2 = st.columns(2)
+        k3, k4 = st.columns(2)
+        with k1:
+            render_kpi(
+                "Fluxo Mensal", fmt_brl(mx["disponivel"]),
+                "Entradas − Saídas − Aportes", mx["d_disponivel"]
+            )
+        with k2:
+            render_kpi(
+                "Renda", fmt_brl(mx["renda"]),
+                "Entradas do mês", mx["d_renda"]
+            )
+        with k3:
+            render_kpi(
+                "Investido", fmt_brl(mx["investido_mes"]),
+                f"Taxa de Aporte: {mx['taxa_aporte']:.1f}%", mx["d_investido"]
+            )
+        with k4:
+            render_kpi(
+                "Reserva Total", fmt_brl(mx["sobrevivencia"]),
+                "Patrimônio acumulado"
+            )
 
-    # ===== ANÁLISE DETALHADA (colapsável) =====
-    with st.expander("📊 Análise Detalhada", expanded=False):
-        render_score(score_data)
-        render_regra_503020(mx)
-        render_annual_strip(annual)
+        # ===== ANÁLISE DETALHADA (colapsável) =====
+        with st.expander("📊 Análise Detalhada", expanded=False):
+            render_score(score_data)
+            render_regra_503020(mx)
+            render_annual_strip(annual)
 
     # ===== LANÇAMENTO RÁPIDO =====
     with st.expander("⚡ Lançamento Rápido"):
@@ -3227,6 +3227,26 @@ def main() -> None:
                 "Investimentos, aportes mensais, compras de ativos"
             )
             wealth_form(sel_mo=sel_mo, sel_yr=sel_yr, default_resp=user)
+
+            # Contexto: últimos aportes do mês
+            df_inv_ctx = mx["df_month"][
+                (mx["df_month"]["Tipo"] == "Saída") &
+                (mx["df_month"]["Categoria"] == "Investimento")
+            ] if not mx["df_month"].empty else pd.DataFrame()
+            if not df_inv_ctx.empty:
+                df_inv_ctx = df_inv_ctx.sort_values("Data", ascending=False).head(3)
+                ctx_html = '<div style="margin-top:8px;padding:8px 0;border-top:1px solid #111;">'
+                ctx_html += '<div class="intel-title" style="font-size:0.55rem;margin-bottom:6px;">Últimos aportes</div>'
+                for _, row in df_inv_ctx.iterrows():
+                    desc = sanitize(str(row.get("Descricao", "")))[:35]
+                    val = fmt_brl(float(row.get("Valor", 0)))
+                    ctx_html += (
+                        f'<div style="font-family:JetBrains Mono,monospace;font-size:0.6rem;'
+                        f'color:#555;padding:2px 0;display:flex;justify-content:space-between;">'
+                        f'<span>{desc}</span><span>{val}</span></div>'
+                    )
+                ctx_html += '</div>'
+                st.markdown(ctx_html, unsafe_allow_html=True)
 
             st.markdown("---")
 
