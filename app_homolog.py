@@ -2415,6 +2415,31 @@ def render_pending_box(n_pendentes: int, total_pendente: float) -> None:
     st.markdown(html, unsafe_allow_html=True)
 
 
+def render_recent_context(df_month: pd.DataFrame, tipo: str, n: int = 3) -> None:
+    """Mostra últimas N transações do tipo para contexto."""
+    if df_month.empty:
+        return
+    df_tipo = df_month[df_month["Tipo"] == tipo].copy()
+    if df_tipo.empty:
+        return
+    df_tipo["Data"] = pd.to_datetime(df_tipo["Data"], errors="coerce")
+    df_tipo = df_tipo.sort_values("Data", ascending=False).head(n)
+    html = '<div style="margin-top:8px; padding:8px 0; border-top:1px solid #111;">'
+    html += '<div class="intel-title" style="font-size:0.55rem; margin-bottom:6px;">Últimos registros</div>'
+    for _, row in df_tipo.iterrows():
+        desc = sanitize(str(row.get("Descricao", "")))[:35]
+        val = fmt_brl(float(row.get("Valor", 0)))
+        cat = sanitize(str(row.get("Categoria", "")))
+        html += (
+            f'<div style="font-family:JetBrains Mono,monospace;font-size:0.6rem;'
+            f'color:#555;padding:2px 0;display:flex;justify-content:space-between;">'
+            f'<span>{desc}</span>'
+            f'<span>{cat} · {val}</span>'
+            f'</div>'
+        )
+    html += '</div>'
+    st.markdown(html, unsafe_allow_html=True)
+
 def render_empty_month(month_label: str) -> None:
     """Renderiza mensagem de mês vazio com guia de ações."""
     st.markdown(f"""
@@ -3065,8 +3090,8 @@ def main() -> None:
                     st.rerun()
 
     # ===== ABAS =====
-    tab_ls, tab_renda, tab_wealth, tab_pat, tab_rec, tab_hist = st.tabs([
-        "GASTOS", "RENDA", "INVESTIR", "PATRIMÔNIO", "FIXOS", "HISTÓRICO"
+    tab_ls, tab_renda, tab_pat, tab_rec, tab_hist = st.tabs([
+        "GASTOS", "RENDA", "PATRIMÔNIO", "FIXOS", "HISTÓRICO"
     ])
 
     with tab_ls:
@@ -3090,6 +3115,7 @@ def main() -> None:
                 sel_mo=sel_mo, sel_yr=sel_yr,
                 default_resp=user,
             )
+            render_recent_context(mx["df_month"], "Saída")
         with col_intel:
             render_intel("Intel — Gastos", mx["insight_ls"])
             evo_data = compute_evolution(df_trans, user, sel_mo, sel_yr)
@@ -3176,33 +3202,34 @@ def main() -> None:
                 sel_mo=sel_mo, sel_yr=sel_yr,
                 default_resp=user,
             )
+            render_recent_context(mx["df_month"], "Entrada")
         with col_intel:
             render_intel("Intel — Renda", mx["insight_renda"])
 
-    with tab_wealth:
-        col_form, col_intel = st.columns([1, 1])
-        with col_form:
-            render_intel(
-                "Aportes do Mês",
-                f"Mês: <strong>{fmt_brl(mx['investido_mes'])}</strong><br>"
-                f"Acumulado: <strong>{fmt_brl(mx['investido_total'])}</strong>"
-            )
-            # [FIX B1] Agora passa default_resp corretamente
-            wealth_form(sel_mo=sel_mo, sel_yr=sel_yr, default_resp=user)
-        with col_intel:
-            render_intel(
-                "Intel — Patrimônio",
-                f"Reserva Total: <strong>{fmt_brl(mx['sobrevivencia'])}</strong><br>"
-                f"Autonomia: <strong>{mx['autonomia']:.1f} meses</strong>"
-            )
-
-    with tab_pat:        
-        col_form, col_list = st.columns([1, 1])
-
-        # [FIX B5] Filtrar patrimônio pelo usuário ativo (incluindo Casal)
+    with tab_pat:
         df_assets_view = filter_by_user(df_assets, user, include_shared=True)
+        total_pat = df_assets_view["Valor"].sum() if not df_assets_view.empty else 0
 
-        with col_form:
+        render_intel(
+            "Patrimônio & Investimentos",
+            f"Reserva Total: <strong>{fmt_brl(mx['sobrevivencia'])}</strong> · "
+            f"Autonomia: <strong>{mx['autonomia']:.1f} meses</strong><br>"
+            f"Investido (mês): <strong>{fmt_brl(mx['investido_mes'])}</strong> · "
+            f"Acumulado: <strong>{fmt_brl(mx['investido_total'])}</strong> · "
+            f"Base patrimonial: <strong>{fmt_brl(total_pat)}</strong>"
+        )
+
+        col_left, col_right = st.columns([1, 1])
+
+        with col_left:
+            render_intel(
+                "📥 Registrar Aporte",
+                "Investimentos, aportes mensais, compras de ativos"
+            )
+            wealth_form(sel_mo=sel_mo, sel_yr=sel_yr, default_resp=user)
+
+            st.markdown("---")
+
             if not df_assets_view.empty and "Responsavel" in df_assets_view.columns:
                 totais = df_assets_view.groupby("Responsavel")["Valor"].sum()
                 partes = " | ".join(
@@ -3210,14 +3237,13 @@ def main() -> None:
                 )
             else:
                 partes = "Nenhum ativo registrado"
-            total_pat = df_assets_view["Valor"].sum() if not df_assets_view.empty else 0
             render_intel(
-                "Patrimônio Base",
-                f"Total: <strong>{fmt_brl(total_pat)}</strong><br>{partes}"
+                "🏦 Base Patrimonial",
+                f"Saldos e ativos estáticos<br>{partes}"
             )
-            # [FIX M3] Agora passa default_resp
             patrimonio_form(default_resp=user)
-        with col_list:
+
+        with col_right:
             render_intel(
                 "Ativos Registrados",
                 f"{len(df_assets_view)} itens no patrimônio base"
@@ -3230,7 +3256,7 @@ def main() -> None:
                     column_config={
                         "Item": st.column_config.TextColumn("Ativo", required=True),
                         "Valor": st.column_config.NumberColumn(
-                            "Valor", format="R$ %.2f", required=True, min_value=0.0
+                            "Valor", format="R$ %.2f", required=True, min_value=0.01
                         ),
                         "Responsavel": st.column_config.SelectboxColumn(
                             "Titular", options=list(CFG.RESPONSAVEIS)
@@ -3243,7 +3269,6 @@ def main() -> None:
                     c_save, c_cancel = st.columns(2)
                     with c_save:
                         if st.button("✓ SALVAR PATRIMÔNIO", key=f"save_pat_{user}", use_container_width=True):
-                            # Validar cada ativo editado
                             pat_errors = []
                             for idx, row in edited_assets.iterrows():
                                 entry = {
@@ -3313,7 +3338,7 @@ def main() -> None:
                 )
 
             st.markdown("---")
-            render_intel("Cadastrar Recorrente", "Adicione despesas ou receitas fixas mensais")
+            render_intel("Nova Despesa/Receita Fixa", "Cadastre aqui os gastos e receitas que se repetem todo mês")
             recorrente_form(default_resp=user)
 
         with col_list:
