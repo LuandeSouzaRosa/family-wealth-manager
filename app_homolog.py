@@ -563,16 +563,50 @@ def inject_css() -> None:
             padding: 40px 20px;
         }
 
+        /* ===== MOBILE (consolidado) ===== */
         @media (max-width: 768px) {
             .autonomia-number { font-size: 4rem; }
             .autonomia-hero { padding: 28px 16px 24px 16px; }
             .block-container { padding: 0.5rem 0.8rem !important; }
             .kpi-mono-value { font-size: 1.1rem; }
+            .kpi-mono { padding: 10px 12px; margin-bottom: 4px; }
             .cat-bar-label { width: 70px; font-size: 0.6rem; }
             .cat-bar-value { width: 80px; font-size: 0.6rem; }
-            .hist-summary { gap: 8px; font-size: 0.65rem; }
+            .hist-summary { flex-direction: column; gap: 8px; font-size: 0.65rem; }
             .alert-item { font-size: 0.63rem; padding: 6px 10px; }
             .projection-main { font-size: 0.8rem; }
+            .projection-box { padding: 12px; }
+            .projection-labels { font-size: 0.58rem; }
+            .budget-label { width: 70px; font-size: 0.6rem; }
+            .budget-info { width: 140px; font-size: 0.6rem; }
+            .budget-row { font-size: 0.63rem; }
+            .budget-panel { padding: 10px 12px; }
+            .score-panel { flex-direction: column; gap: 12px; }
+            .score-value { font-size: 2rem; }
+            .score-detail-label { width: 80px; font-size: 0.55rem; }
+            .annual-strip { flex-direction: column; align-items: flex-start; gap: 8px; font-size: 0.6rem; }
+            .annual-meta { margin-left: 0; width: 100%; }
+            .annual-divider { display: none; }
+            .intel-box { padding: 10px 12px; }
+            .intel-body { font-size: 0.78rem; }
+            .health-badge { font-size: 0.62rem; padding: 5px 10px; }
+            .t-panel { padding: 14px; }
+            .rec-card { font-size: 0.65rem; padding: 10px 12px; }
+            .rec-card-left { min-width: 100px; }
+            .rec-pending-count { font-size: 1.4rem; }
+            .rec-pending-box { padding: 12px; }
+            .stFormSubmitButton button {
+                padding: 12px 16px !important;
+                font-size: 0.75rem !important;
+            }
+            .stButton button {
+                padding: 10px 14px !important;
+            }
+            .stTabs [data-baseweb="tab"] {
+                font-size: 0.65rem;
+                padding: 6px 10px 8px 10px;
+                letter-spacing: 0.08em;
+            }
         }
 
         @media (prefers-reduced-motion: reduce) {
@@ -781,12 +815,6 @@ def inject_css() -> None:
             justify-content: space-between;
         }
 
-        @media (max-width: 768px) {
-            .budget-label { width: 70px; font-size: 0.6rem; }
-            .budget-info { width: 140px; font-size: 0.6rem; }
-            .budget-row { font-size: 0.63rem; }
-        }
-
         /* ===== RECORRENTES ===== */
         .rec-card {
             background: #0a0a0a;
@@ -888,46 +916,6 @@ def inject_css() -> None:
             color: #F0F0F0;
         }
 
-        @media (max-width: 768px) {
-            .score-panel { flex-direction: column; gap: 12px; }
-            .score-value { font-size: 2rem; }
-            .score-detail-label { width: 80px; font-size: 0.55rem; }
-            .annual-strip { gap: 8px; font-size: 0.6rem; }
-            .annual-meta { margin-left: 0; width: 100%; }
-            .rec-card { font-size: 0.65rem; }
-            .rec-card-left { min-width: 100px; }
-            .rec-pending-count { font-size: 1.4rem; }
-        }
-
-        /* ===== MOBILE ENHANCEMENTS ===== */
-        @media (max-width: 768px) {
-            .hist-summary { flex-direction: column; }
-            .intel-box { padding: 10px 12px; }
-            .intel-body { font-size: 0.78rem; }
-            .kpi-mono { padding: 10px 12px; margin-bottom: 4px; }
-            .projection-box { padding: 12px; }
-            .projection-labels { font-size: 0.58rem; }
-            .health-badge { font-size: 0.62rem; padding: 5px 10px; }
-            .budget-panel { padding: 10px 12px; }
-            .annual-strip { flex-direction: column; align-items: flex-start; }
-            .annual-divider { display: none; }
-            .t-panel { padding: 14px; }
-            .stFormSubmitButton button {
-                padding: 12px 16px !important;
-                font-size: 0.75rem !important;
-            }
-            .stButton button {
-                padding: 10px 14px !important;
-            }
-            .stTabs [data-baseweb="tab"] {
-                font-size: 0.65rem;
-                padding: 6px 10px 8px 10px;
-                letter-spacing: 0.08em;
-            }
-            .rec-card { padding: 10px 12px; }
-            .rec-pending-box { padding: 12px; }
-        }
-
         /* ===== EXPANDERS ===== */
         div[data-testid="stExpander"] {
             border: 1px solid #1a1a1a !important;
@@ -944,6 +932,7 @@ def inject_css() -> None:
         }
     </style>
     """, unsafe_allow_html=True)
+
 # ==============================================================================
 # 4. UTILITÁRIOS
 # ==============================================================================
@@ -1185,7 +1174,8 @@ def load_data() -> tuple[pd.DataFrame, pd.DataFrame]:
             if "Origem" not in df_trans.columns:
                 df_trans["Origem"] = "Manual"
             df_trans["Origem"] = df_trans["Origem"].fillna("Manual")
-    except Exception:
+    except Exception as e:
+        logger.error(f"load_data [Transacoes]: {e}")
         df_trans = pd.DataFrame(columns=expected_trans)
 
     expected_pat = list(CFG.COLS_PATRIMONIO)
@@ -1198,11 +1188,11 @@ def load_data() -> tuple[pd.DataFrame, pd.DataFrame]:
         if not df_assets.empty:
             df_assets["Valor"] = pd.to_numeric(df_assets["Valor"], errors="coerce").fillna(0.0)
             df_assets = _normalize_strings(df_assets, ["Item", "Responsavel"])
-    except Exception:
+    except Exception as e:
+        logger.error(f"load_data [Patrimonio]: {e}")
         df_assets = pd.DataFrame(columns=expected_pat)
 
     return df_trans, df_assets
-
 
 def _parse_ativo(val) -> bool:
     """Converte valor para booleano (coluna Ativo)."""
@@ -1231,7 +1221,8 @@ def load_recorrentes() -> pd.DataFrame:
             ).fillna(1).astype(int)
             df["Ativo"] = df["Ativo"].apply(_parse_ativo)
             df = _normalize_strings(df, ["Descricao", "Tipo", "Categoria", "Responsavel"])
-    except Exception:
+    except Exception as e:
+        logger.error(f"load_recorrentes: {e}")
         df = pd.DataFrame(columns=expected)
     return df
 
@@ -1249,7 +1240,8 @@ def load_orcamentos() -> pd.DataFrame:
         if not df.empty:
             df["Limite"] = pd.to_numeric(df["Limite"], errors="coerce").fillna(0.0)
             df = _normalize_strings(df, ["Categoria", "Responsavel"])
-    except Exception:
+    except Exception as e:
+        logger.error(f"load_orcamentos: {e}")
         df = pd.DataFrame(columns=expected)
     return df
 
@@ -1283,6 +1275,7 @@ def save_entry(data: dict, worksheet: str) -> bool:
             df_updated = _serialize_for_sheet(df_updated)
             conn.update(worksheet=worksheet, data=df_updated)
             st.cache_data.clear()
+            logger.info(f"save_entry OK [{worksheet}]")
             return True
         except Exception as e:
             if attempt == CFG.SAVE_RETRIES - 1:
@@ -1302,6 +1295,7 @@ def update_sheet(df_edited: pd.DataFrame, worksheet: str) -> bool:
             df_to_save = _serialize_for_sheet(df_edited)
             conn.update(worksheet=worksheet, data=df_to_save)
             st.cache_data.clear()
+            logger.info(f"update_sheet OK [{worksheet}]: {len(df_edited)} rows")
             return True
         except Exception as e:
             if attempt == CFG.SAVE_RETRIES - 1:
@@ -1492,6 +1486,7 @@ def generate_recorrentes(
                     n_saidas += 1
 
     if entries_ok > 0:
+        logger.info(f"generate_recorrentes: {entries_ok} geradas para {target_month}/{target_year}")
         return {
             "count": entries_ok,
             "entradas": n_entradas,
@@ -1828,7 +1823,7 @@ def compute_metrics(
 
         # --- Split Casal ---
         if user_filter == "Casal":
-            for resp_name in CFG.RESPONSAVEIS:
+            for resp_name in [r for r in CFG.RESPONSAVEIS if r != "Casal"]:
                 resp_total = df_mo[
                     (df_mo["Tipo"] == "Saída") &
                     (df_mo["Categoria"] != "Investimento") &
@@ -2804,13 +2799,14 @@ def transaction_form(
             ok, err = validate_transaction(entry)
             if not ok:
                 st.toast(f"⚠ {err}")
-            elif save_entry(entry, "Transacoes"):
-                if df_month is not None and check_duplicate(df_month, desc.strip(), val, d):
-                    st.toast(f"⚠ Possível duplicata: {desc.strip()} — {fmt_brl(val)}")
-                else:
-                    st.toast(f"✓ {desc.strip()} — {fmt_brl(val)}")
-                st.rerun()
-
+            else:
+                is_dup = df_month is not None and check_duplicate(df_month, desc.strip(), val, d)
+                if save_entry(entry, "Transacoes"):
+                    if is_dup:
+                        st.toast(f"⚠ Possível duplicata: {desc.strip()} — {fmt_brl(val)}")
+                    else:
+                        st.toast(f"✓ {desc.strip()} — {fmt_brl(val)}")
+                    st.rerun()
 
 def wealth_form(
     sel_mo: int | None = None,
@@ -2845,13 +2841,14 @@ def wealth_form(
             ok, err = validate_transaction(entry)
             if not ok:
                 st.toast(f"⚠ {err}")
-            elif save_entry(entry, "Transacoes"):
-                if df_month is not None and check_duplicate(df_month, desc.strip(), val, d):
-                    st.toast(f"⚠ Possível duplicata: {desc.strip()} — {fmt_brl(val)}")
-                else:
-                    st.toast(f"✓ Aporte: {desc.strip()} — {fmt_brl(val)}")
-                st.rerun()
-
+            else:
+                is_dup = df_month is not None and check_duplicate(df_month, desc.strip(), val, d)
+                if save_entry(entry, "Transacoes"):
+                    if is_dup:
+                        st.toast(f"⚠ Possível duplicata: {desc.strip()} — {fmt_brl(val)}")
+                    else:
+                        st.toast(f"✓ Aporte: {desc.strip()} — {fmt_brl(val)}")
+                    st.rerun()
 
 def patrimonio_form(
     default_resp: str = "Casal",  # [FIX M3] Adicionado parâmetro
@@ -3200,7 +3197,7 @@ def main() -> None:
         user = "Casal"
     with c_status:
         st.markdown(
-            f'<div class="status-line">L&L TERMINAL v5.0 — {fmt_date(now)}</div>',
+            f'<div class="status-line">L&L TERMINAL v6.0 — {fmt_date(now)}</div>',
             unsafe_allow_html=True
         )
 
