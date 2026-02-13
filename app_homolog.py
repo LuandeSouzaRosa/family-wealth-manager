@@ -1691,6 +1691,10 @@ def compute_metrics(
         "month_saidas": 0,
         "month_investimentos": 0,
         "health": "neutral",
+        "prev_renda": 0.0,
+        "prev_lifestyle": 0.0,
+        "prev_investido": 0.0,
+        "prev_disponivel": 0.0,
     }
 
     if df_t.empty:
@@ -1806,6 +1810,10 @@ def compute_metrics(
         m["d_lifestyle"] = calc_delta(m["lifestyle"], prev_lifestyle)
         m["d_investido"] = calc_delta(m["investido_mes"], prev_investido)
         m["d_disponivel"] = calc_delta(m["disponivel"], prev_disponivel)
+        m["prev_renda"] = prev_renda
+        m["prev_lifestyle"] = prev_lifestyle
+        m["prev_investido"] = prev_investido
+        m["prev_disponivel"] = prev_disponivel
 
     # --- Insights ---
     if m["lifestyle"] > 0:
@@ -2566,6 +2574,64 @@ def render_annual_strip(annual: dict | None) -> None:
     </div>
     """, unsafe_allow_html=True)
 
+def render_prev_comparison(mx: dict, sel_mo: int, sel_yr: int) -> None:
+    """Renderiza comparativo compacto com mês anterior."""
+    has_prev = mx["prev_renda"] > 0 or mx["prev_lifestyle"] > 0 or mx["prev_investido"] > 0
+    if not has_prev:
+        return
+
+    prev_mo = sel_mo - 1 if sel_mo > 1 else 12
+    prev_yr = sel_yr if sel_mo > 1 else sel_yr - 1
+    prev_label = f"{MESES_PT[prev_mo]}/{prev_yr}"
+    curr_label = f"{MESES_PT[sel_mo]}/{sel_yr}"
+
+    def _row(label: str, prev_val: float, curr_val: float, delta, invert: bool = False) -> str:
+        if delta is None or delta in (float("inf"), float("-inf")):
+            delta_html = '<span style="color:#555;">—</span>'
+        else:
+            if invert:
+                color = "#00FFCC" if delta <= 0 else "#FF4444"
+            else:
+                color = "#00FFCC" if delta >= 0 else "#FF4444"
+            sinal = "+" if delta > 0 else ""
+            delta_html = f'<span style="color:{color};">{sinal}{delta:.0f}%</span>'
+        return (
+            f'<div style="display:flex;justify-content:space-between;padding:4px 0;'
+            f'font-family:JetBrains Mono,monospace;font-size:0.65rem;">'
+            f'<span style="color:#888;width:80px;">{label}</span>'
+            f'<span style="color:#555;width:100px;text-align:right;">{fmt_brl(prev_val)}</span>'
+            f'<span style="color:#F0F0F0;width:100px;text-align:right;">{fmt_brl(curr_val)}</span>'
+            f'<span style="width:50px;text-align:right;">{delta_html}</span>'
+            f'</div>'
+        )
+
+    header = (
+        f'<div style="display:flex;justify-content:space-between;padding:4px 0;'
+        f'font-family:JetBrains Mono,monospace;font-size:0.55rem;color:#444;'
+        f'border-bottom:1px solid #111;margin-bottom:4px;">'
+        f'<span style="width:80px;">Métrica</span>'
+        f'<span style="width:100px;text-align:right;">{prev_label}</span>'
+        f'<span style="width:100px;text-align:right;">{curr_label}</span>'
+        f'<span style="width:50px;text-align:right;">Δ</span>'
+        f'</div>'
+    )
+
+    rows = (
+        _row("Renda", mx["prev_renda"], mx["renda"], mx["d_renda"])
+        + _row("Gastos", mx["prev_lifestyle"], mx["lifestyle"], mx["d_lifestyle"], invert=True)
+        + _row("Investido", mx["prev_investido"], mx["investido_mes"], mx["d_investido"])
+        + _row("Saldo", mx["prev_disponivel"], mx["disponivel"], mx["d_disponivel"])
+    )
+
+    html = (
+        f'<div class="intel-box">'
+        f'<div class="intel-title">◆ vs Mês Anterior</div>'
+        f'{header}{rows}'
+        f'</div>'
+    )
+    st.markdown(html, unsafe_allow_html=True)
+
+
 # ==============================================================================
 # 9. FORMULÁRIOS
 # ==============================================================================
@@ -2577,6 +2643,7 @@ def transaction_form(
     default_step: float = 10.0,
     sel_mo: int | None = None, sel_yr: int | None = None,
     default_resp: str = "Casal",
+    df_month: pd.DataFrame | None = None,
 ) -> None:
     """Formulário genérico de transação."""
     form_date = default_form_date(sel_mo, sel_yr) if sel_mo and sel_yr else datetime.now().date()
@@ -2601,7 +2668,10 @@ def transaction_form(
             if not ok:
                 st.toast(f"⚠ {err}")
             elif save_entry(entry, "Transacoes"):
-                st.toast(f"✓ {desc.strip()} — {fmt_brl(val)}")
+                if df_month is not None and check_duplicate(df_month, desc.strip(), val, d):
+                    st.toast(f"⚠ Possível duplicata: {desc.strip()} — {fmt_brl(val)}")
+                else:
+                    st.toast(f"✓ {desc.strip()} — {fmt_brl(val)}")
                 st.rerun()
 
 
@@ -2848,7 +2918,10 @@ def _render_historico(
     if not _df_equals_safe(df_hist, edited):
         rows_removed = len(df_hist) - len(edited)
         if rows_removed > 0:
-            st.warning(f"⚠ {rows_removed} transação(ões) será(ão) excluída(s) em {month_label}")
+            if rows_removed >= 3:
+                st.error(f"⚠ ATENÇÃO: {rows_removed} transações serão excluídas em {month_label}")
+            else:
+                st.warning(f"⚠ {rows_removed} transação(ões) será(ão) excluída(s) em {month_label}")
         else:
             st.warning(f"⚠ Alterações pendentes em {month_label}")
 
@@ -3103,6 +3176,7 @@ def main() -> None:
         with st.expander("📊 Análise Detalhada", expanded=False):
             render_score(score_data)
             render_regra_503020(mx)
+            render_prev_comparison(mx, sel_mo, sel_yr)
             render_annual_strip(annual)
 
     # ===== LANÇAMENTO RÁPIDO =====
@@ -3170,6 +3244,7 @@ def main() -> None:
                 default_step=10.0,
                 sel_mo=sel_mo, sel_yr=sel_yr,
                 default_resp=user,
+                df_month=mx["df_month"],
             )
             render_recent_context(mx["df_month"], "Saída")
         with col_intel:
@@ -3257,6 +3332,7 @@ def main() -> None:
                 default_step=100.0,
                 sel_mo=sel_mo, sel_yr=sel_yr,
                 default_resp=user,
+                df_month=mx["df_month"],
             )
             render_recent_context(mx["df_month"], "Entrada")
         with col_intel:
