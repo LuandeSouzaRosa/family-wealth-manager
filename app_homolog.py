@@ -891,6 +891,35 @@ def inject_css() -> None:
             .rec-pending-count { font-size: 1.4rem; }
         }
 
+        /* ===== MOBILE ENHANCEMENTS ===== */
+        @media (max-width: 768px) {
+            .hist-summary { flex-direction: column; }
+            .intel-box { padding: 10px 12px; }
+            .intel-body { font-size: 0.78rem; }
+            .kpi-mono { padding: 10px 12px; margin-bottom: 4px; }
+            .projection-box { padding: 12px; }
+            .projection-labels { font-size: 0.58rem; }
+            .health-badge { font-size: 0.62rem; padding: 5px 10px; }
+            .budget-panel { padding: 10px 12px; }
+            .annual-strip { flex-direction: column; align-items: flex-start; }
+            .annual-divider { display: none; }
+            .t-panel { padding: 14px; }
+            .stFormSubmitButton button {
+                padding: 12px 16px !important;
+                font-size: 0.75rem !important;
+            }
+            .stButton button {
+                padding: 10px 14px !important;
+            }
+            .stTabs [data-baseweb="tab"] {
+                font-size: 0.65rem;
+                padding: 6px 10px 8px 10px;
+                letter-spacing: 0.08em;
+            }
+            .rec-card { padding: 10px 12px; }
+            .rec-pending-box { padding: 12px; }
+        }
+
         /* ===== EXPANDERS ===== */
         div[data-testid="stExpander"] {
             border: 1px solid #1a1a1a !important;
@@ -1088,6 +1117,27 @@ def validate_orcamento(entry: dict) -> tuple[bool, str]:
     if entry.get("Responsavel") not in CFG.RESPONSAVEIS:
         return False, "Responsável inválido"
     return True, ""
+
+
+def check_duplicate(df_month: pd.DataFrame, desc: str, valor: float, data_ref) -> bool:
+    """Verifica se existe transação com mesma descrição, valor e data no mês."""
+    if df_month.empty:
+        return False
+    try:
+        if isinstance(data_ref, datetime):
+            data_check = data_ref.date()
+        elif isinstance(data_ref, date):
+            data_check = data_ref
+        else:
+            return False
+        mask = (
+            (df_month["Descricao"].str.strip().str.lower() == desc.strip().lower()) &
+            (df_month["Valor"].round(2) == round(float(valor), 2)) &
+            (df_month["Data"].dt.date == data_check)
+        )
+        return bool(mask.any())
+    except Exception:
+        return False
 
 
 # ==============================================================================
@@ -2028,7 +2078,7 @@ def render_autonomia(val: float, sobrevivencia: float) -> None:
     """, unsafe_allow_html=True)
 
 
-def render_health_badge(health: str, month_label: str) -> None:
+def render_health_badge(health: str, month_label: str, tx_count: int = 0) -> None:
     """Renderiza badge de saúde do mês."""
     config = {
         "excellent": ("● Mês excelente", "health-excellent"),
@@ -2038,8 +2088,9 @@ def render_health_badge(health: str, month_label: str) -> None:
         "neutral":   ("○ Sem dados suficientes", "health-good"),
     }
     label, cls = config.get(health, config["neutral"])
+    count_text = f" · {tx_count} lançamentos" if tx_count > 0 else ""
     st.markdown(
-        f'<div class="health-badge {cls}">{label} — {sanitize(month_label)}</div>',
+        f'<div class="health-badge {cls}">{label} — {sanitize(month_label)}{count_text}</div>',
         unsafe_allow_html=True
     )
 
@@ -2550,7 +2601,7 @@ def transaction_form(
             if not ok:
                 st.toast(f"⚠ {err}")
             elif save_entry(entry, "Transacoes"):
-                st.toast("✓ Registrado")
+                st.toast(f"✓ {desc.strip()} — {fmt_brl(val)}")
                 st.rerun()
 
 
@@ -2582,7 +2633,7 @@ def wealth_form(
             if not ok:
                 st.toast(f"⚠ {err}")
             elif save_entry(entry, "Transacoes"):
-                st.toast("✓ Aporte registrado")
+                st.toast(f"✓ Aporte: {desc.strip()} — {fmt_brl(val)}")
                 st.rerun()
 
 
@@ -2606,7 +2657,7 @@ def patrimonio_form(
             if not ok:
                 st.toast(f"⚠ {err}")
             elif save_entry(entry, "Patrimonio"):
-                st.toast("✓ Ativo registrado")
+                st.toast(f"✓ Ativo: {item.strip()} — {fmt_brl(val)}")
                 st.rerun()
 
 
@@ -2644,7 +2695,7 @@ def recorrente_form(default_resp: str = "Casal") -> None:
             if not ok:
                 st.toast(f"⚠ {err}")
             elif save_entry(entry, "Recorrentes"):
-                st.toast("✓ Recorrente cadastrada")
+                st.toast(f"✓ Recorrente: {desc.strip()} — {fmt_brl(val)}/mês")
                 st.rerun()
 
 
@@ -3015,7 +3066,7 @@ def main() -> None:
     render_autonomia(mx["autonomia"], mx["sobrevivencia"])
 
     # ===== HEALTH + ALERTAS =====
-    render_health_badge(mx["health"], month_label)
+    render_health_badge(mx["health"], month_label, mx["month_tx_count"])
     render_alerts(alerts)
 
     if not has_data:
@@ -3085,9 +3136,14 @@ def main() -> None:
                 ok, err = validate_transaction(entry)
                 if not ok:
                     st.toast(f"⚠ {err}")
-                elif save_entry(entry, "Transacoes"):
-                    st.toast("✓ Registrado")
-                    st.rerun()
+                else:
+                    is_dup = check_duplicate(mx["df_month"], q_desc.strip(), q_val, q_date)
+                    if save_entry(entry, "Transacoes"):
+                        if is_dup:
+                            st.toast(f"⚠ Possível duplicata: {q_desc.strip()} — {fmt_brl(q_val)}")
+                        else:
+                            st.toast(f"✓ {q_desc.strip()} — {fmt_brl(q_val)}")
+                        st.rerun()
 
     # ===== ABAS =====
     tab_ls, tab_renda, tab_pat, tab_rec, tab_hist = st.tabs([
