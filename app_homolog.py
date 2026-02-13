@@ -9,6 +9,7 @@ import html as html_lib
 from dataclasses import dataclass
 from io import BytesIO
 import time
+import logging
 
 
 # ==============================================================================
@@ -47,6 +48,13 @@ class Config:
 
 
 CFG = Config()
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    datefmt="%H:%M:%S",
+)
+logger = logging.getLogger("ll_finance")
 
 MESES_PT: dict[int, str] = {
     1: "Jan", 2: "Fev", 3: "Mar", 4: "Abr", 5: "Mai", 6: "Jun",
@@ -1278,6 +1286,7 @@ def save_entry(data: dict, worksheet: str) -> bool:
             return True
         except Exception as e:
             if attempt == CFG.SAVE_RETRIES - 1:
+                logger.error(f"save_entry failed [{worksheet}]: {e}")
                 st.error(f"Falha ao salvar após {CFG.SAVE_RETRIES} tentativas: {e}")
                 st.cache_data.clear()
                 return False
@@ -1296,6 +1305,7 @@ def update_sheet(df_edited: pd.DataFrame, worksheet: str) -> bool:
             return True
         except Exception as e:
             if attempt == CFG.SAVE_RETRIES - 1:
+                logger.error(f"update_sheet failed [{worksheet}]: {e}")
                 st.error(f"Erro ao atualizar após {CFG.SAVE_RETRIES} tentativas: {e}")
                 st.cache_data.clear()
                 return False
@@ -1440,17 +1450,21 @@ def generate_recorrentes(
     pendentes: pd.DataFrame,
     target_month: int,
     target_year: int,
-) -> bool:
+) -> dict | None:
     """Gera transações a partir das recorrentes pendentes.
 
     Cria uma transação para cada recorrente pendente com
     Origem='Recorrente' e data baseada no DiaVencimento.
+    Retorna dict com resumo ou None se falhar.
     """
     if pendentes.empty:
-        return False
+        return None
 
     last_day = calendar.monthrange(target_year, target_month)[1]
     entries_ok = 0
+    n_entradas = 0
+    n_saidas = 0
+    total_valor = 0.0
 
     for _, rec in pendentes.iterrows():
         dia = int(rec.get("DiaVencimento", 1))
@@ -1471,8 +1485,20 @@ def generate_recorrentes(
         if ok:
             if save_entry(entry, "Transacoes"):
                 entries_ok += 1
+                total_valor += float(rec["Valor"])
+                if str(rec["Tipo"]).strip() == "Entrada":
+                    n_entradas += 1
+                else:
+                    n_saidas += 1
 
-    return entries_ok > 0
+    if entries_ok > 0:
+        return {
+            "count": entries_ok,
+            "entradas": n_entradas,
+            "saidas": n_saidas,
+            "total": total_valor,
+        }
+    return None
 
 def compute_projection(
     mx: dict,
@@ -1695,6 +1721,9 @@ def compute_metrics(
         "prev_lifestyle": 0.0,
         "prev_investido": 0.0,
         "prev_disponivel": 0.0,
+        "top5_gastos": [],
+        "ticket_medio": 0.0,
+        "split_gastos": {},
     }
 
     if df_t.empty:
@@ -1786,6 +1815,30 @@ def compute_metrics(
         renda_grp = df_mo[df_mo["Tipo"] == "Entrada"].groupby("Categoria")["Valor"].sum()
         if not renda_grp.empty:
             m["renda_breakdown"] = renda_grp.sort_values(ascending=False).to_dict()
+
+        # --- Top 5 Gastos ---
+        top5_df = df_mo[
+            (df_mo["Tipo"] == "Saída") &
+            (df_mo["Categoria"] != "Investimento")
+        ].nlargest(5, "Valor")
+        m["top5_gastos"] = [
+            {"desc": str(r["Descricao"]), "valor": float(r["Valor"]), "cat": str(r["Categoria"])}
+            for _, r in top5_df.iterrows()
+        ]
+
+        # --- Split Casal ---
+        if user_filter == "Casal":
+            for resp_name in CFG.RESPONSAVEIS:
+                resp_total = df_mo[
+                    (df_mo["Tipo"] == "Saída") &
+                    (df_mo["Categoria"] != "Investimento") &
+                    (df_mo["Responsavel"] == resp_name)
+                ]["Valor"].sum()
+                if resp_total > 0:
+                    m["split_gastos"][resp_name] = resp_total
+
+    # --- Ticket Médio ---
+    m["ticket_medio"] = m["lifestyle"] / m["month_saidas"] if m["month_saidas"] > 0 else 0.0
 
     # --- Health ---
     m["health"] = _compute_health(m)
@@ -2632,6 +2685,85 @@ def render_prev_comparison(mx: dict, sel_mo: int, sel_yr: int) -> None:
     st.markdown(html, unsafe_allow_html=True)
 
 
+def render_aporte_meta(mx: dict) -> None:
+    """Renderiza barra de progresso da meta de investimento."""
+    if mx["renda"] <= 0:
+        return
+    meta_valor = mx["renda"] * (CFG.META_INVESTIMENTO / 100)
+    investido = mx["investido_mes"]
+    pct = (investido / meta_valor * 100) if meta_valor > 0 else 0
+    fill_pct = min(100, pct)
+
+    if pct >= 100:
+        color = "#00FFCC"
+        status = "Meta atingida ✓"
+    elif pct >= 70:
+        color = "#FFAA00"
+        status = f"Faltam {fmt_brl(meta_valor - investido)}"
+    else:
+        color = "#FF4444"
+        status = f"Faltam {fmt_brl(meta_valor - investido)}"
+
+    html = (
+        f'<div style="font-family:JetBrains Mono,monospace;padding:6px 0 10px 0;">'
+        f'<div style="display:flex;justify-content:space-between;font-size:0.6rem;'
+        f'color:#555;margin-bottom:4px;">'
+        f'<span>Meta Aporte ({CFG.META_INVESTIMENTO}%): {fmt_brl(meta_valor)}</span>'
+        f'<span style="color:{color};">{pct:.0f}% — {status}</span>'
+        f'</div>'
+        f'<div style="width:100%;height:4px;background:#111;">'
+        f'<div style="width:{fill_pct}%;height:100%;background:{color};'
+        f'transition:width 0.4s ease;"></div>'
+        f'</div>'
+        f'</div>'
+    )
+    st.markdown(html, unsafe_allow_html=True)
+
+
+def render_top_gastos(top5: list[dict], ticket_medio: float, split: dict) -> None:
+    """Renderiza top 5 gastos + ticket médio + split casal."""
+    if not top5 and ticket_medio <= 0 and not split:
+        return
+
+    html = '<div class="intel-box">'
+    html += '<div class="intel-title">◆ Radiografia dos Gastos</div>'
+
+    if top5:
+        html += '<div style="margin-bottom:8px;">'
+        for i, g in enumerate(top5, 1):
+            desc = sanitize(g["desc"])[:30]
+            val = fmt_brl(g["valor"])
+            cat = sanitize(g["cat"])
+            html += (
+                f'<div style="font-family:JetBrains Mono,monospace;font-size:0.62rem;'
+                f'color:#888;padding:2px 0;display:flex;align-items:center;gap:6px;">'
+                f'<span style="color:#555;width:14px;">{i}.</span>'
+                f'<span style="flex:1;">{desc}</span>'
+                f'<span style="color:#666;">{cat}</span>'
+                f'<span style="color:#F0F0F0;min-width:90px;text-align:right;">{val}</span>'
+                f'</div>'
+            )
+        html += '</div>'
+
+    meta_parts = []
+    if ticket_medio > 0:
+        meta_parts.append(f"Ticket médio: {fmt_brl(ticket_medio)}")
+    if split:
+        split_text = " · ".join([f"{sanitize(k)}: {fmt_brl(v)}" for k, v in split.items()])
+        meta_parts.append(f"Split: {split_text}")
+
+    if meta_parts:
+        html += (
+            f'<div style="font-family:JetBrains Mono,monospace;font-size:0.6rem;'
+            f'color:#555;padding-top:6px;border-top:1px solid #111;">'
+            f'{" | ".join(meta_parts)}'
+            f'</div>'
+        )
+
+    html += '</div>'
+    st.markdown(html, unsafe_allow_html=True)
+
+
 # ==============================================================================
 # 9. FORMULÁRIOS
 # ==============================================================================
@@ -2647,8 +2779,13 @@ def transaction_form(
 ) -> None:
     """Formulário genérico de transação."""
     form_date = default_form_date(sel_mo, sel_yr) if sel_mo and sel_yr else datetime.now().date()
+    if sel_mo and sel_yr:
+        d_min = date(sel_yr, sel_mo, 1)
+        d_max = date(sel_yr, sel_mo, calendar.monthrange(sel_yr, sel_mo)[1])
+    else:
+        d_min, d_max = None, None
     with st.form(form_key, clear_on_submit=True):
-        d = st.date_input("Data", form_date, format="DD/MM/YYYY")
+        d = st.date_input("Data", form_date, min_value=d_min, max_value=d_max, format="DD/MM/YYYY")
         desc = st.text_input(
             "Descrição", placeholder=desc_placeholder,
             max_chars=CFG.MAX_DESC_LENGTH,
@@ -2678,12 +2815,18 @@ def transaction_form(
 def wealth_form(
     sel_mo: int | None = None,
     sel_yr: int | None = None,
-    default_resp: str = "Casal",  # [FIX B1] Adicionado parâmetro
+    default_resp: str = "Casal",
+    df_month: pd.DataFrame | None = None,
 ) -> None:
     """Formulário de aporte / investimento."""
     form_date = default_form_date(sel_mo, sel_yr) if sel_mo and sel_yr else datetime.now().date()
+    if sel_mo and sel_yr:
+        d_min = date(sel_yr, sel_mo, 1)
+        d_max = date(sel_yr, sel_mo, calendar.monthrange(sel_yr, sel_mo)[1])
+    else:
+        d_min, d_max = None, None
     with st.form("f_wealth", clear_on_submit=True):
-        d = st.date_input("Data", form_date, format="DD/MM/YYYY")
+        d = st.date_input("Data", form_date, min_value=d_min, max_value=d_max, format="DD/MM/YYYY")
         desc = st.text_input(
             "Ativo / Corretora", placeholder="Ex: IVVB11, Bitcoin, CDB",
             max_chars=CFG.MAX_DESC_LENGTH,
@@ -2703,7 +2846,10 @@ def wealth_form(
             if not ok:
                 st.toast(f"⚠ {err}")
             elif save_entry(entry, "Transacoes"):
-                st.toast(f"✓ Aporte: {desc.strip()} — {fmt_brl(val)}")
+                if df_month is not None and check_duplicate(df_month, desc.strip(), val, d):
+                    st.toast(f"⚠ Possível duplicata: {desc.strip()} — {fmt_brl(val)}")
+                else:
+                    st.toast(f"✓ Aporte: {desc.strip()} — {fmt_brl(val)}")
                 st.rerun()
 
 
@@ -2731,7 +2877,7 @@ def patrimonio_form(
                 st.rerun()
 
 
-def recorrente_form(default_resp: str = "Casal") -> None:
+def recorrente_form(default_resp: str = "Casal", df_existing: pd.DataFrame | None = None) -> None:
     """Formulário para cadastrar transação recorrente."""
     with st.form("f_recorrente", clear_on_submit=True):
         tipo = st.selectbox("Tipo", list(CFG.TIPOS))
@@ -2764,12 +2910,19 @@ def recorrente_form(default_resp: str = "Casal") -> None:
             ok, err = validate_recorrente(entry)
             if not ok:
                 st.toast(f"⚠ {err}")
+            elif df_existing is not None and not df_existing.empty and (
+                (df_existing["Descricao"].str.strip().str.lower() == desc.strip().lower()) &
+                (df_existing["Categoria"].str.strip() == cat) &
+                (df_existing["Tipo"].str.strip() == tipo) &
+                (df_existing["Responsavel"].str.strip() == resp)
+            ).any():
+                st.toast(f"⚠ Recorrente já cadastrada: {desc.strip()}")
             elif save_entry(entry, "Recorrentes"):
                 st.toast(f"✓ Recorrente: {desc.strip()} — {fmt_brl(val)}/mês")
                 st.rerun()
 
 
-def orcamento_form(default_resp: str = "Casal") -> None:
+def orcamento_form(default_resp: str = "Casal", df_existing: pd.DataFrame | None = None) -> None:
     """Formulário para definir limite de orçamento por categoria."""
     with st.form("f_orcamento", clear_on_submit=True):
         cat = st.selectbox("Categoria", list(CFG.CATEGORIAS_SAIDA))
@@ -2786,6 +2939,11 @@ def orcamento_form(default_resp: str = "Casal") -> None:
             ok, err = validate_orcamento(entry)
             if not ok:
                 st.toast(f"⚠ {err}")
+            elif df_existing is not None and not df_existing.empty and (
+                (df_existing["Categoria"].str.strip() == cat) &
+                (df_existing["Responsavel"].str.strip() == resp)
+            ).any():
+                st.toast(f"⚠ {cat}/{resp} já tem limite — edite na tabela abaixo")
             elif save_entry(entry, "Orcamentos"):
                 st.toast(f"✓ Limite de {fmt_brl(limite)} definido para {cat}")
                 st.rerun()
@@ -3042,7 +3200,7 @@ def main() -> None:
         user = "Casal"
     with c_status:
         st.markdown(
-            f'<div class="status-line">L&L TERMINAL v4.6 — {fmt_date(now)}</div>',
+            f'<div class="status-line">L&L TERMINAL v5.0 — {fmt_date(now)}</div>',
             unsafe_allow_html=True
         )
 
@@ -3172,6 +3330,9 @@ def main() -> None:
                 "Patrimônio acumulado"
             )
 
+        # ===== META DE APORTE =====
+        render_aporte_meta(mx)
+
         # ===== ANÁLISE DETALHADA (colapsável) =====
         with st.expander("📊 Análise Detalhada", expanded=False):
             render_score(score_data)
@@ -3194,9 +3355,17 @@ def main() -> None:
             with qc3:
                 q_cat = st.selectbox("Categoria", list(CFG.CATEGORIAS_SAIDA))
             with qc4:
+                q_min = date(sel_yr, sel_mo, 1)
+                q_max = date(sel_yr, sel_mo, calendar.monthrange(sel_yr, sel_mo)[1])
                 q_date = st.date_input(
-                    "Data", default_form_date(sel_mo, sel_yr), format="DD/MM/YYYY"
+                    "Data", default_form_date(sel_mo, sel_yr),
+                    min_value=q_min, max_value=q_max, format="DD/MM/YYYY"
                 )
+            qc5, _ = st.columns(2)
+            with qc5:
+                q_resp_opts = list(CFG.RESPONSAVEIS)
+                q_resp_idx = q_resp_opts.index(user) if user in q_resp_opts else 0
+                q_resp = st.selectbox("Responsável", q_resp_opts, index=q_resp_idx)
             if st.form_submit_button("REGISTRAR GASTO", use_container_width=True):
                 entry = {
                     "Data": q_date,
@@ -3204,7 +3373,7 @@ def main() -> None:
                     "Valor": q_val,
                     "Categoria": q_cat,
                     "Tipo": "Saída",
-                    "Responsavel": user,
+                    "Responsavel": q_resp,
                     "Origem": "Manual",
                 }
                 ok, err = validate_transaction(entry)
@@ -3252,13 +3421,20 @@ def main() -> None:
             evo_data = compute_evolution(df_trans, user, sel_mo, sel_yr)
             render_evolution_chart(evo_data)
 
+            # --- Radiografia ---
+            render_top_gastos(
+                mx.get("top5_gastos", []),
+                mx.get("ticket_medio", 0),
+                mx.get("split_gastos", {}),
+            )
+
             # --- Gestão de Orçamentos ---
             st.markdown("---")
             render_intel(
                 "Definir Orçamento",
                 "Defina limites mensais por categoria de gasto"
             )
-            orcamento_form(default_resp=user)
+            orcamento_form(default_resp=user, df_existing=df_orcamentos)
 
             df_orc_view = filter_by_user(df_orcamentos, user, include_shared=True)
             if not df_orc_view.empty:
@@ -3358,7 +3534,7 @@ def main() -> None:
                 "📥 Registrar Aporte",
                 "Investimentos, aportes mensais, compras de ativos"
             )
-            wealth_form(sel_mo=sel_mo, sel_yr=sel_yr, default_resp=user)
+            wealth_form(sel_mo=sel_mo, sel_yr=sel_yr, default_resp=user, df_month=mx["df_month"])
 
             # Contexto: últimos aportes do mês
             df_inv_ctx = mx["df_month"][
@@ -3478,8 +3654,15 @@ def main() -> None:
                     key=f"gen_rec_{user}_{sel_mo}_{sel_yr}",
                     use_container_width=True,
                 ):
-                    if generate_recorrentes(pendentes, sel_mo, sel_yr):
-                        st.toast("✓ Recorrentes geradas com sucesso")
+                    result = generate_recorrentes(pendentes, sel_mo, sel_yr)
+                    if result:
+                        parts = []
+                        if result["entradas"] > 0:
+                            parts.append(f"{result['entradas']} entrada{'s' if result['entradas'] > 1 else ''}")
+                        if result["saidas"] > 0:
+                            parts.append(f"{result['saidas']} saída{'s' if result['saidas'] > 1 else ''}")
+                        detail = " + ".join(parts) if parts else ""
+                        st.toast(f"✓ {result['count']} geradas ({detail}) — {fmt_brl(result['total'])}")
                         st.rerun()
                     else:
                         st.error("Falha ao gerar recorrentes")
@@ -3491,7 +3674,7 @@ def main() -> None:
 
             st.markdown("---")
             render_intel("Nova Despesa/Receita Fixa", "Cadastre aqui os gastos e receitas que se repetem todo mês")
-            recorrente_form(default_resp=user)
+            recorrente_form(default_resp=user, df_existing=df_rec_view)
 
         with col_list:
             n_ativas = 0
