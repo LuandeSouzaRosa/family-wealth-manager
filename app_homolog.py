@@ -1279,7 +1279,7 @@ def detect_pending_recorrentes(
         return pd.DataFrame(columns=list(CFG.COLS_RECORRENTE))
 
     # Filtrar apenas ativas
-    df_ativas = df_recorrentes[df_recorrentes["Ativo"] == True].copy()
+    df_ativas = df_recorrentes[df_recorrentes["Ativo"].eq(True)].copy()
     if df_ativas.empty:
         return pd.DataFrame(columns=list(CFG.COLS_RECORRENTE))
 
