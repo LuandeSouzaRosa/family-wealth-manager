@@ -1719,6 +1719,7 @@ def compute_metrics(
         "top5_gastos": [],
         "ticket_medio": 0.0,
         "split_gastos": {},
+        "split_renda": {},
     }
 
     if df_t.empty:
@@ -1831,6 +1832,15 @@ def compute_metrics(
                 ]["Valor"].sum()
                 if resp_total > 0:
                     m["split_gastos"][resp_name] = resp_total
+
+            # --- Split Renda Casal ---
+            for resp_name in [r for r in CFG.RESPONSAVEIS if r != "Casal"]:
+                resp_renda = df_mo[
+                    (df_mo["Tipo"] == "Entrada") &
+                    (df_mo["Responsavel"] == resp_name)
+                ]["Valor"].sum()
+                if resp_renda > 0:
+                    m["split_renda"][resp_name] = resp_renda
 
     # --- Ticket Médio ---
     m["ticket_medio"] = m["lifestyle"] / m["month_saidas"] if m["month_saidas"] > 0 else 0.0
@@ -2097,6 +2107,59 @@ def compute_evolution(
             trend_pct = 0.0
         data[-1]["trend_pct"] = trend_pct
         data[-1]["trend_direction"] = "up" if trend_pct > 5 else "down" if trend_pct < -5 else "stable"
+
+    return data
+
+
+def compute_renda_evolution(
+    df_trans: pd.DataFrame,
+    user_filter: str,
+    ref_month: int,
+    ref_year: int,
+    months_back: int = CFG.MESES_EVOLUCAO,
+) -> list[dict]:
+    """Calcula evolução mensal de renda com breakdown por fonte."""
+    df = filter_by_user(df_trans, user_filter)
+    if df.empty:
+        return []
+
+    ref_end = end_of_month(ref_year, ref_month)
+    mo, yr = ref_month, ref_year
+    for _ in range(months_back - 1):
+        mo -= 1
+        if mo == 0:
+            mo, yr = 12, yr - 1
+    start_date = datetime(yr, mo, 1)
+
+    df_range = df[
+        (df["Data"] >= start_date) &
+        (df["Data"] <= ref_end) &
+        (df["Tipo"] == "Entrada")
+    ].copy()
+
+    if df_range.empty:
+        return []
+
+    df_range["period"] = df_range["Data"].dt.to_period("M")
+
+    pivot = df_range.pivot_table(
+        values="Valor", index="period", columns="Categoria",
+        aggfunc="sum", fill_value=0,
+    )
+
+    data = []
+    for period in sorted(pivot.index):
+        entry = {
+            "label": f"{MESES_PT[period.month]}/{period.year}",
+            "total": 0.0,
+            "breakdown": {},
+        }
+        for cat in pivot.columns:
+            val = float(pivot.loc[period, cat])
+            if val > 0:
+                entry["breakdown"][cat] = val
+                entry["total"] += val
+        data.append(entry)
 
     return data
 
@@ -2759,6 +2822,174 @@ def render_top_gastos(top5: list[dict], ticket_medio: float, split: dict) -> Non
     st.markdown(html, unsafe_allow_html=True)
 
 
+def render_pending_banner(
+    pendentes: pd.DataFrame, user: str, sel_mo: int, sel_yr: int,
+) -> None:
+    """Banner compacto no topo para recorrentes pendentes com ação direta."""
+    if pendentes.empty:
+        return
+
+    n = len(pendentes)
+    total = pendentes["Valor"].sum()
+    plural = "s" if n > 1 else ""
+
+    st.markdown(f"""
+    <div style="background:#0a0a0a; border:1px solid #FFAA00; border-left:3px solid #FFAA00;
+         padding:10px 16px; margin-bottom:8px; font-family:'JetBrains Mono',monospace;">
+        <span style="color:#FFAA00; font-size:0.72rem; font-weight:600;">
+            ⟳ {n} recorrente{plural} pendente{plural}
+        </span>
+        <span style="color:#666; font-size:0.62rem; margin-left:8px;">
+            {fmt_brl(total)} · {sanitize(fmt_month_year(sel_mo, sel_yr))}
+        </span>
+    </div>
+    """, unsafe_allow_html=True)
+
+    if st.button(
+        f"⟳ GERAR {n} RECORRENTE{'S' if n > 1 else ''} AGORA",
+        key=f"banner_gen_{user}_{sel_mo}_{sel_yr}",
+        use_container_width=True,
+    ):
+        result = generate_recorrentes(pendentes, sel_mo, sel_yr)
+        if result:
+            parts = []
+            if result["entradas"] > 0:
+                parts.append(f"{result['entradas']} entrada{'s' if result['entradas'] > 1 else ''}")
+            if result["saidas"] > 0:
+                parts.append(f"{result['saidas']} saída{'s' if result['saidas'] > 1 else ''}")
+            detail = " + ".join(parts) if parts else ""
+            st.toast(f"✓ {result['count']} geradas ({detail}) — {fmt_brl(result['total'])}")
+            st.rerun()
+        else:
+            st.error("Falha ao gerar recorrentes")
+
+
+def render_split_casal(split_gastos: dict, split_renda: dict) -> None:
+    """Renderiza breakdown por responsável no modo Casal."""
+    if not split_gastos and not split_renda:
+        return
+
+    html = '<div class="intel-box">'
+    html += '<div class="intel-title">◆ Divisão por Responsável</div>'
+    html += '<div style="display:flex; gap:24px; flex-wrap:wrap;">'
+
+    if split_renda:
+        html += '<div style="flex:1; min-width:120px;">'
+        html += (
+            '<div style="font-family:JetBrains Mono,monospace;font-size:0.55rem;'
+            'color:#555;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;">'
+            'Renda</div>'
+        )
+        total_renda = sum(split_renda.values())
+        for name, val in split_renda.items():
+            pct = (val / total_renda * 100) if total_renda > 0 else 0
+            html += (
+                f'<div style="font-family:JetBrains Mono,monospace;font-size:0.65rem;'
+                f'color:#888;padding:3px 0;display:flex;justify-content:space-between;gap:8px;">'
+                f'<span>{sanitize(name)}</span>'
+                f'<span style="color:#00FFCC;">{fmt_brl(val)} <span style="color:#555;">({pct:.0f}%)</span></span>'
+                f'</div>'
+            )
+        html += '</div>'
+
+    if split_gastos:
+        html += '<div style="flex:1; min-width:120px;">'
+        html += (
+            '<div style="font-family:JetBrains Mono,monospace;font-size:0.55rem;'
+            'color:#555;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;">'
+            'Gastos</div>'
+        )
+        total_gastos = sum(split_gastos.values())
+        for name, val in split_gastos.items():
+            pct = (val / total_gastos * 100) if total_gastos > 0 else 0
+            html += (
+                f'<div style="font-family:JetBrains Mono,monospace;font-size:0.65rem;'
+                f'color:#888;padding:3px 0;display:flex;justify-content:space-between;gap:8px;">'
+                f'<span>{sanitize(name)}</span>'
+                f'<span style="color:#FF4444;">{fmt_brl(val)} <span style="color:#555;">({pct:.0f}%)</span></span>'
+                f'</div>'
+            )
+        html += '</div>'
+
+    html += '</div></div>'
+    st.markdown(html, unsafe_allow_html=True)
+
+def render_renda_chart(renda_data: list[dict]) -> None:
+    """Gráfico de evolução de renda com breakdown por fonte."""
+    if not renda_data:
+        render_intel("Evolução de Renda", "Dados insuficientes para gráfico.")
+        return
+
+    labels = [d["label"] for d in renda_data]
+
+    all_cats: set[str] = set()
+    for d in renda_data:
+        all_cats.update(d["breakdown"].keys())
+
+    cat_colors = {
+        "Salário": "#00FFCC",
+        "Dividendos": "#FFAA00",
+        "Bônus": "#F0F0F0",
+        "Extra": "#888888",
+        "Reembolso": "#555555",
+    }
+
+    fig = go.Figure()
+    for cat in sorted(all_cats):
+        vals = [d["breakdown"].get(cat, 0) for d in renda_data]
+        color = cat_colors.get(cat, "#666666")
+        fig.add_trace(go.Bar(
+            name=cat, x=labels, y=vals, marker_color=color,
+        ))
+
+    totals = [d["total"] for d in renda_data]
+    if len(renda_data) > 1:
+        avg = sum(totals) / len(totals)
+        fig.add_trace(go.Scatter(
+            name="Média",
+            x=labels, y=[avg] * len(labels),
+            mode="lines",
+            line=dict(color="#FF4444", width=1, dash="dash"),
+        ))
+
+    fig.update_layout(
+        barmode="stack",
+        paper_bgcolor="#000000",
+        plot_bgcolor="#000000",
+        font=dict(family="JetBrains Mono, monospace", color="#888", size=11),
+        legend=dict(
+            orientation="h", yanchor="bottom", y=1.02,
+            xanchor="center", x=0.5, font=dict(size=9),
+        ),
+        margin=dict(l=0, r=0, t=30, b=0),
+        height=280,
+        xaxis=dict(gridcolor="#111", showline=False),
+        yaxis=dict(gridcolor="#111", showline=False, tickformat=",.0f"),
+    )
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+
+    if len(renda_data) >= 2:
+        curr = renda_data[-1]["total"]
+        prev = renda_data[-2]["total"]
+        if prev > 0:
+            var = ((curr - prev) / prev) * 100
+            if var > 0:
+                var_text = f"▲ Renda +{var:.0f}% vs mês anterior"
+                var_color = "#00FFCC"
+            elif var < 0:
+                var_text = f"▼ Renda {var:.0f}% vs mês anterior"
+                var_color = "#FF4444"
+            else:
+                var_text = "● Renda estável vs mês anterior"
+                var_color = "#555"
+            st.markdown(
+                f'<div style="font-family:JetBrains Mono,monospace;font-size:0.65rem;'
+                f'color:{var_color};padding:4px 0;letter-spacing:0.05em;">'
+                f'{var_text}</div>',
+                unsafe_allow_html=True,
+            )
+
+
 # ==============================================================================
 # 9. FORMULÁRIOS
 # ==============================================================================
@@ -3297,6 +3528,9 @@ def main() -> None:
     render_health_badge(mx["health"], month_label, mx["month_tx_count"])
     render_alerts(alerts)
 
+    # ===== BANNER RECORRENTES PENDENTES =====
+    render_pending_banner(pendentes, user, sel_mo, sel_yr)
+
     if not has_data:
         render_empty_month(month_label)
     else:
@@ -3333,6 +3567,8 @@ def main() -> None:
         # ===== ANÁLISE DETALHADA (colapsável) =====
         with st.expander("📊 Análise Detalhada", expanded=False):
             render_score(score_data)
+            if user == "Casal":
+                render_split_casal(mx.get("split_gastos", {}), mx.get("split_renda", {}))
             render_regra_503020(mx)
             render_prev_comparison(mx, sel_mo, sel_yr)
             render_annual_strip(annual)
@@ -3510,6 +3746,17 @@ def main() -> None:
             render_recent_context(mx["df_month"], "Entrada")
         with col_intel:
             render_intel("Intel — Renda", mx["insight_renda"])
+            renda_evo = compute_renda_evolution(df_trans, user, sel_mo, sel_yr)
+            render_renda_chart(renda_evo)
+            if mx["renda_breakdown"] and len(mx["renda_breakdown"]) > 1:
+                principal = list(mx["renda_breakdown"].keys())[0]
+                principal_val = list(mx["renda_breakdown"].values())[0]
+                principal_pct = (principal_val / mx["renda"] * 100) if mx["renda"] > 0 else 0
+                render_intel(
+                    "Composição",
+                    f"{len(mx['renda_breakdown'])} fontes de renda · "
+                    f"Principal: <strong>{sanitize(principal)}</strong> ({principal_pct:.0f}%)"
+                )
 
     with tab_pat:
         df_assets_view = filter_by_user(df_assets, user, include_shared=True)
