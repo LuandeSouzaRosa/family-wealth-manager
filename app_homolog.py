@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from io import BytesIO
 import time
 import logging
+import uuid
 
 
 # ==============================================================================
@@ -32,7 +33,7 @@ class Config:
     )
     RESPONSAVEIS: tuple = ("Casal", "Luan", "Luana")
     TIPOS: tuple = ("Entrada", "Saída")
-    COLS_TRANSACAO: tuple = ("Data", "Descricao", "Valor", "Categoria", "Tipo", "Responsavel", "Origem")
+    COLS_TRANSACAO: tuple = ("Id", "Data", "Descricao", "Valor", "Categoria", "Tipo", "Responsavel", "Origem")
     COLS_PATRIMONIO: tuple = ("Item", "Valor", "Responsavel")
     COLS_RECORRENTE: tuple = ("Descricao", "Valor", "Categoria", "Tipo", "Responsavel", "DiaVencimento", "Ativo")
     COLS_ORCAMENTO: tuple = ("Categoria", "Limite", "Responsavel")
@@ -45,6 +46,11 @@ class Config:
     MAX_DESC_LENGTH: int = 200
     SAVE_RETRIES: int = 3
     MESES_EVOLUCAO: int = 6
+    TIPO_ENTRADA: str = "Entrada"
+    TIPO_SAIDA: str = "Saída"
+    CAT_INVESTIMENTO: str = "Investimento"
+    ORIGEM_MANUAL: str = "Manual"
+    ORIGEM_RECORRENTE: str = "Recorrente"
 
 
 CFG = Config()
@@ -942,6 +948,11 @@ def sanitize(text: str) -> str:
     return html_lib.escape(str(text))
 
 
+def generate_id() -> str:
+    """Gera ID único de 12 caracteres hex."""
+    return uuid.uuid4().hex[:12]
+
+
 def fmt_brl(val: float) -> str:
     """Formata valor float para padrão BRL: R$ 1.234,56 / -R$ 1.234,56"""
     if val < 0:
@@ -1018,8 +1029,8 @@ def validate_transaction(entry: dict) -> tuple[bool, str]:
 
     # --- Categoria [FIX B3] ---
     cat = entry.get("Categoria", "")
-    if tipo == "Saída":
-        cats_validas = set(CFG.CATEGORIAS_SAIDA) | {"Investimento"}
+    if tipo == CFG.TIPO_SAIDA:
+        cats_validas = set(CFG.CATEGORIAS_SAIDA) | {CFG.CAT_INVESTIMENTO}
     else:
         cats_validas = set(CFG.CATEGORIAS_ENTRADA)
     if cat not in cats_validas:
@@ -1086,8 +1097,8 @@ def validate_recorrente(entry: dict) -> tuple[bool, str]:
         return False, "Tipo inválido"
 
     cat = entry.get("Categoria", "")
-    if tipo == "Saída":
-        cats_validas = set(CFG.CATEGORIAS_SAIDA) | {"Investimento"}
+    if tipo == CFG.TIPO_SAIDA:
+        cats_validas = set(CFG.CATEGORIAS_SAIDA) | {CFG.CAT_INVESTIMENTO}
     else:
         cats_validas = set(CFG.CATEGORIAS_ENTRADA)
     if cat not in cats_validas:
@@ -1172,8 +1183,15 @@ def load_data() -> tuple[pd.DataFrame, pd.DataFrame]:
             df_trans = df_trans.dropna(subset=["Data"])
             df_trans = _normalize_strings(df_trans, ["Tipo", "Categoria", "Responsavel", "Descricao"])
             if "Origem" not in df_trans.columns:
-                df_trans["Origem"] = "Manual"
-            df_trans["Origem"] = df_trans["Origem"].fillna("Manual")
+                df_trans["Origem"] = CFG.ORIGEM_MANUAL
+            df_trans["Origem"] = df_trans["Origem"].fillna(CFG.ORIGEM_MANUAL)
+            # Backfill IDs para registros existentes sem Id
+            if "Id" not in df_trans.columns:
+                df_trans["Id"] = ""
+            df_trans["Id"] = df_trans["Id"].fillna("").astype(str)
+            empty_ids = df_trans["Id"].str.strip() == ""
+            if empty_ids.any():
+                df_trans.loc[empty_ids, "Id"] = [generate_id() for _ in range(empty_ids.sum())]
     except Exception as e:
         logger.error(f"load_data [Transacoes]: {e}")
         df_trans = pd.DataFrame(columns=expected_trans)
@@ -1262,6 +1280,8 @@ def _serialize_for_sheet(df: pd.DataFrame) -> pd.DataFrame:
 
 def save_entry(data: dict, worksheet: str) -> bool:
     """Salva uma nova entrada na planilha com retry."""
+    if worksheet == "Transacoes" and "Id" not in data:
+        data["Id"] = generate_id()
     conn = get_conn()
     for attempt in range(CFG.SAVE_RETRIES):
         try:
@@ -1367,7 +1387,7 @@ def detect_pending_recorrentes(
     # falso positivo entre usuários com mesma descrição/categoria/tipo
     geradas_keys: set[tuple[str, str, str, str]] = set()
     if not df_mo.empty and "Origem" in df_mo.columns:
-        df_geradas = df_mo[df_mo["Origem"] == "Recorrente"]
+        df_geradas = df_mo[df_mo["Origem"] == CFG.ORIGEM_RECORRENTE]
         for _, tr in df_geradas.iterrows():
             chave = (
                 str(tr["Descricao"]).strip().lower(),
@@ -1466,13 +1486,14 @@ def generate_recorrentes(
         data_lancamento = date(target_year, target_month, dia_real)
 
         entry = {
+            "Id": generate_id(),
             "Data": data_lancamento,
             "Descricao": str(rec["Descricao"]).strip(),
             "Valor": float(rec["Valor"]),
             "Categoria": str(rec["Categoria"]).strip(),
             "Tipo": str(rec["Tipo"]).strip(),
             "Responsavel": str(rec["Responsavel"]).strip(),
-            "Origem": "Recorrente",
+            "Origem": CFG.ORIGEM_RECORRENTE,
         }
 
         ok, err = validate_transaction(entry)
@@ -1480,7 +1501,7 @@ def generate_recorrentes(
             if save_entry(entry, "Transacoes"):
                 entries_ok += 1
                 total_valor += float(rec["Valor"])
-                if str(rec["Tipo"]).strip() == "Entrada":
+                if str(rec["Tipo"]).strip() == CFG.TIPO_ENTRADA:
                     n_entradas += 1
                 else:
                     n_saidas += 1
@@ -1728,29 +1749,29 @@ def compute_metrics(
         return m
 
     if not df_mo.empty:
-        m["renda"] = df_mo[df_mo["Tipo"] == "Entrada"]["Valor"].sum()
+        m["renda"] = df_mo[df_mo["Tipo"] == CFG.TIPO_ENTRADA]["Valor"].sum()
         despesas = df_mo[
-            (df_mo["Tipo"] == "Saída") &
-            (df_mo["Categoria"] != "Investimento")
+            (df_mo["Tipo"] == CFG.TIPO_SAIDA) &
+            (df_mo["Categoria"] != CFG.CAT_INVESTIMENTO)
         ]
         m["lifestyle"] = despesas["Valor"].sum()
         m["investido_mes"] = df_mo[
-            (df_mo["Tipo"] == "Saída") &
-            (df_mo["Categoria"] == "Investimento")
+            (df_mo["Tipo"] == CFG.TIPO_SAIDA) &
+            (df_mo["Categoria"] == CFG.CAT_INVESTIMENTO)
         ]["Valor"].sum()
-        m["month_entradas"] = len(df_mo[df_mo["Tipo"] == "Entrada"])
+        m["month_entradas"] = len(df_mo[df_mo["Tipo"] == CFG.TIPO_ENTRADA])
         m["month_saidas"] = len(despesas)
         m["month_investimentos"] = len(df_mo[
-            (df_mo["Tipo"] == "Saída") &
-            (df_mo["Categoria"] == "Investimento")
+            (df_mo["Tipo"] == CFG.TIPO_SAIDA) &
+            (df_mo["Categoria"] == CFG.CAT_INVESTIMENTO)
         ])
 
     m["disponivel"] = m["renda"] - m["lifestyle"] - m["investido_mes"]
 
     base_patrimonio = df_a["Valor"].sum() if not df_a.empty else 0.0
     m["investido_total"] = df_t[
-        (df_t["Tipo"] == "Saída") &
-        (df_t["Categoria"] == "Investimento")
+        (df_t["Tipo"] == CFG.TIPO_SAIDA) &
+        (df_t["Categoria"] == CFG.CAT_INVESTIMENTO)
     ]["Valor"].sum()
     m["sobrevivencia"] = base_patrimonio + m["investido_total"]
 
@@ -1762,8 +1783,8 @@ def compute_metrics(
     df_burn = df_t[
         (df_t["Data"] >= inicio_3m) &
         (df_t["Data"] <= ref_date) &
-        (df_t["Tipo"] == "Saída") &
-        (df_t["Categoria"] != "Investimento")
+        (df_t["Tipo"] == CFG.TIPO_SAIDA) &
+        (df_t["Categoria"] != CFG.CAT_INVESTIMENTO)
     ]
     if not df_burn.empty:
         dias = max(1, (ref_date - df_burn["Data"].min()).days)
@@ -1776,8 +1797,8 @@ def compute_metrics(
     # --- Regra 50/30/20 ---
     if m["renda"] > 0 and not df_mo.empty:
         despesas_mo = df_mo[
-            (df_mo["Tipo"] == "Saída") &
-            (df_mo["Categoria"] != "Investimento")
+            (df_mo["Tipo"] == CFG.TIPO_SAIDA) &
+            (df_mo["Categoria"] != CFG.CAT_INVESTIMENTO)
         ]
         val_nec = despesas_mo[despesas_mo["Categoria"].isin(CFG.NECESSIDADES)]["Valor"].sum()
         val_des = despesas_mo[despesas_mo["Categoria"].isin(CFG.DESEJOS)]["Valor"].sum()
@@ -1791,8 +1812,8 @@ def compute_metrics(
     # --- Breakdown ---
     if not df_mo.empty:
         cat_grp = df_mo[
-            (df_mo["Tipo"] == "Saída") &
-            (df_mo["Categoria"] != "Investimento")
+            (df_mo["Tipo"] == CFG.TIPO_SAIDA) &
+            (df_mo["Categoria"] != CFG.CAT_INVESTIMENTO)
         ].groupby("Categoria")["Valor"].sum()
 
         if not cat_grp.empty:
@@ -1801,21 +1822,21 @@ def compute_metrics(
             m["cat_breakdown"] = cat_grp.sort_values(ascending=False).to_dict()
 
         top_row = df_mo[
-            (df_mo["Tipo"] == "Saída") &
-            (df_mo["Categoria"] != "Investimento")
+            (df_mo["Tipo"] == CFG.TIPO_SAIDA) &
+            (df_mo["Categoria"] != CFG.CAT_INVESTIMENTO)
         ].nlargest(1, "Valor")
         if not top_row.empty:
             m["top_gasto_desc"] = str(top_row["Descricao"].values[0])
             m["top_gasto_val"] = float(top_row["Valor"].values[0])
 
-        renda_grp = df_mo[df_mo["Tipo"] == "Entrada"].groupby("Categoria")["Valor"].sum()
+        renda_grp = df_mo[df_mo["Tipo"] == CFG.TIPO_ENTRADA].groupby("Categoria")["Valor"].sum()
         if not renda_grp.empty:
             m["renda_breakdown"] = renda_grp.sort_values(ascending=False).to_dict()
 
         # --- Top 5 Gastos ---
         top5_df = df_mo[
-            (df_mo["Tipo"] == "Saída") &
-            (df_mo["Categoria"] != "Investimento")
+            (df_mo["Tipo"] == CFG.TIPO_SAIDA) &
+            (df_mo["Categoria"] != CFG.CAT_INVESTIMENTO)
         ].nlargest(5, "Valor")
         m["top5_gastos"] = [
             {"desc": str(r["Descricao"]), "valor": float(r["Valor"]), "cat": str(r["Categoria"])}
@@ -1826,8 +1847,8 @@ def compute_metrics(
         if user_filter == "Casal":
             for resp_name in [r for r in CFG.RESPONSAVEIS if r != "Casal"]:
                 resp_total = df_mo[
-                    (df_mo["Tipo"] == "Saída") &
-                    (df_mo["Categoria"] != "Investimento") &
+                    (df_mo["Tipo"] == CFG.TIPO_SAIDA) &
+                    (df_mo["Categoria"] != CFG.CAT_INVESTIMENTO) &
                     (df_mo["Responsavel"] == resp_name)
                 ]["Valor"].sum()
                 if resp_total > 0:
@@ -1836,7 +1857,7 @@ def compute_metrics(
             # --- Split Renda Casal ---
             for resp_name in [r for r in CFG.RESPONSAVEIS if r != "Casal"]:
                 resp_renda = df_mo[
-                    (df_mo["Tipo"] == "Entrada") &
+                    (df_mo["Tipo"] == CFG.TIPO_ENTRADA) &
                     (df_mo["Responsavel"] == resp_name)
                 ]["Valor"].sum()
                 if resp_renda > 0:
@@ -1854,14 +1875,14 @@ def compute_metrics(
     df_prev = filter_by_month(df_t, prev_mo, prev_yr)
 
     if not df_prev.empty:
-        prev_renda = df_prev[df_prev["Tipo"] == "Entrada"]["Valor"].sum()
+        prev_renda = df_prev[df_prev["Tipo"] == CFG.TIPO_ENTRADA]["Valor"].sum()
         prev_lifestyle = df_prev[
-            (df_prev["Tipo"] == "Saída") &
-            (df_prev["Categoria"] != "Investimento")
+            (df_prev["Tipo"] == CFG.TIPO_SAIDA) &
+            (df_prev["Categoria"] != CFG.CAT_INVESTIMENTO)
         ]["Valor"].sum()
         prev_investido = df_prev[
-            (df_prev["Tipo"] == "Saída") &
-            (df_prev["Categoria"] == "Investimento")
+            (df_prev["Tipo"] == CFG.TIPO_SAIDA) &
+            (df_prev["Categoria"] == CFG.CAT_INVESTIMENTO)
         ]["Valor"].sum()
         prev_disponivel = prev_renda - prev_lifestyle - prev_investido
         m["d_renda"] = calc_delta(m["renda"], prev_renda)
@@ -1990,14 +2011,14 @@ def compute_annual_summary(
     if df_year.empty:
         return None
 
-    renda = df_year[df_year["Tipo"] == "Entrada"]["Valor"].sum()
+    renda = df_year[df_year["Tipo"] == CFG.TIPO_ENTRADA]["Valor"].sum()
     gastos = df_year[
-        (df_year["Tipo"] == "Saída") &
-        (df_year["Categoria"] != "Investimento")
+        (df_year["Tipo"] == CFG.TIPO_SAIDA) &
+        (df_year["Categoria"] != CFG.CAT_INVESTIMENTO)
     ]["Valor"].sum()
     investido = df_year[
-        (df_year["Tipo"] == "Saída") &
-        (df_year["Categoria"] == "Investimento")
+        (df_year["Tipo"] == CFG.TIPO_SAIDA) &
+        (df_year["Categoria"] == CFG.CAT_INVESTIMENTO)
     ]["Valor"].sum()
     saldo = renda - gastos - investido
     meses_ativos = df_year["Data"].dt.month.nunique()
@@ -2041,12 +2062,12 @@ def compute_evolution(
 
     df_range["period"] = df_range["Data"].dt.to_period("M")
 
-    df_saidas = df_range[df_range["Tipo"] == "Saída"].copy()
+    df_saidas = df_range[df_range["Tipo"] == CFG.TIPO_SAIDA].copy()
 
     def classify(cat: str) -> str:
         if cat in CFG.NECESSIDADES:
             return "necessidades"
-        if cat == "Investimento":
+        if cat == CFG.CAT_INVESTIMENTO:
             return "investido"
         return "desejos"
 
@@ -2059,7 +2080,7 @@ def compute_evolution(
     else:
         pivot_s = pd.DataFrame()
 
-    df_entradas = df_range[df_range["Tipo"] == "Entrada"].copy()
+    df_entradas = df_range[df_range["Tipo"] == CFG.TIPO_ENTRADA].copy()
     if not df_entradas.empty:
         renda_por_periodo = df_entradas.groupby(
             df_entradas["Data"].dt.to_period("M")
@@ -2134,7 +2155,7 @@ def compute_renda_evolution(
     df_range = df[
         (df["Data"] >= start_date) &
         (df["Data"] <= ref_end) &
-        (df["Tipo"] == "Entrada")
+        (df["Tipo"] == CFG.TIPO_ENTRADA)
     ].copy()
 
     if df_range.empty:
@@ -2162,6 +2183,112 @@ def compute_renda_evolution(
         data.append(entry)
 
     return data
+
+
+def compute_cashflow_forecast(
+    df_trans: pd.DataFrame,
+    df_recorrentes: pd.DataFrame,
+    user_filter: str,
+    ref_month: int,
+    ref_year: int,
+    months_ahead: int = 3,
+) -> list[dict] | None:
+    """Forecast de cashflow para os próximos N meses.
+
+    Combina recorrentes ativas (baseline fixa) com média de gastos
+    variáveis dos últimos 3 meses para projetar saldo futuro.
+    """
+    df = filter_by_user(df_trans, user_filter)
+    if df.empty:
+        return None
+
+    # --- Recorrentes ativas (baseline fixa) ---
+    df_rec = filter_by_user(df_recorrentes, user_filter, include_shared=True)
+    renda_fixa = 0.0
+    gastos_fixos = 0.0
+    inv_fixo = 0.0
+
+    if not df_rec.empty:
+        df_ativas = df_rec[df_rec["Ativo"].eq(True)]
+        renda_fixa = df_ativas[
+            df_ativas["Tipo"] == CFG.TIPO_ENTRADA
+        ]["Valor"].sum()
+        gastos_fixos = df_ativas[
+            (df_ativas["Tipo"] == CFG.TIPO_SAIDA) &
+            (df_ativas["Categoria"] != CFG.CAT_INVESTIMENTO)
+        ]["Valor"].sum()
+        inv_fixo = df_ativas[
+            (df_ativas["Tipo"] == CFG.TIPO_SAIDA) &
+            (df_ativas["Categoria"] == CFG.CAT_INVESTIMENTO)
+        ]["Valor"].sum()
+
+    # --- Média variável dos últimos 3 meses ---
+    renda_var_total = 0.0
+    gastos_var_total = 0.0
+    inv_var_total = 0.0
+    months_with_data = 0
+
+    mo, yr = ref_month, ref_year
+    for _ in range(3):
+        df_m = filter_by_month(df, mo, yr)
+        if not df_m.empty:
+            months_with_data += 1
+            renda_mes = df_m[
+                df_m["Tipo"] == CFG.TIPO_ENTRADA
+            ]["Valor"].sum()
+            gastos_mes = df_m[
+                (df_m["Tipo"] == CFG.TIPO_SAIDA) &
+                (df_m["Categoria"] != CFG.CAT_INVESTIMENTO)
+            ]["Valor"].sum()
+            inv_mes = df_m[
+                (df_m["Tipo"] == CFG.TIPO_SAIDA) &
+                (df_m["Categoria"] == CFG.CAT_INVESTIMENTO)
+            ]["Valor"].sum()
+            renda_var_total += max(0, renda_mes - renda_fixa)
+            gastos_var_total += max(0, gastos_mes - gastos_fixos)
+            inv_var_total += max(0, inv_mes - inv_fixo)
+        mo -= 1
+        if mo == 0:
+            mo, yr = 12, yr - 1
+
+    if months_with_data == 0:
+        return None
+
+    avg_renda_var = renda_var_total / months_with_data
+    avg_gastos_var = gastos_var_total / months_with_data
+    avg_inv_var = inv_var_total / months_with_data
+
+    # --- Projetar próximos N meses ---
+    forecast: list[dict] = []
+    saldo_acum = 0.0
+    mo, yr = ref_month, ref_year
+
+    for _ in range(months_ahead):
+        mo += 1
+        if mo > 12:
+            mo, yr = 1, yr + 1
+
+        renda_proj = renda_fixa + avg_renda_var
+        gastos_proj = gastos_fixos + avg_gastos_var
+        inv_proj = inv_fixo + avg_inv_var
+        saldo = renda_proj - gastos_proj - inv_proj
+        saldo_acum += saldo
+
+        forecast.append({
+            "label": f"{MESES_PT[mo]}/{yr}",
+            "renda": renda_proj,
+            "gastos": gastos_proj,
+            "investimento": inv_proj,
+            "saldo": saldo,
+            "saldo_acumulado": saldo_acum,
+            "deficit": saldo < 0,
+            "renda_fixa": renda_fixa,
+            "renda_variavel": avg_renda_var,
+            "gastos_fixos": gastos_fixos,
+            "gastos_variaveis": avg_gastos_var,
+        })
+
+    return forecast
 
 
 # ==============================================================================
@@ -2990,6 +3117,120 @@ def render_renda_chart(renda_data: list[dict]) -> None:
             )
 
 
+def render_cashflow_forecast(forecast: list[dict] | None) -> None:
+    """Renderiza tabela de forecast de cashflow para próximos meses."""
+    if not forecast:
+        return
+
+    n = len(forecast)
+
+    # Header
+    header_cells = ""
+    for f in forecast:
+        header_cells += (
+            f'<span style="flex:1;text-align:right;color:#F0F0F0;'
+            f'font-weight:600;">{f["label"]}</span>'
+        )
+
+    def make_row(label: str, key: str, color: str) -> str:
+        cells = ""
+        for fc in forecast:
+            cells += (
+                f'<span style="flex:1;text-align:right;color:{color};">'
+                f'{fmt_brl(fc[key])}</span>'
+            )
+        return (
+            f'<div style="display:flex;gap:8px;padding:4px 0;'
+            f'font-family:JetBrains Mono,monospace;font-size:0.62rem;">'
+            f'<span style="width:90px;color:#555;">{label}</span>'
+            f'{cells}</div>'
+        )
+
+    # Saldo row (cor por célula)
+    saldo_cells = ""
+    for f in forecast:
+        s_color = "#00FFCC" if f["saldo"] >= 0 else "#FF4444"
+        saldo_cells += (
+            f'<span style="flex:1;text-align:right;color:{s_color};'
+            f'font-weight:700;">{fmt_brl(f["saldo"])}</span>'
+        )
+    saldo_row = (
+        f'<div style="display:flex;gap:8px;padding:6px 0;'
+        f'border-top:1px solid #1a1a1a;'
+        f'font-family:JetBrains Mono,monospace;font-size:0.62rem;margin-top:4px;">'
+        f'<span style="width:90px;color:#555;font-weight:700;">Saldo</span>'
+        f'{saldo_cells}</div>'
+    )
+
+    # Acumulado row
+    acum_cells = ""
+    for f in forecast:
+        a_color = "#00FFCC" if f["saldo_acumulado"] >= 0 else "#FF4444"
+        acum_cells += (
+            f'<span style="flex:1;text-align:right;color:{a_color};">'
+            f'{fmt_brl(f["saldo_acumulado"])}</span>'
+        )
+    acum_row = (
+        f'<div style="display:flex;gap:8px;padding:2px 0;'
+        f'font-family:JetBrains Mono,monospace;font-size:0.55rem;">'
+        f'<span style="width:90px;color:#444;">Acumulado</span>'
+        f'{acum_cells}</div>'
+    )
+
+    # Insight
+    any_deficit = any(f["deficit"] for f in forecast)
+    if any_deficit:
+        nota_color = "#FF4444"
+        nota_text = "⚠ Projeção indica meses com déficit — revise gastos ou aumente renda"
+    else:
+        avg_saldo = sum(f["saldo"] for f in forecast) / n
+        nota_color = "#00FFCC"
+        nota_text = f"Saldo médio projetado: {fmt_brl(avg_saldo)}/mês"
+
+    # Composição fixa/variável
+    f0 = forecast[0]
+    comp_parts: list[str] = []
+    if f0["renda_fixa"] > 0:
+        comp_parts.append(f"Renda fixa: {fmt_brl(f0['renda_fixa'])}")
+    if f0["renda_variavel"] > 0:
+        comp_parts.append(f"Renda var: {fmt_brl(f0['renda_variavel'])}")
+    if f0["gastos_fixos"] > 0:
+        comp_parts.append(f"Fixos: {fmt_brl(f0['gastos_fixos'])}")
+    if f0["gastos_variaveis"] > 0:
+        comp_parts.append(f"Variáveis: {fmt_brl(f0['gastos_variaveis'])}")
+    comp_text = " · ".join(comp_parts) if comp_parts else ""
+
+    html = (
+        f'<div class="intel-box">'
+        f'<div class="intel-title">◆ Forecast Cashflow — {n} meses</div>'
+        f'<div style="display:flex;gap:8px;padding:4px 0 8px 0;'
+        f'font-family:JetBrains Mono,monospace;font-size:0.55rem;'
+        f'border-bottom:1px solid #111;margin-bottom:4px;">'
+        f'<span style="width:90px;color:#444;">Projeção</span>'
+        f'{header_cells}</div>'
+        f'{make_row("Renda", "renda", "#00FFCC")}'
+        f'{make_row("Gastos", "gastos", "#FF4444")}'
+        f'{make_row("Investido", "investimento", "#FFAA00")}'
+        f'{saldo_row}'
+        f'{acum_row}'
+        f'<div style="font-family:JetBrains Mono,monospace;font-size:0.58rem;'
+        f'color:{nota_color};margin-top:10px;">{nota_text}</div>'
+    )
+
+    if comp_text:
+        html += (
+            f'<div style="font-family:JetBrains Mono,monospace;font-size:0.5rem;'
+            f'color:#333;margin-top:4px;">{comp_text}</div>'
+        )
+
+    html += (
+        f'<div style="font-family:JetBrains Mono,monospace;font-size:0.48rem;'
+        f'color:#222;margin-top:4px;">Base: recorrentes ativas + média variável (3 meses)</div>'
+        f'</div>'
+    )
+    st.markdown(html, unsafe_allow_html=True)
+
+
 # ==============================================================================
 # 9. FORMULÁRIOS
 # ==============================================================================
@@ -3025,7 +3266,7 @@ def transaction_form(
             entry = {
                 "Data": d, "Descricao": desc.strip(), "Valor": val,
                 "Categoria": cat, "Tipo": tipo, "Responsavel": resp,
-                "Origem": "Manual",
+                "Origem": CFG.ORIGEM_MANUAL,
             }
             ok, err = validate_transaction(entry)
             if not ok:
@@ -3066,8 +3307,8 @@ def wealth_form(
         if st.form_submit_button("CONFIRMAR APORTE"):
             entry = {
                 "Data": d, "Descricao": desc.strip(), "Valor": val,
-                "Categoria": "Investimento", "Tipo": "Saída", "Responsavel": resp,
-                "Origem": "Manual",
+                "Categoria": CFG.CAT_INVESTIMENTO, "Tipo": CFG.TIPO_SAIDA, "Responsavel": resp,
+                "Origem": CFG.ORIGEM_MANUAL,
             }
             ok, err = validate_transaction(entry)
             if not ok:
@@ -3114,8 +3355,8 @@ def recorrente_form(default_resp: str = "Casal", df_existing: pd.DataFrame | Non
             max_chars=CFG.MAX_DESC_LENGTH,
         )
         val = st.number_input("Valor (R$)", min_value=0.01, step=50.0)
-        if tipo == "Saída":
-            cat_options = list(CFG.CATEGORIAS_SAIDA) + ["Investimento"]
+        if tipo == CFG.TIPO_SAIDA:
+            cat_options = list(CFG.CATEGORIAS_SAIDA) + [CFG.CAT_INVESTIMENTO]
         else:
             cat_options = list(CFG.CATEGORIAS_ENTRADA)
         cat = st.selectbox("Categoria", cat_options)
@@ -3296,6 +3537,7 @@ def _render_historico(
                 "Responsável", options=list(CFG.RESPONSAVEIS)
             ),
             "Origem": st.column_config.TextColumn("Origem", disabled=True),
+            "Id": None,  # Oculta coluna Id do editor
         },
         hide_index=True,
         key=f"editor_historico_{user}_{sel_mo}_{sel_yr}",
@@ -3319,9 +3561,9 @@ def _render_historico(
                 else:
                     # Garantir coluna Origem em linhas novas
                     if "Origem" in edited.columns:
-                        edited["Origem"] = edited["Origem"].fillna("Manual")
+                        edited["Origem"] = edited["Origem"].fillna(CFG.ORIGEM_MANUAL)
                     else:
-                        edited["Origem"] = "Manual"
+                        edited["Origem"] = CFG.ORIGEM_MANUAL
 
                     # Validar cada linha editada
                     validation_errors = []
@@ -3518,6 +3760,11 @@ def main() -> None:
     # --- Resumo Anual ---
     annual = compute_annual_summary(df_trans, user, sel_yr)
 
+    # --- Forecast Cashflow ---
+    cashflow_forecast = compute_cashflow_forecast(
+        df_trans, df_recorrentes, user, sel_mo, sel_yr,
+    )
+
     month_label = fmt_month_year(sel_mo, sel_yr)
     has_data = mx["renda"] > 0 or mx["lifestyle"] > 0 or mx["investido_mes"] > 0
 
@@ -3572,6 +3819,7 @@ def main() -> None:
             render_regra_503020(mx)
             render_prev_comparison(mx, sel_mo, sel_yr)
             render_annual_strip(annual)
+            render_cashflow_forecast(cashflow_forecast)
 
     # ===== LANÇAMENTO RÁPIDO =====
     with st.expander("⚡ Lançamento Rápido"):
@@ -3605,9 +3853,9 @@ def main() -> None:
                     "Descricao": q_desc.strip(),
                     "Valor": q_val,
                     "Categoria": q_cat,
-                    "Tipo": "Saída",
+                    "Tipo": CFG.TIPO_SAIDA,
                     "Responsavel": q_resp,
-                    "Origem": "Manual",
+                    "Origem": CFG.ORIGEM_MANUAL,
                 }
                 ok, err = validate_transaction(entry)
                 if not ok:
@@ -3639,7 +3887,7 @@ def main() -> None:
                 render_cat_breakdown(mx["cat_breakdown"])
             transaction_form(
                 form_key="f_lifestyle",
-                tipo="Saída",
+                tipo=CFG.TIPO_SAIDA,
                 categorias=list(CFG.CATEGORIAS_SAIDA),
                 submit_label="REGISTRAR SAÍDA",
                 desc_placeholder="Ex: Mercado, Uber, Jantar",
@@ -3648,7 +3896,7 @@ def main() -> None:
                 default_resp=user,
                 df_month=mx["df_month"],
             )
-            render_recent_context(mx["df_month"], "Saída")
+            render_recent_context(mx["df_month"], CFG.TIPO_SAIDA)
         with col_intel:
             render_intel("Intel — Gastos", mx["insight_ls"])
             evo_data = compute_evolution(df_trans, user, sel_mo, sel_yr)
@@ -3734,7 +3982,7 @@ def main() -> None:
                 render_cat_breakdown(mx["renda_breakdown"])
             transaction_form(
                 form_key="f_renda",
-                tipo="Entrada",
+                tipo=CFG.TIPO_ENTRADA,
                 categorias=list(CFG.CATEGORIAS_ENTRADA),
                 submit_label="REGISTRAR ENTRADA",
                 desc_placeholder="Ex: Salário, Freelance",
@@ -3743,7 +3991,7 @@ def main() -> None:
                 default_resp=user,
                 df_month=mx["df_month"],
             )
-            render_recent_context(mx["df_month"], "Entrada")
+            render_recent_context(mx["df_month"], CFG.TIPO_ENTRADA)
         with col_intel:
             render_intel("Intel — Renda", mx["insight_renda"])
             renda_evo = compute_renda_evolution(df_trans, user, sel_mo, sel_yr)
@@ -3782,8 +4030,8 @@ def main() -> None:
 
             # Contexto: últimos aportes do mês
             df_inv_ctx = mx["df_month"][
-                (mx["df_month"]["Tipo"] == "Saída") &
-                (mx["df_month"]["Categoria"] == "Investimento")
+                (mx["df_month"]["Tipo"] == CFG.TIPO_SAIDA) &
+                (mx["df_month"]["Categoria"] == CFG.CAT_INVESTIMENTO)
             ] if not mx["df_month"].empty else pd.DataFrame()
             if not df_inv_ctx.empty:
                 df_inv_ctx = df_inv_ctx.sort_values("Data", ascending=False).head(3)
@@ -3875,7 +4123,7 @@ def main() -> None:
                 render_pending_box(len(pendentes), total_pendente)
 
                 for _, rec in pendentes.iterrows():
-                    tipo_cls = "rec-badge-saida" if rec["Tipo"] == "Saída" else "rec-badge-entrada"
+                    tipo_cls = "rec-badge-saida" if rec["Tipo"] == CFG.TIPO_SAIDA else "rec-badge-entrada"
                     st.markdown(
                         f'<div class="rec-card">'
                         f'<div class="rec-card-left">'
@@ -3928,10 +4176,10 @@ def main() -> None:
                 mask_ativo = df_rec_view["Ativo"].eq(True)
                 n_ativas = int(mask_ativo.sum())
                 total_saidas_fix = df_rec_view[
-                    mask_ativo & (df_rec_view["Tipo"] == "Saída")
+                    mask_ativo & (df_rec_view["Tipo"] == CFG.TIPO_SAIDA)
                 ]["Valor"].sum()
                 total_entradas_fix = df_rec_view[
-                    mask_ativo & (df_rec_view["Tipo"] == "Entrada")
+                    mask_ativo & (df_rec_view["Tipo"] == CFG.TIPO_ENTRADA)
                 ]["Valor"].sum()
 
             render_intel(
