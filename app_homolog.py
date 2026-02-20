@@ -2287,6 +2287,59 @@ def compute_cashflow_forecast(
 
     return forecast
 
+
+def compute_divisao_casal(df_month: pd.DataFrame) -> dict | None:
+    """Calcula divisão justa de despesas entre o casal.
+
+    Lógica:
+    - Gastos com Responsavel individual → cada um paga o seu
+    - Gastos com Responsavel 'Casal' → divididos 50/50
+    - Cota justa = individual + metade do compartilhado
+    - Diferença indica quem deve a quem para equilibrar
+    """
+    if df_month.empty:
+        return None
+
+    gastos = df_month[
+        (df_month["Tipo"] == CFG.TIPO_SAIDA) &
+        (df_month["Categoria"] != CFG.CAT_INVESTIMENTO)
+    ]
+    if gastos.empty:
+        return None
+
+    individuais = [r for r in CFG.RESPONSAVEIS if r != "Casal"]
+    if len(individuais) != 2:
+        return None
+
+    pessoa_a, pessoa_b = individuais[0], individuais[1]
+
+    a_ind = gastos[gastos["Responsavel"] == pessoa_a]["Valor"].sum()
+    b_ind = gastos[gastos["Responsavel"] == pessoa_b]["Valor"].sum()
+    casal_total = gastos[gastos["Responsavel"] == "Casal"]["Valor"].sum()
+    total = a_ind + b_ind + casal_total
+
+    if total == 0:
+        return None
+
+    metade = casal_total / 2
+    a_justo = a_ind + metade
+    b_justo = b_ind + metade
+    diferenca = a_justo - b_justo
+
+    return {
+        "pessoas": (pessoa_a, pessoa_b),
+        "individual": {pessoa_a: a_ind, pessoa_b: b_ind},
+        "casal_compartilhado": casal_total,
+        "metade_compartilhado": metade,
+        "cota_justa": {pessoa_a: a_justo, pessoa_b: b_justo},
+        "total_geral": total,
+        "diferenca": abs(diferenca),
+        "quem_deve": pessoa_b if diferenca > 0 else (pessoa_a if diferenca < 0 else None),
+        "quem_recebe": pessoa_a if diferenca > 0 else (pessoa_b if diferenca < 0 else None),
+        "equilibrado": abs(diferenca) < 1.0,
+    }
+
+
 # ==============================================================================
 # 8. COMPONENTES VISUAIS
 # ==============================================================================
@@ -3037,6 +3090,86 @@ def render_split_casal(split_gastos: dict, split_renda: dict) -> None:
     html += '</div></div>'
     st.markdown(html, unsafe_allow_html=True)
 
+def render_divisao_casal(divisao: dict | None) -> None:
+    """Renderiza card de divisão de despesas do casal com acerto."""
+    if divisao is None:
+        return
+
+    pessoa_a, pessoa_b = divisao["pessoas"]
+
+    # --- Acerto ---
+    if divisao["equilibrado"]:
+        acerto_html = (
+            '<div style="color:#00FFCC; font-family:JetBrains Mono,monospace; '
+            'font-size:0.75rem; font-weight:700; margin-top:12px; padding:10px; '
+            'border:1px solid #00FFCC33; text-align:center;">'
+            '✓ Despesas equilibradas</div>'
+        )
+    else:
+        acerto_html = (
+            f'<div style="color:#FFAA00; font-family:JetBrains Mono,monospace; '
+            f'font-size:0.75rem; font-weight:700; margin-top:12px; padding:10px; '
+            f'border:1px solid #FFAA0033; text-align:center;">'
+            f'⟶ {sanitize(divisao["quem_deve"])} deve '
+            f'{fmt_brl(divisao["diferenca"])} '
+            f'a {sanitize(divisao["quem_recebe"])}'
+            f'</div>'
+        )
+
+    # --- Cards por pessoa ---
+    persons_html = ""
+    for pessoa in [pessoa_a, pessoa_b]:
+        ind = divisao["individual"][pessoa]
+        justo = divisao["cota_justa"][pessoa]
+        persons_html += (
+            f'<div style="flex:1; min-width:130px;">'
+            f'<div style="font-family:JetBrains Mono,monospace; font-size:0.55rem; '
+            f'color:#555; text-transform:uppercase; letter-spacing:0.1em; '
+            f'margin-bottom:6px;">{sanitize(pessoa)}</div>'
+
+            f'<div style="font-family:JetBrains Mono,monospace; font-size:0.62rem; '
+            f'color:#888; padding:3px 0;">'
+            f'Individual: <span style="color:#F0F0F0;">{fmt_brl(ind)}</span></div>'
+
+            f'<div style="font-family:JetBrains Mono,monospace; font-size:0.62rem; '
+            f'color:#888; padding:3px 0;">'
+            f'+ ½ casal: <span style="color:#F0F0F0;">'
+            f'{fmt_brl(divisao["metade_compartilhado"])}</span></div>'
+
+            f'<div style="font-family:JetBrains Mono,monospace; font-size:0.72rem; '
+            f'color:#F0F0F0; font-weight:700; padding:6px 0 0 0; '
+            f'border-top:1px solid #1a1a1a; margin-top:4px;">'
+            f'Cota justa: {fmt_brl(justo)}</div>'
+            f'</div>'
+        )
+
+    # --- Composição final ---
+    html = (
+        f'<div class="intel-box">'
+        f'<div class="intel-title">◆ Divisão de Despesas — Acerto Mensal</div>'
+
+        f'<div style="display:flex; gap:24px; flex-wrap:wrap; margin-bottom:8px;">'
+        f'{persons_html}'
+        f'</div>'
+
+        f'<div style="font-family:JetBrains Mono,monospace; font-size:0.58rem; '
+        f'color:#444; padding:6px 0; border-top:1px solid #0f0f0f;">'
+        f'Compartilhado (Casal): {fmt_brl(divisao["casal_compartilhado"])} '
+        f'· Total geral: {fmt_brl(divisao["total_geral"])}'
+        f'</div>'
+
+        f'{acerto_html}'
+
+        f'<div style="font-family:JetBrains Mono,monospace; font-size:0.48rem; '
+        f'color:#222; margin-top:8px;">'
+        f'Nota: gastos com responsável "Casal" são divididos 50/50. '
+        f'Para rastreio preciso de quem pagou, use o responsável individual.</div>'
+
+        f'</div>'
+    )
+    st.markdown(html, unsafe_allow_html=True)
+
+
 def render_renda_chart(renda_data: list[dict]) -> None:
     """Gráfico de evolução de renda com breakdown por fonte."""
     if not renda_data:
@@ -3643,21 +3776,105 @@ def _save_filtered_sheet(
 
 
 # ==============================================================================
-# 12. APLICAÇÃO PRINCIPAL
+# 12. AUTENTICAÇÃO
+# ==============================================================================
+
+def _check_auth() -> bool:
+    """Verifica se o usuário está autenticado.
+
+    Se auth não está configurado em secrets.toml, permite acesso livre.
+    """
+    try:
+        auth_cfg = st.secrets.get("auth", {})
+        if not auth_cfg.get("enabled", False):
+            return True
+    except (FileNotFoundError, KeyError, Exception):
+        return True
+    return st.session_state.get("authenticated", False)
+
+
+def _render_login() -> None:
+    """Renderiza tela de login no tema do terminal."""
+    st.markdown("""
+    <div style="text-align:center; padding:80px 20px 20px 20px;">
+        <div style="font-family:'JetBrains Mono',monospace; font-size:0.6rem;
+             color:#00FFCC; text-transform:uppercase; letter-spacing:0.6em;
+             margin-bottom:12px; opacity:0.5;">▮ L&L Finance Terminal</div>
+        <div style="font-family:'JetBrains Mono',monospace; font-size:2.5rem;
+             color:#F0F0F0; margin-bottom:8px; letter-spacing:-0.02em;">Autenticação</div>
+        <div style="font-family:'JetBrains Mono',monospace; font-size:0.65rem;
+             color:#333; letter-spacing:0.05em;">Acesso restrito</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    _, col_center, _ = st.columns([1, 1, 1])
+    with col_center:
+        with st.form("login_form"):
+            username = st.text_input(
+                "Usuário", placeholder="seu nome",
+                label_visibility="collapsed",
+            )
+            password = st.text_input(
+                "Senha", type="password", placeholder="senha",
+                label_visibility="collapsed",
+            )
+            if st.form_submit_button("ENTRAR", use_container_width=True):
+                try:
+                    users = st.secrets.get("auth", {}).get("users", {})
+                    user_key = username.strip().lower()
+                    user_data = users.get(user_key, None)
+
+                    if user_data and str(user_data.get("password", "")) == password:
+                        st.session_state.authenticated = True
+                        st.session_state.auth_user = str(user_data.get("name", username.strip()))
+                        logger.info(f"Login OK: {user_key}")
+                        st.rerun()
+                    else:
+                        st.error("Usuário ou senha incorretos")
+                        logger.warning(f"Login falhou: {user_key}")
+                except Exception as e:
+                    st.error("Erro na autenticação")
+                    logger.error(f"Auth error: {e}")
+
+        st.markdown(
+            '<div style="font-family:JetBrains Mono,monospace;font-size:0.5rem;'
+            'color:#1a1a1a;text-align:center;margin-top:24px;">v6.0</div>',
+            unsafe_allow_html=True,
+        )
+
+
+def _logout() -> None:
+    """Limpa sessão de autenticação."""
+    for key in ["authenticated", "auth_user"]:
+        st.session_state.pop(key, None)
+    logger.info("Logout")
+    st.rerun()
+
+
+# ==============================================================================
+# 13. APLICAÇÃO PRINCIPAL
 # ==============================================================================
 
 def main() -> None:
     inject_css()
 
+    # --- Autenticação ---
+    if not _check_auth():
+        _render_login()
+        return
+
     now = datetime.now()
 
     # --- Barra de Controle ---
+    auth_user = st.session_state.get("auth_user", "")
+    default_filter = auth_user if auth_user in list(CFG.RESPONSAVEIS) else "Casal"
+
     c_filter, _, c_status = st.columns([1, 2, 1])
     with c_filter:
         try:
             user = st.pills(
                 "", list(CFG.RESPONSAVEIS),
-                default="Casal", selection_mode="single",
+                default=default_filter, selection_mode="single",
                 label_visibility="collapsed"
             )
         except Exception:
@@ -3668,10 +3885,16 @@ def main() -> None:
     if not user:
         user = "Casal"
     with c_status:
+        status_parts = [f"L&L v6.0 — {fmt_date(now)}"]
+        if auth_user:
+            status_parts.append(sanitize(auth_user))
         st.markdown(
-            f'<div class="status-line">L&L TERMINAL v6.0 — {fmt_date(now)}</div>',
-            unsafe_allow_html=True
+            f'<div class="status-line">{" — ".join(status_parts)}</div>',
+            unsafe_allow_html=True,
         )
+        if auth_user:
+            if st.button("⏻ Sair", key="logout_btn"):
+                _logout()
 
     # --- Navegação Mensal ---
     if "nav_month" not in st.session_state:
@@ -3764,6 +3987,11 @@ def main() -> None:
         df_trans, df_recorrentes, user, sel_mo, sel_yr,
     )
 
+    # --- Divisão Casal ---
+    divisao_casal = None
+    if user == "Casal":
+        divisao_casal = compute_divisao_casal(mx["df_month"])
+
     month_label = fmt_month_year(sel_mo, sel_yr)
     has_data = mx["renda"] > 0 or mx["lifestyle"] > 0 or mx["investido_mes"] > 0
 
@@ -3815,6 +4043,7 @@ def main() -> None:
             render_score(score_data)
             if user == "Casal":
                 render_split_casal(mx.get("split_gastos", {}), mx.get("split_renda", {}))
+                render_divisao_casal(divisao_casal)
             render_regra_503020(mx)
             render_prev_comparison(mx, sel_mo, sel_yr)
             render_annual_strip(annual)
