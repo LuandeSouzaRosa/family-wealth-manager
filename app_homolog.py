@@ -37,6 +37,7 @@ class Config:
     COLS_PATRIMONIO: tuple = ("Item", "Valor", "Responsavel")
     COLS_RECORRENTE: tuple = ("Descricao", "Valor", "Categoria", "Tipo", "Responsavel", "DiaVencimento", "Ativo")
     COLS_ORCAMENTO: tuple = ("Categoria", "Limite", "Responsavel")
+    COLS_CONFIG: tuple = ("Chave", "Valor", "Responsavel")
     META_NECESSIDADES: int = 50
     META_DESEJOS: int = 30
     META_INVESTIMENTO: int = 20
@@ -54,6 +55,68 @@ class Config:
 
 
 CFG = Config()
+
+
+@dataclass
+class UserConfig:
+    """Configurações personalizáveis do usuário."""
+    meta_necessidades: int = CFG.META_NECESSIDADES
+    meta_desejos: int = CFG.META_DESEJOS
+    meta_investimento: int = CFG.META_INVESTIMENTO
+    autonomia_alvo: int = CFG.AUTONOMIA_OK
+    autonomia_warn: int = CFG.AUTONOMIA_WARN
+    auto_gerar_recorrentes: bool = False
+
+    @classmethod
+    def from_df(cls, df: pd.DataFrame, responsavel: str = "Casal") -> "UserConfig":
+        """Carrega config do DataFrame. Fallback: defaults do CFG."""
+        cfg = cls()
+        if df.empty:
+            return cfg
+
+        df_user = df[df["Responsavel"].str.strip() == responsavel]
+        if df_user.empty:
+            df_user = df[df["Responsavel"].str.strip() == "Casal"]
+        if df_user.empty:
+            return cfg
+
+        kv: dict[str, str] = {}
+        for _, row in df_user.iterrows():
+            key = str(row.get("Chave", "")).strip().lower()
+            val = str(row.get("Valor", "")).strip()
+            if key:
+                kv[key] = val
+
+        def _int(k: str, default: int) -> int:
+            try:
+                return int(float(kv[k]))
+            except (KeyError, ValueError, TypeError):
+                return default
+
+        def _bool(k: str, default: bool) -> bool:
+            try:
+                return kv[k].lower() in ("true", "1", "sim", "yes")
+            except (KeyError, ValueError):
+                return default
+
+        cfg.meta_necessidades = _int("meta_necessidades", cfg.meta_necessidades)
+        cfg.meta_desejos = _int("meta_desejos", cfg.meta_desejos)
+        cfg.meta_investimento = _int("meta_investimento", cfg.meta_investimento)
+        cfg.autonomia_alvo = _int("autonomia_alvo", cfg.autonomia_alvo)
+        cfg.auto_gerar_recorrentes = _bool("auto_gerar_recorrentes", cfg.auto_gerar_recorrentes)
+
+        # Validar: metas devem somar 100
+        total = cfg.meta_necessidades + cfg.meta_desejos + cfg.meta_investimento
+        if total != 100:
+            cfg.meta_necessidades = CFG.META_NECESSIDADES
+            cfg.meta_desejos = CFG.META_DESEJOS
+            cfg.meta_investimento = CFG.META_INVESTIMENTO
+
+        # Derivar warn como metade do alvo
+        cfg.autonomia_warn = max(1, cfg.autonomia_alvo // 2)
+
+        return cfg
+
 
 logging.basicConfig(
     level=logging.INFO,
@@ -1264,6 +1327,58 @@ def load_orcamentos() -> pd.DataFrame:
     return df
 
 
+@st.cache_data(ttl=CFG.CACHE_TTL)
+def load_config() -> pd.DataFrame:
+    """Carrega configurações do usuário do Google Sheets."""
+    conn = get_conn()
+    expected = list(CFG.COLS_CONFIG)
+    try:
+        df = conn.read(worksheet="Configuracoes")
+        df = df.dropna(how="all")
+        missing = set(expected) - set(df.columns)
+        for col in missing:
+            df[col] = None
+        if not df.empty:
+            df = _normalize_strings(df, ["Chave", "Responsavel"])
+    except Exception as e:
+        logger.warning(f"load_config: {e} (worksheet pode não existir)")
+        df = pd.DataFrame(columns=expected)
+    return df
+
+
+def save_config(user_config: UserConfig, responsavel: str) -> bool:
+    """Salva configurações do usuário na planilha."""
+    entries = [
+        {"Chave": "meta_necessidades", "Valor": str(user_config.meta_necessidades), "Responsavel": responsavel},
+        {"Chave": "meta_desejos", "Valor": str(user_config.meta_desejos), "Responsavel": responsavel},
+        {"Chave": "meta_investimento", "Valor": str(user_config.meta_investimento), "Responsavel": responsavel},
+        {"Chave": "autonomia_alvo", "Valor": str(user_config.autonomia_alvo), "Responsavel": responsavel},
+        {"Chave": "auto_gerar_recorrentes", "Valor": str(user_config.auto_gerar_recorrentes).lower(), "Responsavel": responsavel},
+    ]
+    conn = get_conn()
+    try:
+        try:
+            df_curr = conn.read(worksheet="Configuracoes")
+            df_curr = df_curr.dropna(how="all")
+        except Exception:
+            df_curr = pd.DataFrame(columns=list(CFG.COLS_CONFIG))
+
+        # Remove config existente deste responsável
+        if not df_curr.empty and "Responsavel" in df_curr.columns:
+            df_curr = df_curr[df_curr["Responsavel"].str.strip() != responsavel].copy()
+
+        df_new = pd.DataFrame(entries)
+        df_updated = pd.concat([df_curr, df_new], ignore_index=True)
+        conn.update(worksheet="Configuracoes", data=df_updated)
+        st.cache_data.clear()
+        logger.info(f"save_config OK [{responsavel}]")
+        return True
+    except Exception as e:
+        logger.error(f"save_config failed: {e}")
+        st.error(f"Erro ao salvar configurações: {e}")
+        return False
+
+
 def _serialize_for_sheet(df: pd.DataFrame) -> pd.DataFrame:
     """Serializa DataFrame para gravação na planilha."""
     df_out = df.copy()
@@ -1699,8 +1814,10 @@ def compute_metrics(
     user_filter: str,
     target_month: int,
     target_year: int,
+    user_config: UserConfig | None = None,
 ) -> dict:
     """Calcula todas as métricas financeiras para o mês/usuário."""
+    ucfg = user_config or UserConfig()
 
     df_t = filter_by_user(df_trans, user_filter)
     df_a = filter_by_user(df_assets, user_filter, include_shared=True)
@@ -1804,9 +1921,9 @@ def compute_metrics(
         m["nec_pct"] = (val_nec / m["renda"]) * 100
         m["des_pct"] = (val_des / m["renda"]) * 100
         m["inv_pct"] = (m["investido_mes"] / m["renda"]) * 100
-        m["nec_delta"] = m["nec_pct"] - CFG.META_NECESSIDADES
-        m["des_delta"] = m["des_pct"] - CFG.META_DESEJOS
-        m["inv_delta"] = m["inv_pct"] - CFG.META_INVESTIMENTO
+        m["nec_delta"] = m["nec_pct"] - ucfg.meta_necessidades
+        m["des_delta"] = m["des_pct"] - ucfg.meta_desejos
+        m["inv_delta"] = m["inv_pct"] - ucfg.meta_investimento
 
     # --- Breakdown ---
     if not df_mo.empty:
@@ -1864,6 +1981,9 @@ def compute_metrics(
 
     # --- Ticket Médio ---
     m["ticket_medio"] = m["lifestyle"] / m["month_saidas"] if m["month_saidas"] > 0 else 0.0
+
+    # --- Config do usuário ---
+    m["user_config"] = ucfg
 
     # --- Health ---
     m["health"] = _compute_health(m)
@@ -1936,6 +2056,7 @@ def _compute_health(m: dict) -> str:
 
 def compute_score(mx: dict) -> dict:
     """Calcula score financeiro de 0-100 com breakdown."""
+    ucfg: UserConfig = mx.get("user_config", UserConfig())
     details: list[tuple[str, float, int]] = []
     score = 0.0
 
@@ -1950,7 +2071,7 @@ def compute_score(mx: dict) -> dict:
 
     # 2. Taxa de Aporte (25 pts)
     if mx["renda"] > 0:
-        aporte_pts = min(25.0, (mx["taxa_aporte"] / CFG.META_INVESTIMENTO) * 25)
+        aporte_pts = min(25.0, (mx["taxa_aporte"] / ucfg.meta_investimento) * 25)
         score += aporte_pts
         details.append(("Taxa de Aporte", aporte_pts, 25))
     else:
@@ -1961,7 +2082,7 @@ def compute_score(mx: dict) -> dict:
     if autonomia >= 999:
         auto_pts = 25.0
     else:
-        auto_pts = min(25.0, (autonomia / CFG.AUTONOMIA_OK) * 25)
+        auto_pts = min(25.0, (autonomia / ucfg.autonomia_alvo) * 25)
     score += auto_pts
     details.append(("Autonomia", auto_pts, 25))
 
@@ -2344,16 +2465,17 @@ def compute_divisao_casal(df_month: pd.DataFrame) -> dict | None:
 # 8. COMPONENTES VISUAIS
 # ==============================================================================
 
-def render_autonomia(val: float, sobrevivencia: float) -> None:
+def render_autonomia(val: float, sobrevivencia: float, user_config: UserConfig | None = None) -> None:
     """Renderiza hero de autonomia financeira."""
+    ucfg = user_config or UserConfig()
     if val >= 999:
         display_text = "∞"
         color = "#00FFCC"
     else:
         display_text = f"{min(val, 999):.1f}"
-        if val >= CFG.AUTONOMIA_OK:
+        if val >= ucfg.autonomia_alvo:
             color = "#00FFCC"
-        elif val >= CFG.AUTONOMIA_WARN:
+        elif val >= ucfg.autonomia_warn:
             color = "#FFAA00"
         else:
             color = "#FF4444"
@@ -2528,9 +2650,10 @@ def render_regra_503020(mx: dict) -> None:
             f'</span>'
         )
 
-    b_nec = _badge("Necessidades", mx["nec_pct"], mx["nec_delta"], CFG.META_NECESSIDADES)
-    b_des = _badge("Desejos", mx["des_pct"], mx["des_delta"], CFG.META_DESEJOS)
-    b_inv = _badge("Investimento", mx["inv_pct"], mx["inv_delta"], CFG.META_INVESTIMENTO)
+    ucfg: UserConfig = mx.get("user_config", UserConfig())
+    b_nec = _badge("Necessidades", mx["nec_pct"], mx["nec_delta"], ucfg.meta_necessidades)
+    b_des = _badge("Desejos", mx["des_pct"], mx["des_delta"], ucfg.meta_desejos)
+    b_inv = _badge("Investimento", mx["inv_pct"], mx["inv_delta"], ucfg.meta_investimento)
 
     st.markdown(f"""
     <div class="t-panel" style="padding: 12px 16px;">
@@ -2923,7 +3046,8 @@ def render_aporte_meta(mx: dict) -> None:
     """Renderiza barra de progresso da meta de investimento."""
     if mx["renda"] <= 0:
         return
-    meta_valor = mx["renda"] * (CFG.META_INVESTIMENTO / 100)
+    ucfg: UserConfig = mx.get("user_config", UserConfig())
+    meta_valor = mx["renda"] * (ucfg.meta_investimento / 100)
     investido = mx["investido_mes"]
     pct = (investido / meta_valor * 100) if meta_valor > 0 else 0
     fill_pct = min(100, pct)
@@ -2942,7 +3066,7 @@ def render_aporte_meta(mx: dict) -> None:
         f'<div style="font-family:JetBrains Mono,monospace;padding:6px 0 10px 0;">'
         f'<div style="display:flex;justify-content:space-between;font-size:0.6rem;'
         f'color:#555;margin-bottom:4px;">'
-        f'<span>Meta Aporte ({CFG.META_INVESTIMENTO}%): {fmt_brl(meta_valor)}</span>'
+        f'<span>Meta Aporte ({ucfg.meta_investimento}%): {fmt_brl(meta_valor)}</span>'
         f'<span style="color:{color};">{pct:.0f}% — {status}</span>'
         f'</div>'
         f'<div style="width:100%;height:4px;background:#111;">'
@@ -3957,9 +4081,13 @@ def main() -> None:
     sel_mo = st.session_state.nav_month
     sel_yr = st.session_state.nav_year
 
+    # --- Carregar Config ---
+    df_config = load_config()
+    user_config = UserConfig.from_df(df_config, user)
+
     # --- Carregar Dados e Métricas ---
     df_trans, df_assets = load_data()
-    mx = compute_metrics(df_trans, df_assets, user, sel_mo, sel_yr)
+    mx = compute_metrics(df_trans, df_assets, user, sel_mo, sel_yr, user_config)
 
     # --- Projeção (só mês atual) ---
     projection = compute_projection(mx, sel_mo, sel_yr)
@@ -3967,6 +4095,22 @@ def main() -> None:
     # --- Recorrentes ---
     df_recorrentes = load_recorrentes()
     pendentes = detect_pending_recorrentes(df_recorrentes, df_trans, user, sel_mo, sel_yr)
+
+    # --- Auto-gerar recorrentes (se habilitado) ---
+    if user_config.auto_gerar_recorrentes and not pendentes.empty:
+        auto_key = f"auto_gen_{user}_{sel_mo}_{sel_yr}"
+        if auto_key not in st.session_state:
+            st.session_state[auto_key] = True
+            result = generate_recorrentes(pendentes, sel_mo, sel_yr)
+            if result:
+                parts = []
+                if result["entradas"] > 0:
+                    parts.append(f"{result['entradas']} entrada{'s' if result['entradas'] > 1 else ''}")
+                if result["saidas"] > 0:
+                    parts.append(f"{result['saidas']} saída{'s' if result['saidas'] > 1 else ''}")
+                detail = " + ".join(parts) if parts else ""
+                st.toast(f"⟳ Auto: {result['count']} recorrentes geradas ({detail})")
+                st.rerun()
 
     # --- Orçamento ---
     df_orcamentos = load_orcamentos()
@@ -3996,7 +4140,7 @@ def main() -> None:
     has_data = mx["renda"] > 0 or mx["lifestyle"] > 0 or mx["investido_mes"] > 0
 
     # ===== HERO =====
-    render_autonomia(mx["autonomia"], mx["sobrevivencia"])
+    render_autonomia(mx["autonomia"], mx["sobrevivencia"], user_config)
 
     # ===== HEALTH + ALERTAS =====
     render_health_badge(mx["health"], month_label, mx["month_tx_count"])
@@ -4098,8 +4242,8 @@ def main() -> None:
                         st.rerun()
 
     # ===== ABAS =====
-    tab_ls, tab_renda, tab_pat, tab_rec, tab_hist = st.tabs([
-        "GASTOS", "RENDA", "PATRIMÔNIO", "FIXOS", "HISTÓRICO"
+    tab_ls, tab_renda, tab_pat, tab_rec, tab_hist, tab_cfg = st.tabs([
+        "GASTOS", "RENDA", "PATRIMÔNIO", "FIXOS", "HISTÓRICO", "CONFIG"
     ])
 
     with tab_ls:
@@ -4501,6 +4645,162 @@ def main() -> None:
     with tab_hist:
         # [FIX B2] Removido df_trans da chamada
         _render_historico(mx, user, sel_mo, sel_yr)
+
+    with tab_cfg:
+        render_intel(
+            "⚙ Configurações",
+            f"Personalize metas e comportamento do app · Perfil: <strong>{sanitize(user)}</strong>"
+        )
+
+        cfg_left, cfg_right = st.columns([1, 1])
+
+        with cfg_left:
+            render_intel(
+                "Metas Financeiras",
+                "Regra de alocação de renda. Os 3 valores devem somar 100%."
+            )
+            with st.form("f_config", clear_on_submit=False):
+                cc1, cc2, cc3 = st.columns(3)
+                with cc1:
+                    cfg_nec = st.number_input(
+                        "Necessidades %", min_value=0, max_value=100,
+                        value=user_config.meta_necessidades, step=5,
+                    )
+                with cc2:
+                    cfg_des = st.number_input(
+                        "Desejos %", min_value=0, max_value=100,
+                        value=user_config.meta_desejos, step=5,
+                    )
+                with cc3:
+                    cfg_inv = st.number_input(
+                        "Investimento %", min_value=0, max_value=100,
+                        value=user_config.meta_investimento, step=5,
+                    )
+
+                cfg_total = cfg_nec + cfg_des + cfg_inv
+                if cfg_total != 100:
+                    st.markdown(
+                        f'<div style="font-family:JetBrains Mono,monospace;font-size:0.65rem;'
+                        f'color:#FF4444;padding:4px 0;">Total: {cfg_total}% (deve ser 100%)</div>',
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    st.markdown(
+                        f'<div style="font-family:JetBrains Mono,monospace;font-size:0.65rem;'
+                        f'color:#00FFCC;padding:4px 0;">✓ Total: 100%</div>',
+                        unsafe_allow_html=True,
+                    )
+
+                st.markdown("---")
+                cfg_auto_alvo = st.number_input(
+                    "Autonomia — Meta (meses)",
+                    min_value=1, max_value=120,
+                    value=user_config.autonomia_alvo, step=1,
+                    help="Quantos meses de reserva você quer como objetivo",
+                )
+                cfg_auto_gen = st.checkbox(
+                    "Auto-gerar recorrentes ao navegar para mês novo",
+                    value=user_config.auto_gerar_recorrentes,
+                    help="Se ativo, recorrentes pendentes são geradas automaticamente",
+                )
+
+                if st.form_submit_button("SALVAR CONFIGURAÇÕES", use_container_width=True):
+                    if cfg_total != 100:
+                        st.error(f"As metas devem somar 100% (atual: {cfg_total}%)")
+                    elif cfg_auto_alvo < 1:
+                        st.error("Autonomia-alvo deve ser ao menos 1 mês")
+                    else:
+                        new_config = UserConfig(
+                            meta_necessidades=cfg_nec,
+                            meta_desejos=cfg_des,
+                            meta_investimento=cfg_inv,
+                            autonomia_alvo=cfg_auto_alvo,
+                            autonomia_warn=max(1, cfg_auto_alvo // 2),
+                            auto_gerar_recorrentes=cfg_auto_gen,
+                        )
+                        if save_config(new_config, user):
+                            st.toast("✓ Configurações salvas")
+                            st.rerun()
+
+        with cfg_right:
+            render_intel(
+                "Configuração Atual",
+                f"Perfil: <strong>{sanitize(user)}</strong>"
+            )
+
+            # Preview visual das metas
+            current_html = (
+                f'<div class="t-panel">'
+                f'<div style="font-family:JetBrains Mono,monospace;font-size:0.6rem;'
+                f'color:#555;text-transform:uppercase;letter-spacing:0.15em;'
+                f'margin-bottom:10px;">Regra de Alocação</div>'
+
+                f'<div style="display:flex;gap:12px;margin-bottom:12px;">'
+
+                f'<div style="flex:1;text-align:center;padding:12px;border:1px solid #1a1a1a;">'
+                f'<div style="font-family:JetBrains Mono,monospace;font-size:1.2rem;'
+                f'color:#F0F0F0;font-weight:700;">{user_config.meta_necessidades}%</div>'
+                f'<div style="font-family:JetBrains Mono,monospace;font-size:0.55rem;'
+                f'color:#555;margin-top:2px;">Necessidades</div></div>'
+
+                f'<div style="flex:1;text-align:center;padding:12px;border:1px solid #1a1a1a;">'
+                f'<div style="font-family:JetBrains Mono,monospace;font-size:1.2rem;'
+                f'color:#FFAA00;font-weight:700;">{user_config.meta_desejos}%</div>'
+                f'<div style="font-family:JetBrains Mono,monospace;font-size:0.55rem;'
+                f'color:#555;margin-top:2px;">Desejos</div></div>'
+
+                f'<div style="flex:1;text-align:center;padding:12px;border:1px solid #1a1a1a;">'
+                f'<div style="font-family:JetBrains Mono,monospace;font-size:1.2rem;'
+                f'color:#00FFCC;font-weight:700;">{user_config.meta_investimento}%</div>'
+                f'<div style="font-family:JetBrains Mono,monospace;font-size:0.55rem;'
+                f'color:#555;margin-top:2px;">Investimento</div></div>'
+
+                f'</div>'
+
+                f'<div style="font-family:JetBrains Mono,monospace;font-size:0.62rem;'
+                f'color:#888;padding:8px 0;border-top:1px solid #111;">'
+                f'Autonomia-alvo: <strong style="color:#F0F0F0;">'
+                f'{user_config.autonomia_alvo} meses</strong>'
+                f'<span style="color:#444;"> (alerta: {user_config.autonomia_warn}m)</span></div>'
+
+                f'<div style="font-family:JetBrains Mono,monospace;font-size:0.62rem;'
+                f'color:#888;padding:4px 0;">'
+                f'Auto-gerar recorrentes: '
+                f'<strong style="color:{"#00FFCC" if user_config.auto_gerar_recorrentes else "#555"};">'
+                f'{"Ativo" if user_config.auto_gerar_recorrentes else "Desativado"}'
+                f'</strong></div>'
+
+                f'</div>'
+            )
+            st.markdown(current_html, unsafe_allow_html=True)
+
+            # Impacto simulado se renda existe
+            if mx["renda"] > 0:
+                sim_nec = mx["renda"] * user_config.meta_necessidades / 100
+                sim_des = mx["renda"] * user_config.meta_desejos / 100
+                sim_inv = mx["renda"] * user_config.meta_investimento / 100
+
+                sim_html = (
+                    f'<div class="intel-box">'
+                    f'<div class="intel-title">◆ Simulação com Renda Atual</div>'
+                    f'<div style="font-family:JetBrains Mono,monospace;font-size:0.62rem;'
+                    f'color:#888;">'
+                    f'Renda: {fmt_brl(mx["renda"])}<br>'
+                    f'→ Necessidades ({user_config.meta_necessidades}%): '
+                    f'<strong style="color:#F0F0F0;">{fmt_brl(sim_nec)}</strong><br>'
+                    f'→ Desejos ({user_config.meta_desejos}%): '
+                    f'<strong style="color:#FFAA00;">{fmt_brl(sim_des)}</strong><br>'
+                    f'→ Investimento ({user_config.meta_investimento}%): '
+                    f'<strong style="color:#00FFCC;">{fmt_brl(sim_inv)}</strong>'
+                    f'</div></div>'
+                )
+                st.markdown(sim_html, unsafe_allow_html=True)
+
+            render_intel(
+                "Nota",
+                "As configurações são salvas por perfil (Casal/Luan/Luana). "
+                "Se não houver config individual, o app usa os valores do perfil Casal ou os defaults (50/30/20)."
+            )
 
 
 # ==============================================================================
