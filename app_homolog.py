@@ -1564,7 +1564,6 @@ def compute_projection(
         "daily_budget": remaining_budget / days_remaining,
     }
 
-
 def compute_alerts(
     mx: dict,
     sel_mo: int,
@@ -1845,7 +1844,7 @@ def compute_metrics(
 
         # --- Split Casal ---
         if user_filter == "Casal":
-            for resp_name in [r for r in CFG.RESPONSAVEIS if r != "Casal"]:
+            for resp_name in CFG.RESPONSAVEIS:
                 resp_total = df_mo[
                     (df_mo["Tipo"] == CFG.TIPO_SAIDA) &
                     (df_mo["Categoria"] != CFG.CAT_INVESTIMENTO) &
@@ -1855,7 +1854,7 @@ def compute_metrics(
                     m["split_gastos"][resp_name] = resp_total
 
             # --- Split Renda Casal ---
-            for resp_name in [r for r in CFG.RESPONSAVEIS if r != "Casal"]:
+            for resp_name in CFG.RESPONSAVEIS:
                 resp_renda = df_mo[
                     (df_mo["Tipo"] == CFG.TIPO_ENTRADA) &
                     (df_mo["Responsavel"] == resp_name)
@@ -2199,8 +2198,6 @@ def compute_cashflow_forecast(
     variáveis dos últimos 3 meses para projetar saldo futuro.
     """
     df = filter_by_user(df_trans, user_filter)
-    if df.empty:
-        return None
 
     # --- Recorrentes ativas (baseline fixa) ---
     df_rec = filter_by_user(df_recorrentes, user_filter, include_shared=True)
@@ -2251,7 +2248,7 @@ def compute_cashflow_forecast(
         if mo == 0:
             mo, yr = 12, yr - 1
 
-    if months_with_data == 0:
+    if months_with_data == 0 and renda_fixa == 0 and gastos_fixos == 0 and inv_fixo == 0:
         return None
 
     avg_renda_var = renda_var_total / months_with_data
@@ -2289,7 +2286,6 @@ def compute_cashflow_forecast(
         })
 
     return forecast
-
 
 # ==============================================================================
 # 8. COMPONENTES VISUAIS
@@ -3053,6 +3049,7 @@ def render_renda_chart(renda_data: list[dict]) -> None:
     for d in renda_data:
         all_cats.update(d["breakdown"].keys())
 
+    _palette = ["#00FFCC", "#FFAA00", "#F0F0F0", "#888888", "#555555", "#FF4444", "#4488FF", "#AA44FF"]
     cat_colors = {
         "Salário": "#00FFCC",
         "Dividendos": "#FFAA00",
@@ -3060,6 +3057,9 @@ def render_renda_chart(renda_data: list[dict]) -> None:
         "Extra": "#888888",
         "Reembolso": "#555555",
     }
+    for i, cat in enumerate(sorted(all_cats)):
+        if cat not in cat_colors:
+            cat_colors[cat] = _palette[i % len(_palette)]
 
     fig = go.Figure()
     for cat in sorted(all_cats):
@@ -3229,7 +3229,6 @@ def render_cashflow_forecast(forecast: list[dict] | None) -> None:
         f'</div>'
     )
     st.markdown(html, unsafe_allow_html=True)
-
 
 # ==============================================================================
 # 9. FORMULÁRIOS
