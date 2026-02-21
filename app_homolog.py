@@ -6,7 +6,7 @@ from streamlit_gsheets import GSheetsConnection
 from datetime import datetime, timedelta, date
 import calendar
 import html as html_lib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from io import BytesIO
 import time
 import logging
@@ -55,6 +55,71 @@ class Config:
 
 
 CFG = Config()
+
+
+@dataclass
+class MonthMetrics:
+    """Métricas financeiras computadas para um mês/usuário."""
+    # --- Core ---
+    renda: float = 0.0
+    lifestyle: float = 0.0
+    investido_mes: float = 0.0
+    disponivel: float = 0.0
+    sobrevivencia: float = 0.0
+    investido_total: float = 0.0
+    taxa_aporte: float = 0.0
+    autonomia: float = 0.0
+    
+    # --- Regra 50/30/20 ---
+    nec_pct: float = 0.0
+    des_pct: float = 0.0
+    inv_pct: float = 0.0
+    nec_delta: float = 0.0
+    des_delta: float = 0.0
+    inv_delta: float = 0.0
+    
+    # --- Top gastos ---
+    top_cat: str = "—"
+    top_cat_val: float = 0.0
+    top_gasto_desc: str = "—"
+    top_gasto_val: float = 0.0
+    top5_gastos: list = field(default_factory=list)
+    ticket_medio: float = 0.0
+    
+    # --- DataFrames ---
+    df_user: pd.DataFrame = field(default_factory=pd.DataFrame)
+    df_month: pd.DataFrame = field(default_factory=pd.DataFrame)
+    
+    # --- Insights ---
+    insight_ls: str = ""
+    insight_renda: str = ""
+    
+    # --- Deltas ---
+    d_renda: float | None = None
+    d_lifestyle: float | None = None
+    d_investido: float | None = None
+    d_disponivel: float | None = None
+    prev_renda: float = 0.0
+    prev_lifestyle: float = 0.0
+    prev_investido: float = 0.0
+    prev_disponivel: float = 0.0
+    
+    # --- Breakdowns ---
+    cat_breakdown: dict = field(default_factory=dict)
+    renda_breakdown: dict = field(default_factory=dict)
+    split_gastos: dict = field(default_factory=dict)
+    split_renda: dict = field(default_factory=dict)
+    
+    # --- Contadores ---
+    month_tx_count: int = 0
+    month_entradas: int = 0
+    month_saidas: int = 0
+    month_investimentos: int = 0
+    
+    # --- Status ---
+    health: str = "neutral"
+    budget_data: list = field(default_factory=list)
+    user_config: UserConfig = field(default_factory=UserConfig)
 
 
 @dataclass
@@ -1632,7 +1697,7 @@ def generate_recorrentes(
     return None
 
 def compute_projection(
-    mx: dict,
+    mx: MonthMetrics,
     sel_mo: int,
     sel_yr: int,
 ) -> dict | None:
@@ -1650,18 +1715,18 @@ def compute_projection(
     day_of_month = now.day
     days_in_month = calendar.monthrange(sel_yr, sel_mo)[1]
 
-    if day_of_month < 3 or mx["lifestyle"] == 0:
+    if day_of_month < 3 or mx.lifestyle == 0:
         return None
 
-    daily_rate = mx["lifestyle"] / day_of_month
+    daily_rate = mx.lifestyle / day_of_month
     projected_lifestyle = daily_rate * days_in_month
-    projected_investido = mx["investido_mes"]
-    projected_available = mx["renda"] - projected_lifestyle - projected_investido
+    projected_investido = mx.investido_mes
+    projected_available = mx.renda - projected_lifestyle - projected_investido
     progress_pct = (day_of_month / days_in_month) * 100
-    renda_consumed_pct = (mx["lifestyle"] / mx["renda"] * 100) if mx["renda"] > 0 else 0
-    renda_projected_pct = (projected_lifestyle / mx["renda"] * 100) if mx["renda"] > 0 else 0
+    renda_consumed_pct = (mx.lifestyle / mx.renda * 100) if mx.renda > 0 else 0
+    renda_projected_pct = (projected_lifestyle / mx.renda * 100) if mx.renda > 0 else 0
 
-    remaining_budget = max(0, mx["renda"] - mx["lifestyle"] - mx["investido_mes"])
+    remaining_budget = max(0, mx.renda - mx.lifestyle - mx.investido_mes)
     days_remaining = max(1, days_in_month - day_of_month)
 
     return {
@@ -1680,7 +1745,7 @@ def compute_projection(
     }
 
 def compute_alerts(
-    mx: dict,
+    mx: MonthMetrics,
     sel_mo: int,
     sel_yr: int,
     projection: dict | None,
@@ -1700,21 +1765,21 @@ def compute_alerts(
             "msg": f"{n_pendentes} transação(ões) recorrente{plural} pendente{plural} — gere na aba FIXOS",
         })
 
-    if mx["disponivel"] > 0 and mx["investido_mes"] > 0 and mx["renda"] > 0:
+    if mx.disponivel > 0 and mx.investido_mes > 0 and mx.renda > 0:
         alerts.append({
             "level": "ok",
             "icon": "✦",
             "msg": f"Mês positivo — {mx['taxa_aporte']:.0f}% investido, saldo de {fmt_brl(mx['disponivel'])}",
         })
 
-    if mx["renda"] > 0 and mx["lifestyle"] > mx["renda"]:
+    if mx.renda > 0 and mx.lifestyle > mx.renda:
         pct = (mx["lifestyle"] / mx["renda"]) * 100
         alerts.append({
             "level": "danger",
             "icon": "▲",
             "msg": f"Gastos em {pct:.0f}% da renda — mês no vermelho",
         })
-    elif mx["renda"] > 0 and mx["lifestyle"] > mx["renda"] * 0.8:
+    elif mx.renda > 0 and mx.lifestyle > mx.renda * 0.8:
         pct = (mx["lifestyle"] / mx["renda"]) * 100
         alerts.append({
             "level": "danger",
@@ -1735,9 +1800,9 @@ def compute_alerts(
             "msg": f"Projeção aperta: gastos consumirão {projection['renda_projected_pct']:.0f}% da renda",
         })
 
-    if mx["cat_breakdown"] and mx["lifestyle"] > 0:
-        for cat, val in mx["cat_breakdown"].items():
-            pct = (val / mx["lifestyle"]) * 100
+    if mx.cat_breakdown and mx.lifestyle > 0:
+        for cat, val in mx.cat_breakdown.items():
+            pct = (val / mx.lifestyle) * 100
             if pct > 40:
                 alerts.append({
                     "level": "warn",
@@ -1746,21 +1811,21 @@ def compute_alerts(
                 })
                 break
 
-    if mx["d_lifestyle"] is not None and mx["d_lifestyle"] != float("inf") and mx["d_lifestyle"] > 30:
+    if mx.d_lifestyle is not None and mx.d_lifestyle != float("inf") and mx.d_lifestyle > 30:
         alerts.append({
             "level": "warn",
             "icon": "▲",
-            "msg": f"Gastos {mx['d_lifestyle']:.0f}% acima do mês anterior",
+            "msg": f"Gastos {mx.d_lifestyle:.0f}% acima do mês anterior",
         })
 
-    if is_current and now.day >= 5 and mx["renda"] == 0:
+    if is_current and now.day >= 5 and mx.renda == 0:
         alerts.append({
             "level": "info",
             "icon": "○",
             "msg": "Nenhuma entrada registrada este mês",
         })
 
-    if mx["renda"] > 0 and mx["investido_mes"] == 0:
+    if mx.renda > 0 and mx.investido_mes == 0:
         if is_current and now.day >= 20:
             alerts.append({
                 "level": "info",
@@ -1782,7 +1847,7 @@ def compute_alerts(
         })
 
     # --- Orçamento estourado ---
-    budget_data = mx.get("budget_data", [])
+    budget_data = mx.budget_data
     for b in budget_data:
         if b["status"] == "over":
             alerts.append({
@@ -1807,7 +1872,6 @@ def compute_alerts(
 
     return alerts
 
-
 def compute_metrics(
     df_trans: pd.DataFrame,
     df_assets: pd.DataFrame,
@@ -1815,7 +1879,7 @@ def compute_metrics(
     target_month: int,
     target_year: int,
     user_config: UserConfig | None = None,
-) -> dict:
+) -> MonthMetrics:
     """Calcula todas as métricas financeiras para o mês/usuário."""
     ucfg = user_config or UserConfig()
 
@@ -1829,69 +1893,46 @@ def compute_metrics(
 
     df_mo = filter_by_month(df_t, target_month, target_year)
 
-    m: dict = {
-        "renda": 0.0, "lifestyle": 0.0, "investido_mes": 0.0,
-        "disponivel": 0.0, "sobrevivencia": 0.0, "investido_total": 0.0,
-        "taxa_aporte": 0.0, "autonomia": 0.0,
-        "nec_pct": 0.0, "des_pct": 0.0, "inv_pct": 0.0,
-        "nec_delta": 0.0, "des_delta": 0.0, "inv_delta": 0.0,
-        "top_cat": "—", "top_cat_val": 0.0,
-        "top_gasto_desc": "—", "top_gasto_val": 0.0,
-        "df_user": df_t,
-        "df_month": df_mo,
-        "insight_ls": "", "insight_renda": "",
-        "d_renda": None, "d_lifestyle": None,
-        "d_investido": None, "d_disponivel": None,
-        "cat_breakdown": {},
-        "renda_breakdown": {},
-        "month_tx_count": len(df_mo),
-        "month_entradas": 0,
-        "month_saidas": 0,
-        "month_investimentos": 0,
-        "health": "neutral",
-        "prev_renda": 0.0,
-        "prev_lifestyle": 0.0,
-        "prev_investido": 0.0,
-        "prev_disponivel": 0.0,
-        "top5_gastos": [],
-        "ticket_medio": 0.0,
-        "split_gastos": {},
-        "split_renda": {},
-    }
+    m = MonthMetrics(
+        df_user=df_t,
+        df_month=df_mo,
+        month_tx_count=len(df_mo),
+        user_config=ucfg,
+    )
 
     if df_t.empty:
-        m["insight_ls"] = "Nenhum dado registrado."
-        m["insight_renda"] = "Nenhum dado registrado."
+        m.insight_ls = "Nenhum dado registrado."
+        m.insight_renda = "Nenhum dado registrado."
         return m
 
     if not df_mo.empty:
-        m["renda"] = df_mo[df_mo["Tipo"] == CFG.TIPO_ENTRADA]["Valor"].sum()
+        m.renda = df_mo[df_mo["Tipo"] == CFG.TIPO_ENTRADA]["Valor"].sum()
         despesas = df_mo[
             (df_mo["Tipo"] == CFG.TIPO_SAIDA) &
             (df_mo["Categoria"] != CFG.CAT_INVESTIMENTO)
         ]
-        m["lifestyle"] = despesas["Valor"].sum()
-        m["investido_mes"] = df_mo[
+        m.lifestyle = despesas["Valor"].sum()
+        m.investido_mes = df_mo[
             (df_mo["Tipo"] == CFG.TIPO_SAIDA) &
             (df_mo["Categoria"] == CFG.CAT_INVESTIMENTO)
         ]["Valor"].sum()
-        m["month_entradas"] = len(df_mo[df_mo["Tipo"] == CFG.TIPO_ENTRADA])
-        m["month_saidas"] = len(despesas)
-        m["month_investimentos"] = len(df_mo[
+        m.month_entradas = len(df_mo[df_mo["Tipo"] == CFG.TIPO_ENTRADA])
+        m.month_saidas = len(despesas)
+        m.month_investimentos = len(df_mo[
             (df_mo["Tipo"] == CFG.TIPO_SAIDA) &
             (df_mo["Categoria"] == CFG.CAT_INVESTIMENTO)
         ])
 
-    m["disponivel"] = m["renda"] - m["lifestyle"] - m["investido_mes"]
+    m.disponivel = m.renda - m.lifestyle - m.investido_mes
 
     base_patrimonio = df_a["Valor"].sum() if not df_a.empty else 0.0
-    m["investido_total"] = df_t[
+    m.investido_total = df_t[
         (df_t["Tipo"] == CFG.TIPO_SAIDA) &
         (df_t["Categoria"] == CFG.CAT_INVESTIMENTO)
     ]["Valor"].sum()
-    m["sobrevivencia"] = base_patrimonio + m["investido_total"]
+    m.sobrevivencia = base_patrimonio + m.investido_total
 
-    m["taxa_aporte"] = (m["investido_mes"] / m["renda"] * 100) if m["renda"] > 0 else 0.0
+    m.taxa_aporte = (m.investido_mes / m.renda * 100) if m.renda > 0 else 0.0
 
     # --- Autonomia ---
     ref_date = end_of_month(target_year, target_month)
@@ -1906,24 +1947,24 @@ def compute_metrics(
         dias = max(1, (ref_date - df_burn["Data"].min()).days)
         meses = max(1, min(3, dias / 30))
         media_gastos = df_burn["Valor"].sum() / meses
-        m["autonomia"] = (m["sobrevivencia"] / media_gastos) if media_gastos > 0 else 999.0
+        m.autonomia = (m.sobrevivencia / media_gastos) if media_gastos > 0 else 999.0
     else:
-        m["autonomia"] = 999.0
+        m.autonomia = 999.0
 
     # --- Regra 50/30/20 ---
-    if m["renda"] > 0 and not df_mo.empty:
+    if m.renda > 0 and not df_mo.empty:
         despesas_mo = df_mo[
             (df_mo["Tipo"] == CFG.TIPO_SAIDA) &
             (df_mo["Categoria"] != CFG.CAT_INVESTIMENTO)
         ]
         val_nec = despesas_mo[despesas_mo["Categoria"].isin(CFG.NECESSIDADES)]["Valor"].sum()
         val_des = despesas_mo[despesas_mo["Categoria"].isin(CFG.DESEJOS)]["Valor"].sum()
-        m["nec_pct"] = (val_nec / m["renda"]) * 100
-        m["des_pct"] = (val_des / m["renda"]) * 100
-        m["inv_pct"] = (m["investido_mes"] / m["renda"]) * 100
-        m["nec_delta"] = m["nec_pct"] - ucfg.meta_necessidades
-        m["des_delta"] = m["des_pct"] - ucfg.meta_desejos
-        m["inv_delta"] = m["inv_pct"] - ucfg.meta_investimento
+        m.nec_pct = (val_nec / m.renda) * 100
+        m.des_pct = (val_des / m.renda) * 100
+        m.inv_pct = (m.investido_mes / m.renda) * 100
+        m.nec_delta = m.nec_pct - ucfg.meta_necessidades
+        m.des_delta = m.des_pct - ucfg.meta_desejos
+        m.inv_delta = m.inv_pct - ucfg.meta_investimento
 
     # --- Breakdown ---
     if not df_mo.empty:
@@ -1933,28 +1974,28 @@ def compute_metrics(
         ].groupby("Categoria")["Valor"].sum()
 
         if not cat_grp.empty:
-            m["top_cat"] = cat_grp.idxmax()
-            m["top_cat_val"] = cat_grp.max()
-            m["cat_breakdown"] = cat_grp.sort_values(ascending=False).to_dict()
+            m.top_cat = cat_grp.idxmax()
+            m.top_cat_val = cat_grp.max()
+            m.cat_breakdown = cat_grp.sort_values(ascending=False).to_dict()
 
         top_row = df_mo[
             (df_mo["Tipo"] == CFG.TIPO_SAIDA) &
             (df_mo["Categoria"] != CFG.CAT_INVESTIMENTO)
         ].nlargest(1, "Valor")
         if not top_row.empty:
-            m["top_gasto_desc"] = str(top_row["Descricao"].values[0])
-            m["top_gasto_val"] = float(top_row["Valor"].values[0])
+            m.top_gasto_desc = str(top_row["Descricao"].values[0])
+            m.top_gasto_val = float(top_row["Valor"].values[0])
 
         renda_grp = df_mo[df_mo["Tipo"] == CFG.TIPO_ENTRADA].groupby("Categoria")["Valor"].sum()
         if not renda_grp.empty:
-            m["renda_breakdown"] = renda_grp.sort_values(ascending=False).to_dict()
+            m.renda_breakdown = renda_grp.sort_values(ascending=False).to_dict()
 
         # --- Top 5 Gastos ---
         top5_df = df_mo[
             (df_mo["Tipo"] == CFG.TIPO_SAIDA) &
             (df_mo["Categoria"] != CFG.CAT_INVESTIMENTO)
         ].nlargest(5, "Valor")
-        m["top5_gastos"] = [
+        m.top5_gastos = [
             {"desc": str(r["Descricao"]), "valor": float(r["Valor"]), "cat": str(r["Categoria"])}
             for _, r in top5_df.iterrows()
         ]
@@ -1968,7 +2009,7 @@ def compute_metrics(
                     (df_mo["Responsavel"] == resp_name)
                 ]["Valor"].sum()
                 if resp_total > 0:
-                    m["split_gastos"][resp_name] = resp_total
+                    m.split_gastos[resp_name] = resp_total
 
             # --- Split Renda Casal ---
             for resp_name in CFG.RESPONSAVEIS:
@@ -1977,16 +2018,13 @@ def compute_metrics(
                     (df_mo["Responsavel"] == resp_name)
                 ]["Valor"].sum()
                 if resp_renda > 0:
-                    m["split_renda"][resp_name] = resp_renda
+                    m.split_renda[resp_name] = resp_renda
 
     # --- Ticket Médio ---
-    m["ticket_medio"] = m["lifestyle"] / m["month_saidas"] if m["month_saidas"] > 0 else 0.0
-
-    # --- Config do usuário ---
-    m["user_config"] = ucfg
+    m.ticket_medio = m.lifestyle / m.month_saidas if m.month_saidas > 0 else 0.0
 
     # --- Health ---
-    m["health"] = _compute_health(m)
+    m.health = _compute_health(m)
 
     # --- Comparativo ---
     prev_mo = target_month - 1 if target_month > 1 else 12
@@ -2004,46 +2042,46 @@ def compute_metrics(
             (df_prev["Categoria"] == CFG.CAT_INVESTIMENTO)
         ]["Valor"].sum()
         prev_disponivel = prev_renda - prev_lifestyle - prev_investido
-        m["d_renda"] = calc_delta(m["renda"], prev_renda)
-        m["d_lifestyle"] = calc_delta(m["lifestyle"], prev_lifestyle)
-        m["d_investido"] = calc_delta(m["investido_mes"], prev_investido)
-        m["d_disponivel"] = calc_delta(m["disponivel"], prev_disponivel)
-        m["prev_renda"] = prev_renda
-        m["prev_lifestyle"] = prev_lifestyle
-        m["prev_investido"] = prev_investido
-        m["prev_disponivel"] = prev_disponivel
+        m.d_renda = calc_delta(m.renda, prev_renda)
+        m.d_lifestyle = calc_delta(m.lifestyle, prev_lifestyle)
+        m.d_investido = calc_delta(m.investido_mes, prev_investido)
+        m.d_disponivel = calc_delta(m.disponivel, prev_disponivel)
+        m.prev_renda = prev_renda
+        m.prev_lifestyle = prev_lifestyle
+        m.prev_investido = prev_investido
+        m.prev_disponivel = prev_disponivel
 
     # --- Insights ---
-    if m["lifestyle"] > 0:
-        m["insight_ls"] = (
-            f"Impacto: <strong>{sanitize(m['top_cat'])}</strong> "
-            f"({fmt_brl(m['top_cat_val'])})<br>"
-            f"Maior gasto: <em>{sanitize(m['top_gasto_desc'])}</em> "
-            f"({fmt_brl(m['top_gasto_val'])})"
+    if m.lifestyle > 0:
+        m.insight_ls = (
+            f"Impacto: <strong>{sanitize(m.top_cat)}</strong> "
+            f"({fmt_brl(m.top_cat_val)})<br>"
+            f"Maior gasto: <em>{sanitize(m.top_gasto_desc)}</em> "
+            f"({fmt_brl(m.top_gasto_val)})"
         )
     else:
-        m["insight_ls"] = "Sem registros de consumo este mês."
+        m.insight_ls = "Sem registros de consumo este mês."
 
-    if m["renda"] > 0:
-        m["insight_renda"] = f"Gerado: <strong>{fmt_brl(m['renda'])}</strong> este mês."
+    if m.renda > 0:
+        m.insight_renda = f"Gerado: <strong>{fmt_brl(m.renda)}</strong> este mês."
     else:
-        m["insight_renda"] = "Nenhuma entrada registrada."
+        m.insight_renda = "Nenhuma entrada registrada."
 
     return m
 
 
-def _compute_health(m: dict) -> str:
+def _compute_health(m: MonthMetrics) -> str:
     """Classifica saúde financeira do mês."""
-    if m["renda"] == 0:
+    if m.renda == 0:
         return "neutral"
     score = 0
-    if m["disponivel"] > 0:
+    if m.disponivel > 0:
         score += 1
-    if m["investido_mes"] > 0:
+    if m.investido_mes > 0:
         score += 1
-    if m["renda"] > 0 and (m["lifestyle"] / m["renda"]) < 0.8:
+    if m.renda > 0 and (m.lifestyle / m.renda) < 0.8:
         score += 1
-    if abs(m["nec_delta"]) <= 15 and abs(m["des_delta"]) <= 15:
+    if abs(m.nec_delta) <= 15 and abs(m.des_delta) <= 15:
         score += 1
     if score >= 4:
         return "excellent"
@@ -2054,15 +2092,15 @@ def _compute_health(m: dict) -> str:
     return "danger"
 
 
-def compute_score(mx: dict) -> dict:
+def compute_score(mx: MonthMetrics) -> dict:
     """Calcula score financeiro de 0-100 com breakdown."""
-    ucfg: UserConfig = mx.get("user_config", UserConfig())
+    ucfg: UserConfig = mx.user_config
     details: list[tuple[str, float, int]] = []
     score = 0.0
 
     # 1. Aderência 50/30/20 (25 pts)
-    if mx["renda"] > 0:
-        avg_diff = (abs(mx["nec_delta"]) + abs(mx["des_delta"]) + abs(mx["inv_delta"])) / 3
+    if mx.renda > 0:
+        avg_diff = (abs(mx.nec_delta) + abs(mx.des_delta) + abs(mx.inv_delta)) / 3
         regra_pts = max(0.0, 25.0 - avg_diff)
         score += regra_pts
         details.append(("Regra 50/30/20", regra_pts, 25))
@@ -2070,15 +2108,15 @@ def compute_score(mx: dict) -> dict:
         details.append(("Regra 50/30/20", 0.0, 25))
 
     # 2. Taxa de Aporte (25 pts)
-    if mx["renda"] > 0:
-        aporte_pts = min(25.0, (mx["taxa_aporte"] / ucfg.meta_investimento) * 25)
+    if mx.renda > 0:
+        aporte_pts = min(25.0, (mx.taxa_aporte / ucfg.meta_investimento) * 25)
         score += aporte_pts
         details.append(("Taxa de Aporte", aporte_pts, 25))
     else:
         details.append(("Taxa de Aporte", 0.0, 25))
 
     # 3. Autonomia (25 pts)
-    autonomia = mx.get("autonomia", 0)
+    autonomia = mx.autonomia
     if autonomia >= 999:
         auto_pts = 25.0
     else:
@@ -2087,9 +2125,9 @@ def compute_score(mx: dict) -> dict:
     details.append(("Autonomia", auto_pts, 25))
 
     # 4. Saldo Mensal (25 pts)
-    if mx["renda"] > 0:
-        if mx["disponivel"] > 0:
-            ratio = mx["disponivel"] / mx["renda"]
+    if mx.renda > 0:
+        if mx.disponivel > 0:
+            ratio = mx.disponivel / mx.renda
             saldo_pts = min(25.0, ratio * 100)
         else:
             saldo_pts = 0.0
@@ -2303,7 +2341,6 @@ def compute_renda_evolution(
         data.append(entry)
 
     return data
-
 
 def compute_cashflow_forecast(
     df_trans: pd.DataFrame,
@@ -2528,7 +2565,7 @@ def render_alerts(alerts: list[dict]) -> None:
     st.markdown(html, unsafe_allow_html=True)
 
 
-def render_projection(proj: dict | None, mx: dict) -> None:
+def render_projection(proj: dict | None, mx: MonthMetrics) -> None:
     """Renderiza barra de projeção de fim de mês."""
     if proj is None:
         return
@@ -2548,8 +2585,8 @@ def render_projection(proj: dict | None, mx: dict) -> None:
     time_pct = proj["progress_pct"]
 
     main_text = f"Projeção: {fmt_brl(proj['projected_lifestyle'])}"
-    if mx["renda"] > 0:
-        remaining = mx["renda"] - proj["projected_lifestyle"]
+    if mx.renda > 0:
+        remaining = mx.renda - proj["projected_lifestyle"]
         if remaining >= 0:
             sub_text = f"Sobra projetada: {fmt_brl(remaining)} | Ritmo: {fmt_brl(proj['daily_rate'])}/dia"
         else:
@@ -2572,9 +2609,9 @@ def render_projection(proj: dict | None, mx: dict) -> None:
             <div class="projection-marker" style="left:{time_pct:.0f}%;"></div>
         </div>
         <div class="projection-labels">
-            <span>Gasto: {fmt_brl(mx['lifestyle'])}</span>
+            <span>Gasto: {fmt_brl(mx.lifestyle)}</span>
             <span style="color:{proj_color};">→ {fmt_brl(proj['projected_lifestyle'])}</span>
-            <span>Renda: {fmt_brl(mx['renda'])}</span>
+            <span>Renda: {fmt_brl(mx.renda)}</span>
         </div>
         <div class="projection-main" style="color:{proj_color};">{main_text}</div>
         <div class="projection-sub">{sub_text}</div>
@@ -2626,14 +2663,14 @@ def render_intel(title: str, body: str) -> None:
     """, unsafe_allow_html=True)
 
 
-def render_regra_503020(mx: dict) -> None:
+def render_regra_503020(mx: MonthMetrics) -> None:
     """Renderiza barra e badges da regra 50/30/20."""
-    total = mx["nec_pct"] + mx["des_pct"] + mx["inv_pct"]
+    total = mx.nec_pct + mx.des_pct + mx.inv_pct
     if total == 0:
         n_w, d_w, i_w = 33, 33, 34
     else:
-        n_w = max(1, int(mx["nec_pct"] / total * 100))
-        d_w = max(1, int(mx["des_pct"] / total * 100))
+        n_w = max(1, int(mx.nec_pct / total * 100))
+        d_w = max(1, int(mx.des_pct / total * 100))
         i_w = max(1, 100 - n_w - d_w)
 
     def _badge(label: str, pct: float, delta: float, meta: int) -> str:
@@ -2650,10 +2687,10 @@ def render_regra_503020(mx: dict) -> None:
             f'</span>'
         )
 
-    ucfg: UserConfig = mx.get("user_config", UserConfig())
-    b_nec = _badge("Necessidades", mx["nec_pct"], mx["nec_delta"], ucfg.meta_necessidades)
-    b_des = _badge("Desejos", mx["des_pct"], mx["des_delta"], ucfg.meta_desejos)
-    b_inv = _badge("Investimento", mx["inv_pct"], mx["inv_delta"], ucfg.meta_investimento)
+    ucfg: UserConfig = mx.user_config
+    b_nec = _badge("Necessidades", mx.nec_pct, mx.nec_delta, ucfg.meta_necessidades)
+    b_des = _badge("Desejos", mx.des_pct, mx.des_delta, ucfg.meta_desejos)
+    b_inv = _badge("Investimento", mx.inv_pct, mx.inv_delta, ucfg.meta_investimento)
 
     st.markdown(f"""
     <div class="t-panel" style="padding: 12px 16px;">
@@ -2690,12 +2727,12 @@ def render_cat_breakdown(cat_dict: dict) -> None:
     st.markdown(html, unsafe_allow_html=True)
 
 
-def render_hist_summary(mx: dict) -> None:
+def render_hist_summary(mx: MonthMetrics) -> None:
     """Renderiza resumo do histórico mensal."""
-    entradas = mx["renda"]
-    saidas = mx["lifestyle"]
-    investido = mx["investido_mes"]
-    saldo = mx["disponivel"]
+    entradas = mx.renda
+    saidas = mx.lifestyle
+    investido = mx.investido_mes
+    saldo = mx.disponivel
     saldo_color = "#00FFCC" if saldo >= 0 else "#FF4444"
     st.markdown(f"""
     <div class="hist-summary">
@@ -2703,19 +2740,19 @@ def render_hist_summary(mx: dict) -> None:
             <div class="hist-dot" style="background:#00FFCC;"></div>
             <span style="color:#888;">Entradas</span>
             <span style="color:#F0F0F0;">{fmt_brl(entradas)}</span>
-            <span style="color:#555;">({mx['month_entradas']})</span>
+            <span style="color:#555;">({mx.month_entradas})</span>
         </div>
         <div class="hist-summary-item">
             <div class="hist-dot" style="background:#FF4444;"></div>
             <span style="color:#888;">Saídas</span>
             <span style="color:#F0F0F0;">{fmt_brl(saidas)}</span>
-            <span style="color:#555;">({mx['month_saidas']})</span>
+            <span style="color:#555;">({mx.month_saidas})</span>
         </div>
         <div class="hist-summary-item">
             <div class="hist-dot" style="background:#FFAA00;"></div>
             <span style="color:#888;">Investido</span>
             <span style="color:#F0F0F0;">{fmt_brl(investido)}</span>
-            <span style="color:#555;">({mx['month_investimentos']})</span>
+            <span style="color:#555;">({mx.month_investimentos})</span>
         </div>
         <div class="hist-summary-item">
             <div class="hist-dot" style="background:{saldo_color};"></div>
@@ -2984,9 +3021,9 @@ def render_annual_strip(annual: dict | None) -> None:
     </div>
     """, unsafe_allow_html=True)
 
-def render_prev_comparison(mx: dict, sel_mo: int, sel_yr: int) -> None:
+def render_prev_comparison(mx: MonthMetrics, sel_mo: int, sel_yr: int) -> None:
     """Renderiza comparativo compacto com mês anterior."""
-    has_prev = mx["prev_renda"] > 0 or mx["prev_lifestyle"] > 0 or mx["prev_investido"] > 0
+    has_prev = mx.prev_renda > 0 or mx.prev_lifestyle > 0 or mx.prev_investido > 0
     if not has_prev:
         return
 
@@ -3027,10 +3064,10 @@ def render_prev_comparison(mx: dict, sel_mo: int, sel_yr: int) -> None:
     )
 
     rows = (
-        _row("Renda", mx["prev_renda"], mx["renda"], mx["d_renda"])
-        + _row("Gastos", mx["prev_lifestyle"], mx["lifestyle"], mx["d_lifestyle"], invert=True)
-        + _row("Investido", mx["prev_investido"], mx["investido_mes"], mx["d_investido"])
-        + _row("Saldo", mx["prev_disponivel"], mx["disponivel"], mx["d_disponivel"])
+        _row("Renda", mx.prev_renda, mx.renda, mx.d_renda)
+        + _row("Gastos", mx.prev_lifestyle, mx.lifestyle, mx.d_lifestyle, invert=True)
+        + _row("Investido", mx.prev_investido, mx.investido_mes, mx.d_investido)
+        + _row("Saldo", mx.prev_disponivel, mx.disponivel, mx.d_disponivel)
     )
 
     html = (
@@ -3042,13 +3079,13 @@ def render_prev_comparison(mx: dict, sel_mo: int, sel_yr: int) -> None:
     st.markdown(html, unsafe_allow_html=True)
 
 
-def render_aporte_meta(mx: dict) -> None:
+def render_aporte_meta(mx: MonthMetrics) -> None:
     """Renderiza barra de progresso da meta de investimento."""
-    if mx["renda"] <= 0:
+    if mx.renda <= 0:
         return
-    ucfg: UserConfig = mx.get("user_config", UserConfig())
-    meta_valor = mx["renda"] * (ucfg.meta_investimento / 100)
-    investido = mx["investido_mes"]
+    ucfg: UserConfig = mx.user_config
+    meta_valor = mx.renda * (ucfg.meta_investimento / 100)
+    investido = mx.investido_mes
     pct = (investido / meta_valor * 100) if meta_valor > 0 else 0
     fill_pct = min(100, pct)
 
@@ -3696,13 +3733,13 @@ def _df_equals_safe(df1: pd.DataFrame, df2: pd.DataFrame) -> bool:
 
 
 def _render_historico(
-    mx: dict,
+    mx: MonthMetrics,
     user: str,  # [FIX B2] Removido df_trans_full (não era usado)
     sel_mo: int,
     sel_yr: int,
 ) -> None:
     """Renderiza aba de histórico com busca, export e edição."""
-    df_hist = mx["df_month"].copy()
+    df_hist = mx.df_month.copy()
     month_label = fmt_month_year(sel_mo, sel_yr)
 
     if df_hist.empty:
@@ -4114,8 +4151,8 @@ def main() -> None:
 
     # --- Orçamento ---
     df_orcamentos = load_orcamentos()
-    budget_data = compute_budget(df_orcamentos, mx["cat_breakdown"], user)
-    mx["budget_data"] = budget_data
+    budget_data = compute_budget(df_orcamentos, mx.cat_breakdown, user)
+    mx.budget_data = budget_data
 
     # --- Alertas ---
     alerts = compute_alerts(mx, sel_mo, sel_yr, projection, n_pendentes=len(pendentes))
@@ -4134,16 +4171,16 @@ def main() -> None:
     # --- Divisão Casal ---
     divisao_casal = None
     if user == "Casal":
-        divisao_casal = compute_divisao_casal(mx["df_month"])
+        divisao_casal = compute_divisao_casal(mx.df_month)
 
     month_label = fmt_month_year(sel_mo, sel_yr)
-    has_data = mx["renda"] > 0 or mx["lifestyle"] > 0 or mx["investido_mes"] > 0
+    has_data = mx.renda > 0 or mx.lifestyle > 0 or mx.investido_mes > 0
 
     # ===== HERO =====
-    render_autonomia(mx["autonomia"], mx["sobrevivencia"], user_config)
+    render_autonomia(mx.autonomia, mx.sobrevivencia, user_config)
 
     # ===== HEALTH + ALERTAS =====
-    render_health_badge(mx["health"], month_label, mx["month_tx_count"])
+    render_health_badge(mx.health, month_label, mx.month_tx_count)
     render_alerts(alerts)
 
     # ===== BANNER RECORRENTES PENDENTES =====
@@ -4160,22 +4197,22 @@ def main() -> None:
         k3, k4 = st.columns(2)
         with k1:
             render_kpi(
-                "Fluxo Mensal", fmt_brl(mx["disponivel"]),
-                "Entradas − Saídas − Aportes", mx["d_disponivel"]
+                "Fluxo Mensal", fmt_brl(mx.disponivel),
+                "Entradas − Saídas − Aportes", mx.d_disponivel
             )
         with k2:
             render_kpi(
-                "Renda", fmt_brl(mx["renda"]),
-                "Entradas do mês", mx["d_renda"]
+                "Renda", fmt_brl(mx.renda),
+                "Entradas do mês", mx.d_renda
             )
         with k3:
             render_kpi(
-                "Investido", fmt_brl(mx["investido_mes"]),
-                f"Taxa de Aporte: {mx['taxa_aporte']:.1f}%", mx["d_investido"]
+                "Investido", fmt_brl(mx.investido_mes),
+                f"Taxa de Aporte: {mx.taxa_aporte:.1f}%", mx.d_investido
             )
         with k4:
             render_kpi(
-                "Reserva Total", fmt_brl(mx["sobrevivencia"]),
+                "Reserva Total", fmt_brl(mx.sobrevivencia),
                 "Patrimônio acumulado"
             )
 
@@ -4186,7 +4223,7 @@ def main() -> None:
         with st.expander("📊 Análise Detalhada", expanded=False):
             render_score(score_data)
             if user == "Casal":
-                render_split_casal(mx.get("split_gastos", {}), mx.get("split_renda", {}))
+                render_split_casal(mx.split_gastos, mx.split_renda)
                 render_divisao_casal(divisao_casal)
             render_regra_503020(mx)
             render_prev_comparison(mx, sel_mo, sel_yr)
@@ -4233,7 +4270,7 @@ def main() -> None:
                 if not ok:
                     st.toast(f"⚠ {err}")
                 else:
-                    is_dup = check_duplicate(mx["df_month"], q_desc.strip(), q_val, q_date)
+                    is_dup = check_duplicate(mx.df_month, q_desc.strip(), q_val, q_date)
                     if save_entry(entry, "Transacoes"):
                         if is_dup:
                             st.toast(f"⚠ Possível duplicata: {q_desc.strip()} — {fmt_brl(q_val)}")
@@ -4251,12 +4288,12 @@ def main() -> None:
         with col_form:
             render_intel(
                 "Consumo Mensal",
-                f"Total: <strong>{fmt_brl(mx['lifestyle'])}</strong>"
+                f"Total: <strong>{fmt_brl(mx.lifestyle)}</strong>"
             )
             if budget_data:
                 render_budget_bars(budget_data)
-            if mx["cat_breakdown"]:
-                render_cat_breakdown(mx["cat_breakdown"])
+            if mx.cat_breakdown:
+                render_cat_breakdown(mx.cat_breakdown)
             transaction_form(
                 form_key="f_lifestyle",
                 tipo=CFG.TIPO_SAIDA,
@@ -4266,19 +4303,19 @@ def main() -> None:
                 default_step=10.0,
                 sel_mo=sel_mo, sel_yr=sel_yr,
                 default_resp=user,
-                df_month=mx["df_month"],
+                df_month=mx.df_month,
             )
-            render_recent_context(mx["df_month"], CFG.TIPO_SAIDA)
+            render_recent_context(mx.df_month, CFG.TIPO_SAIDA)
         with col_intel:
-            render_intel("Intel — Gastos", mx["insight_ls"])
+            render_intel("Intel — Gastos", mx.insight_ls)
             evo_data = compute_evolution(df_trans, user, sel_mo, sel_yr)
             render_evolution_chart(evo_data)
 
             # --- Radiografia ---
             render_top_gastos(
-                mx.get("top5_gastos", []),
-                mx.get("ticket_medio", 0),
-                mx.get("split_gastos", {}),
+                mx.top5_gastos,
+                mx.ticket_medio,
+                mx.split_gastos,
             )
 
             # --- Gestão de Orçamentos ---
@@ -4348,10 +4385,10 @@ def main() -> None:
         with col_form:
             render_intel(
                 "Entradas do Mês",
-                f"Total: <strong>{fmt_brl(mx['renda'])}</strong>"
+                f"Total: <strong>{fmt_brl(mx.renda)}</strong>"
             )
-            if mx["renda_breakdown"]:
-                render_cat_breakdown(mx["renda_breakdown"])
+            if mx.renda_breakdown:
+                render_cat_breakdown(mx.renda_breakdown)
             transaction_form(
                 form_key="f_renda",
                 tipo=CFG.TIPO_ENTRADA,
@@ -4361,20 +4398,20 @@ def main() -> None:
                 default_step=100.0,
                 sel_mo=sel_mo, sel_yr=sel_yr,
                 default_resp=user,
-                df_month=mx["df_month"],
+                df_month=mx.df_month,
             )
-            render_recent_context(mx["df_month"], CFG.TIPO_ENTRADA)
+            render_recent_context(mx.df_month, CFG.TIPO_ENTRADA)
         with col_intel:
-            render_intel("Intel — Renda", mx["insight_renda"])
+            render_intel("Intel — Renda", mx.insight_renda)
             renda_evo = compute_renda_evolution(df_trans, user, sel_mo, sel_yr)
             render_renda_chart(renda_evo)
-            if mx["renda_breakdown"] and len(mx["renda_breakdown"]) > 1:
-                principal = list(mx["renda_breakdown"].keys())[0]
-                principal_val = list(mx["renda_breakdown"].values())[0]
-                principal_pct = (principal_val / mx["renda"] * 100) if mx["renda"] > 0 else 0
+            if mx.renda_breakdown and len(mx.renda_breakdown) > 1:
+                principal = list(mx.renda_breakdown.keys())[0]
+                principal_val = list(mx.renda_breakdown.values())[0]
+                principal_pct = (principal_val / mx.renda * 100) if mx.renda > 0 else 0
                 render_intel(
                     "Composição",
-                    f"{len(mx['renda_breakdown'])} fontes de renda · "
+                    f"{len(mx.renda_breakdown)} fontes de renda · "
                     f"Principal: <strong>{sanitize(principal)}</strong> ({principal_pct:.0f}%)"
                 )
 
@@ -4384,10 +4421,10 @@ def main() -> None:
 
         render_intel(
             "Patrimônio & Investimentos",
-            f"Reserva Total: <strong>{fmt_brl(mx['sobrevivencia'])}</strong> · "
-            f"Autonomia: <strong>{mx['autonomia']:.1f} meses</strong><br>"
-            f"Investido (mês): <strong>{fmt_brl(mx['investido_mes'])}</strong> · "
-            f"Acumulado: <strong>{fmt_brl(mx['investido_total'])}</strong> · "
+            f"Reserva Total: <strong>{fmt_brl(mx.sobrevivencia)}</strong> · "
+            f"Autonomia: <strong>{mx.autonomia:.1f} meses</strong><br>"
+            f"Investido (mês): <strong>{fmt_brl(mx.investido_mes)}</strong> · "
+            f"Acumulado: <strong>{fmt_brl(mx.investido_total)}</strong> · "
             f"Base patrimonial: <strong>{fmt_brl(total_pat)}</strong>"
         )
 
@@ -4398,13 +4435,13 @@ def main() -> None:
                 "📥 Registrar Aporte",
                 "Investimentos, aportes mensais, compras de ativos"
             )
-            wealth_form(sel_mo=sel_mo, sel_yr=sel_yr, default_resp=user, df_month=mx["df_month"])
+            wealth_form(sel_mo=sel_mo, sel_yr=sel_yr, default_resp=user, df_month=mx.df_month)
 
             # Contexto: últimos aportes do mês
-            df_inv_ctx = mx["df_month"][
-                (mx["df_month"]["Tipo"] == CFG.TIPO_SAIDA) &
-                (mx["df_month"]["Categoria"] == CFG.CAT_INVESTIMENTO)
-            ] if not mx["df_month"].empty else pd.DataFrame()
+            df_inv_ctx = mx.df_month[
+                (mx.df_month["Tipo"] == CFG.TIPO_SAIDA) &
+                (mx.df_month["Categoria"] == CFG.CAT_INVESTIMENTO)
+            ] if not mx.df_month.empty else pd.DataFrame()
             if not df_inv_ctx.empty:
                 df_inv_ctx = df_inv_ctx.sort_values("Data", ascending=False).head(3)
                 ctx_html = '<div style="margin-top:8px;padding:8px 0;border-top:1px solid #111;">'
@@ -4775,17 +4812,17 @@ def main() -> None:
             st.markdown(current_html, unsafe_allow_html=True)
 
             # Impacto simulado se renda existe
-            if mx["renda"] > 0:
-                sim_nec = mx["renda"] * user_config.meta_necessidades / 100
-                sim_des = mx["renda"] * user_config.meta_desejos / 100
-                sim_inv = mx["renda"] * user_config.meta_investimento / 100
+            if mx.renda > 0:
+                sim_nec = mx.renda * user_config.meta_necessidades / 100
+                sim_des = mx.renda * user_config.meta_desejos / 100
+                sim_inv = mx.renda * user_config.meta_investimento / 100
 
                 sim_html = (
                     f'<div class="intel-box">'
                     f'<div class="intel-title">◆ Simulação com Renda Atual</div>'
                     f'<div style="font-family:JetBrains Mono,monospace;font-size:0.62rem;'
                     f'color:#888;">'
-                    f'Renda: {fmt_brl(mx["renda"])}<br>'
+                    f'Renda: {fmt_brl(mx.renda)}<br>'
                     f'→ Necessidades ({user_config.meta_necessidades}%): '
                     f'<strong style="color:#F0F0F0;">{fmt_brl(sim_nec)}</strong><br>'
                     f'→ Desejos ({user_config.meta_desejos}%): '
