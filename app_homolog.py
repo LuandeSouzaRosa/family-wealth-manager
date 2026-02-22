@@ -1769,18 +1769,18 @@ def compute_alerts(
         alerts.append({
             "level": "ok",
             "icon": "✦",
-            "msg": f"Mês positivo — {mx['taxa_aporte']:.0f}% investido, saldo de {fmt_brl(mx['disponivel'])}",
+            "msg": f"Mês positivo — {mx.taxa_aporte:.0f}% investido, saldo de {fmt_brl(mx.disponivel)}",
         })
 
     if mx.renda > 0 and mx.lifestyle > mx.renda:
-        pct = (mx["lifestyle"] / mx["renda"]) * 100
+        pct = (mx.lifestyle / mx.renda) * 100
         alerts.append({
             "level": "danger",
             "icon": "▲",
             "msg": f"Gastos em {pct:.0f}% da renda — mês no vermelho",
         })
     elif mx.renda > 0 and mx.lifestyle > mx.renda * 0.8:
-        pct = (mx["lifestyle"] / mx["renda"]) * 100
+        pct = (mx.lifestyle / mx.renda) * 100
         alerts.append({
             "level": "danger",
             "icon": "▲",
@@ -2342,6 +2342,75 @@ def compute_renda_evolution(
 
     return data
 
+def compute_patrimonio_evolution(
+    df_trans: pd.DataFrame,
+    df_assets: pd.DataFrame,
+    user_filter: str,
+    ref_month: int,
+    ref_year: int,
+    months_back: int = CFG.MESES_EVOLUCAO,
+) -> list[dict]:
+    """Calcula evolução patrimonial mês a mês.
+
+    Patrimônio em cada mês = Base patrimonial (ativos estáticos)
+    + Investimentos acumulados até aquele mês.
+    Não requer coluna Data no Patrimônio — usa dados já existentes.
+    """
+    df = filter_by_user(df_trans, user_filter)
+    df_a = filter_by_user(df_assets, user_filter, include_shared=True)
+    base_pat = df_a["Valor"].sum() if not df_a.empty else 0.0
+
+    if df.empty and base_pat == 0:
+        return []
+
+    # Construir lista de períodos
+    periods = []
+    mo, yr = ref_month, ref_year
+    for _ in range(months_back - 1):
+        mo -= 1
+        if mo == 0:
+            mo, yr = 12, yr - 1
+    for _ in range(months_back):
+        periods.append((mo, yr))
+        mo += 1
+        if mo > 12:
+            mo, yr = 1, yr + 1
+
+    # Investimentos acumulados
+    df_inv = df[
+        (df["Tipo"] == CFG.TIPO_SAIDA) &
+        (df["Categoria"] == CFG.CAT_INVESTIMENTO)
+    ].copy() if not df.empty else pd.DataFrame()
+
+    data = []
+    for p_mo, p_yr in periods:
+        eom = end_of_month(p_yr, p_mo)
+        if not df_inv.empty:
+            inv_acum = df_inv[df_inv["Data"] <= eom]["Valor"].sum()
+        else:
+            inv_acum = 0.0
+
+        patrimonio_total = base_pat + inv_acum
+
+        # Gastos do mês (para calcular variação)
+        df_mes = filter_by_month(df, p_mo, p_yr) if not df.empty else pd.DataFrame()
+        inv_mes = 0.0
+        if not df_mes.empty:
+            inv_mes = df_mes[
+                (df_mes["Tipo"] == CFG.TIPO_SAIDA) &
+                (df_mes["Categoria"] == CFG.CAT_INVESTIMENTO)
+            ]["Valor"].sum()
+
+        data.append({
+            "label": f"{MESES_PT[p_mo]}/{p_yr}",
+            "patrimonio": patrimonio_total,
+            "base": base_pat,
+            "investido_acum": inv_acum,
+            "aporte_mes": inv_mes,
+        })
+
+    return data
+
 def compute_cashflow_forecast(
     df_trans: pd.DataFrame,
     df_recorrentes: pd.DataFrame,
@@ -2409,9 +2478,10 @@ def compute_cashflow_forecast(
     if months_with_data == 0 and renda_fixa == 0 and gastos_fixos == 0 and inv_fixo == 0:
         return None
 
-    avg_renda_var = renda_var_total / months_with_data
-    avg_gastos_var = gastos_var_total / months_with_data
-    avg_inv_var = inv_var_total / months_with_data
+    divisor = max(1, months_with_data)
+    avg_renda_var = renda_var_total / divisor
+    avg_gastos_var = gastos_var_total / divisor
+    avg_inv_var = inv_var_total / divisor
 
     # --- Projetar próximos N meses ---
     forecast: list[dict] = []
@@ -3410,6 +3480,72 @@ def render_renda_chart(renda_data: list[dict]) -> None:
                 unsafe_allow_html=True,
             )
 
+def render_patrimonio_chart(pat_data: list[dict]) -> None:
+    """Gráfico de evolução patrimonial: área + barras de aportes."""
+    if not pat_data:
+        render_intel("Evolução Patrimonial", "Dados insuficientes para gráfico.")
+        return
+
+    labels = [d["label"] for d in pat_data]
+    patrimonio = [d["patrimonio"] for d in pat_data]
+    aportes = [d["aporte_mes"] for d in pat_data]
+
+    fig = go.Figure()
+
+    # Área: patrimônio total
+    fig.add_trace(go.Scatter(
+        name="Patrimônio",
+        x=labels, y=patrimonio,
+        mode="lines+markers",
+        fill="tozeroy",
+        line=dict(color="#00FFCC", width=2),
+        marker=dict(size=5, color="#00FFCC"),
+        fillcolor="rgba(0,255,204,0.08)",
+    ))
+
+    # Barras: aportes mensais
+    fig.add_trace(go.Bar(
+        name="Aporte/mês",
+        x=labels, y=aportes,
+        marker_color="rgba(255,170,0,0.6)",
+    ))
+
+    fig.update_layout(
+        paper_bgcolor="#000000",
+        plot_bgcolor="#000000",
+        font=dict(family="JetBrains Mono, monospace", color="#888", size=11),
+        legend=dict(
+            orientation="h", yanchor="bottom", y=1.02,
+            xanchor="center", x=0.5, font=dict(size=9),
+        ),
+        margin=dict(l=0, r=0, t=30, b=0),
+        height=280,
+        xaxis=dict(gridcolor="#111", showline=False),
+        yaxis=dict(gridcolor="#111", showline=False, tickformat=",.0f"),
+        barmode="overlay",
+    )
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+
+    # Variação
+    if len(pat_data) >= 2:
+        curr = pat_data[-1]["patrimonio"]
+        prev = pat_data[-2]["patrimonio"]
+        diff = curr - prev
+        if diff > 0:
+            var_text = f"▲ Patrimônio +{fmt_brl(diff)} vs mês anterior"
+            var_color = "#00FFCC"
+        elif diff < 0:
+            var_text = f"▼ Patrimônio {fmt_brl(diff)} vs mês anterior"
+            var_color = "#FF4444"
+        else:
+            var_text = "● Patrimônio estável vs mês anterior"
+            var_color = "#555"
+        st.markdown(
+            f'<div style="font-family:JetBrains Mono,monospace;font-size:0.65rem;'
+            f'color:{var_color};padding:4px 0;letter-spacing:0.05em;">'
+            f'{var_text}</div>',
+            unsafe_allow_html=True,
+        )
 
 def render_cashflow_forecast(forecast: list[dict] | None) -> None:
     """Renderiza tabela de forecast de cashflow para próximos meses."""
@@ -4168,6 +4304,11 @@ def main() -> None:
         df_trans, df_recorrentes, user, sel_mo, sel_yr,
     )
 
+    # --- Evolução Patrimonial ---
+    pat_evolution = compute_patrimonio_evolution(
+        df_trans, df_assets, user, sel_mo, sel_yr,
+    )
+
     # --- Divisão Casal ---
     divisao_casal = None
     if user == "Casal":
@@ -4473,6 +4614,9 @@ def main() -> None:
             patrimonio_form(default_resp=user)
 
         with col_right:
+            # --- Gráfico Evolução Patrimonial ---
+            render_patrimonio_chart(pat_evolution)
+
             render_intel(
                 "Ativos Registrados",
                 f"{len(df_assets_view)} itens no patrimônio base"
