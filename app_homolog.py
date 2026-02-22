@@ -58,6 +58,67 @@ CFG = Config()
 
 
 @dataclass
+class UserConfig:
+    """Configurações personalizáveis do usuário."""
+    meta_necessidades: int = CFG.META_NECESSIDADES
+    meta_desejos: int = CFG.META_DESEJOS
+    meta_investimento: int = CFG.META_INVESTIMENTO
+    autonomia_alvo: int = CFG.AUTONOMIA_OK
+    autonomia_warn: int = CFG.AUTONOMIA_WARN
+    auto_gerar_recorrentes: bool = False
+
+    @classmethod
+    def from_df(cls, df: pd.DataFrame, responsavel: str = "Casal") -> "UserConfig":
+        """Carrega config do DataFrame. Fallback: defaults do CFG."""
+        cfg = cls()
+        if df.empty:
+            return cfg
+
+        df_user = df[df["Responsavel"].str.strip() == responsavel]
+        if df_user.empty:
+            df_user = df[df["Responsavel"].str.strip() == "Casal"]
+        if df_user.empty:
+            return cfg
+
+        kv: dict[str, str] = {}
+        for _, row in df_user.iterrows():
+            key = str(row.get("Chave", "")).strip().lower()
+            val = str(row.get("Valor", "")).strip()
+            if key:
+                kv[key] = val
+
+        def _int(k: str, default: int) -> int:
+            try:
+                return int(float(kv[k]))
+            except (KeyError, ValueError, TypeError):
+                return default
+
+        def _bool(k: str, default: bool) -> bool:
+            try:
+                return kv[k].lower() in ("true", "1", "sim", "yes")
+            except (KeyError, ValueError):
+                return default
+
+        cfg.meta_necessidades = _int("meta_necessidades", cfg.meta_necessidades)
+        cfg.meta_desejos = _int("meta_desejos", cfg.meta_desejos)
+        cfg.meta_investimento = _int("meta_investimento", cfg.meta_investimento)
+        cfg.autonomia_alvo = _int("autonomia_alvo", cfg.autonomia_alvo)
+        cfg.auto_gerar_recorrentes = _bool("auto_gerar_recorrentes", cfg.auto_gerar_recorrentes)
+
+        # Validar: metas devem somar 100
+        total = cfg.meta_necessidades + cfg.meta_desejos + cfg.meta_investimento
+        if total != 100:
+            cfg.meta_necessidades = CFG.META_NECESSIDADES
+            cfg.meta_desejos = CFG.META_DESEJOS
+            cfg.meta_investimento = CFG.META_INVESTIMENTO
+
+        # Derivar warn como metade do alvo
+        cfg.autonomia_warn = max(1, cfg.autonomia_alvo // 2)
+
+        return cfg
+
+
+@dataclass
 class MonthMetrics:
     """Métricas financeiras computadas para um mês/usuário."""
     # --- Core ---
@@ -120,67 +181,6 @@ class MonthMetrics:
     health: str = "neutral"
     budget_data: list = field(default_factory=list)
     user_config: UserConfig = field(default_factory=UserConfig)
-
-
-@dataclass
-class UserConfig:
-    """Configurações personalizáveis do usuário."""
-    meta_necessidades: int = CFG.META_NECESSIDADES
-    meta_desejos: int = CFG.META_DESEJOS
-    meta_investimento: int = CFG.META_INVESTIMENTO
-    autonomia_alvo: int = CFG.AUTONOMIA_OK
-    autonomia_warn: int = CFG.AUTONOMIA_WARN
-    auto_gerar_recorrentes: bool = False
-
-    @classmethod
-    def from_df(cls, df: pd.DataFrame, responsavel: str = "Casal") -> "UserConfig":
-        """Carrega config do DataFrame. Fallback: defaults do CFG."""
-        cfg = cls()
-        if df.empty:
-            return cfg
-
-        df_user = df[df["Responsavel"].str.strip() == responsavel]
-        if df_user.empty:
-            df_user = df[df["Responsavel"].str.strip() == "Casal"]
-        if df_user.empty:
-            return cfg
-
-        kv: dict[str, str] = {}
-        for _, row in df_user.iterrows():
-            key = str(row.get("Chave", "")).strip().lower()
-            val = str(row.get("Valor", "")).strip()
-            if key:
-                kv[key] = val
-
-        def _int(k: str, default: int) -> int:
-            try:
-                return int(float(kv[k]))
-            except (KeyError, ValueError, TypeError):
-                return default
-
-        def _bool(k: str, default: bool) -> bool:
-            try:
-                return kv[k].lower() in ("true", "1", "sim", "yes")
-            except (KeyError, ValueError):
-                return default
-
-        cfg.meta_necessidades = _int("meta_necessidades", cfg.meta_necessidades)
-        cfg.meta_desejos = _int("meta_desejos", cfg.meta_desejos)
-        cfg.meta_investimento = _int("meta_investimento", cfg.meta_investimento)
-        cfg.autonomia_alvo = _int("autonomia_alvo", cfg.autonomia_alvo)
-        cfg.auto_gerar_recorrentes = _bool("auto_gerar_recorrentes", cfg.auto_gerar_recorrentes)
-
-        # Validar: metas devem somar 100
-        total = cfg.meta_necessidades + cfg.meta_desejos + cfg.meta_investimento
-        if total != 100:
-            cfg.meta_necessidades = CFG.META_NECESSIDADES
-            cfg.meta_desejos = CFG.META_DESEJOS
-            cfg.meta_investimento = CFG.META_INVESTIMENTO
-
-        # Derivar warn como metade do alvo
-        cfg.autonomia_warn = max(1, cfg.autonomia_alvo // 2)
-
-        return cfg
 
 
 logging.basicConfig(
