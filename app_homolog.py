@@ -19,6 +19,7 @@ import uuid
 
 @dataclass(frozen=True)
 class Config:
+    VERSION: str = "7.0"
     NECESSIDADES: tuple = ("Moradia", "Alimentação", "Saúde", "Transporte")
     DESEJOS: tuple = ("Lazer", "Assinaturas", "Educação", "Outros")
     CATEGORIAS_SAIDA: tuple = (
@@ -33,11 +34,12 @@ class Config:
     )
     RESPONSAVEIS: tuple = ("Casal", "Luan", "Luana")
     TIPOS: tuple = ("Entrada", "Saída")
-    COLS_TRANSACAO: tuple = ("Id", "Data", "Descricao", "Valor", "Categoria", "Tipo", "Responsavel", "Origem")
+    COLS_TRANSACAO: tuple = ("Id", "Data", "Descricao", "Valor", "Categoria", "Tipo", "Responsavel", "Origem", "Tag")
     COLS_PATRIMONIO: tuple = ("Item", "Valor", "Responsavel")
     COLS_RECORRENTE: tuple = ("Descricao", "Valor", "Categoria", "Tipo", "Responsavel", "DiaVencimento", "Ativo")
     COLS_ORCAMENTO: tuple = ("Categoria", "Limite", "Responsavel")
     COLS_CONFIG: tuple = ("Chave", "Valor", "Responsavel")
+    COLS_AUDIT: tuple = ("Timestamp", "Usuario", "Acao", "Planilha", "Detalhes")
     META_NECESSIDADES: int = 50
     META_DESEJOS: int = 30
     META_INVESTIMENTO: int = 20
@@ -146,6 +148,9 @@ class MonthMetrics:
     top_gasto_val: float = 0.0
     top5_gastos: list = field(default_factory=list)
     ticket_medio: float = 0.0
+    dia_mais_caro: int = 0
+    dia_mais_caro_val: float = 0.0
+    dia_mais_caro_count: int = 0
     
     # --- DataFrames ---
     df_user: pd.DataFrame = field(default_factory=pd.DataFrame)
@@ -218,9 +223,13 @@ st.set_page_config(
 # ==============================================================================
 
 def inject_css() -> None:
+    st.markdown(
+        '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800'
+        '&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">',
+        unsafe_allow_html=True,
+    )
     st.markdown("""
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap');
 
         #MainMenu, footer, header { visibility: hidden; }
         .stDeployButton { display: none; }
@@ -1313,6 +1322,10 @@ def load_data() -> tuple[pd.DataFrame, pd.DataFrame]:
             if "Origem" not in df_trans.columns:
                 df_trans["Origem"] = CFG.ORIGEM_MANUAL
             df_trans["Origem"] = df_trans["Origem"].fillna(CFG.ORIGEM_MANUAL)
+            # Backfill Tag para registros existentes sem Tag
+            if "Tag" not in df_trans.columns:
+                df_trans["Tag"] = ""
+            df_trans["Tag"] = df_trans["Tag"].fillna("").astype(str).str.strip()
             # Backfill IDs para registros existentes sem Id
             if "Id" not in df_trans.columns:
                 df_trans["Id"] = ""
@@ -1437,12 +1450,12 @@ def save_config(user_config: UserConfig, responsavel: str) -> bool:
         conn.update(worksheet="Configuracoes", data=df_updated)
         st.cache_data.clear()
         logger.info(f"save_config OK [{responsavel}]")
+        _log_audit("CONFIG", "Configuracoes", f"Perfil: {responsavel}")
         return True
     except Exception as e:
         logger.error(f"save_config failed: {e}")
         st.error(f"Erro ao salvar configurações: {e}")
         return False
-
 
 def _serialize_for_sheet(df: pd.DataFrame) -> pd.DataFrame:
     """Serializa DataFrame para gravação na planilha."""
@@ -1457,8 +1470,36 @@ def _serialize_for_sheet(df: pd.DataFrame) -> pd.DataFrame:
         )
     return df_out
 
+def _log_audit(action: str, worksheet: str, details: str = "") -> None:
+    """Registra ação no audit log (fire-and-forget)."""
+    try:
+        conn = get_conn()
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        usuario = st.session_state.get("auth_user", "anônimo")
 
-def save_entry(data: dict, worksheet: str) -> bool:
+        try:
+            df_log = conn.read(worksheet="AuditLog")
+            df_log = df_log.dropna(how="all")
+        except Exception:
+            df_log = pd.DataFrame(columns=list(CFG.COLS_AUDIT))
+
+        new_row = pd.DataFrame([{
+            "Timestamp": timestamp,
+            "Usuario": usuario,
+            "Acao": action,
+            "Planilha": worksheet,
+            "Detalhes": str(details)[:200],
+        }])
+
+        df_updated = pd.concat([df_log, new_row], ignore_index=True)
+        # Manter apenas últimos 500 registros para não sobrecarregar
+        if len(df_updated) > 500:
+            df_updated = df_updated.tail(500).reset_index(drop=True)
+        conn.update(worksheet="AuditLog", data=df_updated)
+    except Exception as e:
+        logger.warning(f"Audit log failed (non-blocking): {e}")
+
+def save_entry(data: dict, worksheet: str, *, skip_audit: bool = False) -> bool:
     """Salva uma nova entrada na planilha com retry."""
     if worksheet == "Transacoes" and "Id" not in data:
         data["Id"] = generate_id()
@@ -1476,6 +1517,8 @@ def save_entry(data: dict, worksheet: str) -> bool:
             conn.update(worksheet=worksheet, data=df_updated)
             st.cache_data.clear()
             logger.info(f"save_entry OK [{worksheet}]")
+            if not skip_audit:
+                _log_audit("CREATE", worksheet, f"{data.get('Descricao', data.get('Item', data.get('Chave', '')))}")
             return True
         except Exception as e:
             if attempt == CFG.SAVE_RETRIES - 1:
@@ -1496,6 +1539,7 @@ def update_sheet(df_edited: pd.DataFrame, worksheet: str) -> bool:
             conn.update(worksheet=worksheet, data=df_to_save)
             st.cache_data.clear()
             logger.info(f"update_sheet OK [{worksheet}]: {len(df_edited)} rows")
+            _log_audit("UPDATE", worksheet, f"{len(df_edited)} registros")
             return True
         except Exception as e:
             if attempt == CFG.SAVE_RETRIES - 1:
@@ -1678,7 +1722,7 @@ def generate_recorrentes(
 
         ok, err = validate_transaction(entry)
         if ok:
-            if save_entry(entry, "Transacoes"):
+            if save_entry(entry, "Transacoes", skip_audit=True):
                 entries_ok += 1
                 total_valor += float(rec["Valor"])
                 if str(rec["Tipo"]).strip() == CFG.TIPO_ENTRADA:
@@ -1688,6 +1732,7 @@ def generate_recorrentes(
 
     if entries_ok > 0:
         logger.info(f"generate_recorrentes: {entries_ok} geradas para {target_month}/{target_year}")
+        _log_audit("BATCH_CREATE", "Transacoes", f"{entries_ok} recorrentes em {target_month}/{target_year}")
         return {
             "count": entries_ok,
             "entradas": n_entradas,
@@ -2023,6 +2068,20 @@ def compute_metrics(
     # --- Ticket Médio ---
     m.ticket_medio = m.lifestyle / m.month_saidas if m.month_saidas > 0 else 0.0
 
+    # --- Dia mais caro ---
+    if not df_mo.empty:
+        _despesas_dia = df_mo[
+            (df_mo["Tipo"] == CFG.TIPO_SAIDA) &
+            (df_mo["Categoria"] != CFG.CAT_INVESTIMENTO)
+        ].copy()
+        if not _despesas_dia.empty:
+            _despesas_dia["_dia"] = _despesas_dia["Data"].dt.day
+            _dia_agg = _despesas_dia.groupby("_dia")["Valor"].agg(["sum", "count"])
+            _idx_max = _dia_agg["sum"].idxmax()
+            m.dia_mais_caro = int(_idx_max)
+            m.dia_mais_caro_val = float(_dia_agg.loc[_idx_max, "sum"])
+            m.dia_mais_caro_count = int(_dia_agg.loc[_idx_max, "count"])
+
     # --- Health ---
     m.health = _compute_health(m)
 
@@ -2341,6 +2400,58 @@ def compute_renda_evolution(
         data.append(entry)
 
     return data
+
+def compute_yoy(
+    df_trans: pd.DataFrame,
+    user_filter: str,
+    month: int,
+    year: int,
+) -> dict | None:
+    """Compara o mesmo mês no ano atual vs ano anterior."""
+    df = filter_by_user(df_trans, user_filter)
+    if df.empty:
+        return None
+
+    prev_year = year - 1
+
+    def _month_data(y: int) -> dict:
+        df_m = filter_by_month(df, month, y)
+        if df_m.empty:
+            return {"renda": 0, "gastos": 0, "investido": 0, "saldo": 0, "tx_count": 0}
+        renda = df_m[df_m["Tipo"] == CFG.TIPO_ENTRADA]["Valor"].sum()
+        gastos = df_m[
+            (df_m["Tipo"] == CFG.TIPO_SAIDA) &
+            (df_m["Categoria"] != CFG.CAT_INVESTIMENTO)
+        ]["Valor"].sum()
+        investido = df_m[
+            (df_m["Tipo"] == CFG.TIPO_SAIDA) &
+            (df_m["Categoria"] == CFG.CAT_INVESTIMENTO)
+        ]["Valor"].sum()
+        return {
+            "renda": renda,
+            "gastos": gastos,
+            "investido": investido,
+            "saldo": renda - gastos - investido,
+            "tx_count": len(df_m),
+        }
+
+    curr = _month_data(year)
+    prev = _month_data(prev_year)
+
+    if prev["tx_count"] == 0:
+        return None
+
+    return {
+        "month": month,
+        "curr_year": year,
+        "prev_year": prev_year,
+        "curr": curr,
+        "prev": prev,
+        "d_renda": calc_delta(curr["renda"], prev["renda"]),
+        "d_gastos": calc_delta(curr["gastos"], prev["gastos"]),
+        "d_investido": calc_delta(curr["investido"], prev["investido"]),
+        "d_saldo": calc_delta(curr["saldo"], prev["saldo"]),
+    }
 
 def compute_patrimonio_evolution(
     df_trans: pd.DataFrame,
@@ -3185,9 +3296,13 @@ def render_aporte_meta(mx: MonthMetrics) -> None:
     st.markdown(html, unsafe_allow_html=True)
 
 
-def render_top_gastos(top5: list[dict], ticket_medio: float, split: dict) -> None:
-    """Renderiza top 5 gastos + ticket médio + split casal."""
-    if not top5 and ticket_medio <= 0 and not split:
+def render_top_gastos(
+    top5: list[dict], ticket_medio: float, split: dict,
+    dia_mais_caro: int = 0, dia_mais_caro_val: float = 0.0,
+    dia_mais_caro_count: int = 0,
+) -> None:
+    """Renderiza top 5 gastos + ticket médio + split casal + dia mais caro."""
+    if not top5 and ticket_medio <= 0 and not split and dia_mais_caro <= 0:
         return
 
     html = '<div class="intel-box">'
@@ -3213,6 +3328,10 @@ def render_top_gastos(top5: list[dict], ticket_medio: float, split: dict) -> Non
     meta_parts = []
     if ticket_medio > 0:
         meta_parts.append(f"Ticket médio: {fmt_brl(ticket_medio)}")
+    if dia_mais_caro > 0:
+        meta_parts.append(
+            f"Dia mais caro: {dia_mais_caro} ({fmt_brl(dia_mais_caro_val)} · {dia_mais_caro_count}tx)"
+        )
     if split:
         split_text = " · ".join([f"{sanitize(k)}: {fmt_brl(v)}" for k, v in split.items()])
         meta_parts.append(f"Split: {split_text}")
@@ -3547,6 +3666,59 @@ def render_patrimonio_chart(pat_data: list[dict]) -> None:
             unsafe_allow_html=True,
         )
 
+def render_yoy(yoy: dict | None) -> None:
+    """Renderiza comparação year-over-year."""
+    if yoy is None:
+        return
+
+    month_name = MESES_FULL[yoy["month"]]
+
+    def _row(label: str, prev_val: float, curr_val: float, delta, invert: bool = False) -> str:
+        if delta is None or delta in (float("inf"), float("-inf")):
+            delta_html = '<span style="color:#555;">—</span>'
+        else:
+            if invert:
+                color = "#00FFCC" if delta <= 0 else "#FF4444"
+            else:
+                color = "#00FFCC" if delta >= 0 else "#FF4444"
+            sinal = "+" if delta > 0 else ""
+            delta_html = f'<span style="color:{color};">{sinal}{delta:.0f}%</span>'
+        return (
+            f'<div style="display:flex;justify-content:space-between;padding:4px 0;'
+            f'font-family:JetBrains Mono,monospace;font-size:0.65rem;">'
+            f'<span style="color:#888;width:80px;">{label}</span>'
+            f'<span style="color:#555;width:100px;text-align:right;">{fmt_brl(prev_val)}</span>'
+            f'<span style="color:#F0F0F0;width:100px;text-align:right;">{fmt_brl(curr_val)}</span>'
+            f'<span style="width:50px;text-align:right;">{delta_html}</span>'
+            f'</div>'
+        )
+
+    header = (
+        f'<div style="display:flex;justify-content:space-between;padding:4px 0;'
+        f'font-family:JetBrains Mono,monospace;font-size:0.55rem;color:#444;'
+        f'border-bottom:1px solid #111;margin-bottom:4px;">'
+        f'<span style="width:80px;">Métrica</span>'
+        f'<span style="width:100px;text-align:right;">{month_name[:3]}/{yoy["prev_year"]}</span>'
+        f'<span style="width:100px;text-align:right;">{month_name[:3]}/{yoy["curr_year"]}</span>'
+        f'<span style="width:50px;text-align:right;">Δ</span>'
+        f'</div>'
+    )
+
+    rows = (
+        _row("Renda", yoy["prev"]["renda"], yoy["curr"]["renda"], yoy["d_renda"])
+        + _row("Gastos", yoy["prev"]["gastos"], yoy["curr"]["gastos"], yoy["d_gastos"], invert=True)
+        + _row("Investido", yoy["prev"]["investido"], yoy["curr"]["investido"], yoy["d_investido"])
+        + _row("Saldo", yoy["prev"]["saldo"], yoy["curr"]["saldo"], yoy["d_saldo"])
+    )
+
+    st.markdown(
+        f'<div class="intel-box">'
+        f'<div class="intel-title">◆ {sanitize(month_name)} — Ano vs Ano</div>'
+        f'{header}{rows}'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
 def render_cashflow_forecast(forecast: list[dict] | None) -> None:
     """Renderiza tabela de forecast de cashflow para próximos meses."""
     if not forecast:
@@ -3664,6 +3836,86 @@ def render_cashflow_forecast(forecast: list[dict] | None) -> None:
 # 9. FORMULÁRIOS
 # ==============================================================================
 
+def generate_monthly_report(
+    mx: MonthMetrics,
+    budget_data: list[dict],
+    score_data: dict,
+    sel_mo: int,
+    sel_yr: int,
+    user: str,
+) -> BytesIO | None:
+    """Gera relatório mensal completo em Excel (múltiplas abas)."""
+    try:
+        buffer = BytesIO()
+
+        with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+            # --- Aba Resumo ---
+            resumo = pd.DataFrame({
+                "Métrica": [
+                    "Renda", "Gastos Lifestyle", "Investido no Mês", "Saldo Disponível",
+                    "Taxa de Aporte (%)", "Autonomia (meses)",
+                    "Score Financeiro", "Classificação",
+                    "Necessidades (%)", "Desejos (%)", "Investimento (%)",
+                    "Ticket Médio", "Nº Transações",
+                ],
+                "Valor": [
+                    mx.renda, mx.lifestyle, mx.investido_mes, mx.disponivel,
+                    round(mx.taxa_aporte, 1), round(mx.autonomia, 1),
+                    round(score_data["score"]), score_data["grade"],
+                    round(mx.nec_pct, 1), round(mx.des_pct, 1), round(mx.inv_pct, 1),
+                    round(mx.ticket_medio, 2), mx.month_tx_count,
+                ],
+            })
+            resumo.to_excel(writer, sheet_name="Resumo", index=False)
+
+            # --- Aba Transações ---
+            if not mx.df_month.empty:
+                df_tx = mx.df_month.copy()
+                if "Data" in df_tx.columns:
+                    df_tx["Data"] = pd.to_datetime(
+                        df_tx["Data"], errors="coerce"
+                    ).dt.strftime("%d/%m/%Y")
+                cols_export = [c for c in df_tx.columns if c != "Id"]
+                df_tx[cols_export].to_excel(
+                    writer, sheet_name="Transações", index=False
+                )
+
+            # --- Aba Categorias ---
+            if mx.cat_breakdown:
+                cat_df = pd.DataFrame({
+                    "Categoria": list(mx.cat_breakdown.keys()),
+                    "Valor (R$)": list(mx.cat_breakdown.values()),
+                    "% do Total": [
+                        round((v / mx.lifestyle * 100), 1) if mx.lifestyle > 0 else 0
+                        for v in mx.cat_breakdown.values()
+                    ],
+                })
+                cat_df.to_excel(writer, sheet_name="Categorias", index=False)
+
+            # --- Aba Orçamento ---
+            if budget_data:
+                orc_df = pd.DataFrame({
+                    "Categoria": [b["categoria"] for b in budget_data],
+                    "Limite (R$)": [b["limite"] for b in budget_data],
+                    "Gasto (R$)": [b["gasto"] for b in budget_data],
+                    "% Consumido": [round(b["pct"], 1) for b in budget_data],
+                    "Restante (R$)": [b["restante"] for b in budget_data],
+                    "Status": [b["status"].upper() for b in budget_data],
+                })
+                orc_df.to_excel(writer, sheet_name="Orçamento", index=False)
+
+            # --- Aba Top 5 ---
+            if mx.top5_gastos:
+                top_df = pd.DataFrame(mx.top5_gastos)
+                top_df.columns = ["Descrição", "Valor (R$)", "Categoria"]
+                top_df.to_excel(writer, sheet_name="Top Gastos", index=False)
+
+        buffer.seek(0)
+        return buffer
+    except Exception as e:
+        logger.error(f"generate_monthly_report failed: {e}")
+        return None
+
 def transaction_form(
     form_key: str, tipo: str, categorias: list[str],
     submit_label: str = "REGISTRAR",
@@ -3691,11 +3943,13 @@ def transaction_form(
         resp_options = list(CFG.RESPONSAVEIS)
         resp_index = resp_options.index(default_resp) if default_resp in resp_options else 0
         resp = st.selectbox("Responsável", resp_options, index=resp_index)
+        tag = st.text_input("Tag (opcional)", placeholder="Ex: viagem, reforma, natal", max_chars=50)
         if st.form_submit_button(submit_label):
             entry = {
                 "Data": d, "Descricao": desc.strip(), "Valor": val,
                 "Categoria": cat, "Tipo": tipo, "Responsavel": resp,
                 "Origem": CFG.ORIGEM_MANUAL,
+                "Tag": tag.strip() if tag else "",
             }
             ok, err = validate_transaction(entry)
             if not ok:
@@ -3733,11 +3987,13 @@ def wealth_form(
         resp_options = list(CFG.RESPONSAVEIS)
         resp_index = resp_options.index(default_resp) if default_resp in resp_options else 0
         resp = st.selectbox("Titular", resp_options, index=resp_index)
+        w_tag = st.text_input("Tag (opcional)", placeholder="Ex: renda fixa, cripto", max_chars=50, key="w_tag")
         if st.form_submit_button("CONFIRMAR APORTE"):
             entry = {
                 "Data": d, "Descricao": desc.strip(), "Valor": val,
                 "Categoria": CFG.CAT_INVESTIMENTO, "Tipo": CFG.TIPO_SAIDA, "Responsavel": resp,
                 "Origem": CFG.ORIGEM_MANUAL,
+                "Tag": w_tag.strip() if w_tag else "",
             }
             ok, err = validate_transaction(entry)
             if not ok:
@@ -3894,6 +4150,25 @@ def _render_historico(
     )
     render_hist_summary(mx)
 
+    # --- Relatório Completo ---
+    try:
+        report_buf = generate_monthly_report(
+            mx, mx.budget_data,
+            compute_score(mx),
+            sel_mo, sel_yr, user,
+        )
+        if report_buf:
+            st.download_button(
+                "📊 RELATÓRIO COMPLETO (Excel)",
+                report_buf.getvalue(),
+                f"relatorio_{sel_mo:02d}_{sel_yr}_{user}.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+                key=f"report_{user}_{sel_mo}_{sel_yr}",
+            )
+    except Exception as e:
+        logger.warning(f"Report generation failed: {e}")
+
     search = st.text_input(
         "🔍 Buscar",
         placeholder="Filtrar visualização por descrição, categoria...",
@@ -3904,11 +4179,13 @@ def _render_historico(
     df_display = df_hist.copy()
     if search and search.strip():
         search_lower = search.strip().lower()
+        tag_mask = df_display["Tag"].str.lower().str.contains(search_lower, na=False) if "Tag" in df_display.columns else False
         mask = (
             df_display["Descricao"].str.lower().str.contains(search_lower, na=False) |
             df_display["Categoria"].str.lower().str.contains(search_lower, na=False) |
             df_display["Tipo"].str.lower().str.contains(search_lower, na=False) |
-            df_display["Responsavel"].str.lower().str.contains(search_lower, na=False)
+            df_display["Responsavel"].str.lower().str.contains(search_lower, na=False) |
+            tag_mask
         )
         df_display = df_display[mask].reset_index(drop=True)
         if df_display.empty:
@@ -3966,6 +4243,7 @@ def _render_historico(
                 "Responsável", options=list(CFG.RESPONSAVEIS)
             ),
             "Origem": st.column_config.TextColumn("Origem", disabled=True),
+            "Tag": st.column_config.TextColumn("Tag", max_chars=50),
             "Id": None,  # Oculta coluna Id do editor
         },
         hide_index=True,
@@ -4061,16 +4339,44 @@ def _save_filtered_sheet(
     user: str,
     worksheet: str,
 ) -> bool:
-    """Salva edição filtrada preservando registros de outros usuários."""
-    if user != "Casal":
+    """Salva edição filtrada preservando registros de outros usuários.
+
+    Registros 'Casal' são protegidos contra deleção por perfil individual.
+    """
+    if user != "Casal" and "Responsavel" in df_full.columns:
+        # Registros de outros usuários individuais (intocáveis)
         df_others = df_full[
             ~df_full["Responsavel"].isin([user, "Casal"])
         ].copy()
-        df_final = pd.concat([df_others, df_edited], ignore_index=True)
+
+        # Registros Casal: proteger contra deleção acidental
+        df_casal_orig = df_full[df_full["Responsavel"] == "Casal"].copy()
+        df_casal_edit = (
+            df_edited[df_edited["Responsavel"] == "Casal"].copy()
+            if not df_edited.empty and "Responsavel" in df_edited.columns
+            else pd.DataFrame()
+        )
+
+        if len(df_casal_edit) < len(df_casal_orig):
+            logger.warning(f"[{worksheet}] {user}: deleção de Casal bloqueada")
+            st.toast("⚠ Registros 'Casal' só podem ser excluídos pelo perfil Casal")
+            df_casal_final = df_casal_orig
+        else:
+            df_casal_final = df_casal_edit
+
+        # Registros do próprio usuário (editáveis livremente)
+        df_user_edit = (
+            df_edited[df_edited["Responsavel"] == user].copy()
+            if not df_edited.empty and "Responsavel" in df_edited.columns
+            else pd.DataFrame()
+        )
+
+        df_final = pd.concat(
+            [df_others, df_casal_final, df_user_edit], ignore_index=True
+        )
     else:
         df_final = df_edited.copy()
     return update_sheet(df_final, worksheet)
-
 
 # ==============================================================================
 # 12. AUTENTICAÇÃO
@@ -4134,8 +4440,8 @@ def _render_login() -> None:
                     logger.error(f"Auth error: {e}")
 
         st.markdown(
-            '<div style="font-family:JetBrains Mono,monospace;font-size:0.5rem;'
-            'color:#1a1a1a;text-align:center;margin-top:24px;">v6.0</div>',
+            f'<div style="font-family:JetBrains Mono,monospace;font-size:0.5rem;'
+            f'color:#1a1a1a;text-align:center;margin-top:24px;">v{CFG.VERSION}</div>',
             unsafe_allow_html=True,
         )
 
@@ -4182,16 +4488,22 @@ def main() -> None:
     if not user:
         user = "Casal"
     with c_status:
-        status_parts = [f"L&L v6.0 — {fmt_date(now)}"]
+        status_parts = [f"L&L v{CFG.VERSION} — {fmt_date(now)}"]
         if auth_user:
             status_parts.append(sanitize(auth_user))
         st.markdown(
             f'<div class="status-line">{" — ".join(status_parts)}</div>',
             unsafe_allow_html=True,
         )
-        if auth_user:
-            if st.button("⏻ Sair", key="logout_btn"):
-                _logout()
+        cs1, cs2 = st.columns(2)
+        with cs1:
+            if st.button("⟳", key="refresh_btn", help="Atualizar dados"):
+                st.cache_data.clear()
+                st.rerun()
+        with cs2:
+            if auth_user:
+                if st.button("⏻", key="logout_btn", help="Sair"):
+                    _logout()
 
     # --- Navegação Mensal ---
     if "nav_month" not in st.session_state:
@@ -4254,19 +4566,22 @@ def main() -> None:
     sel_mo = st.session_state.nav_month
     sel_yr = st.session_state.nav_year
 
-    # --- Carregar Config ---
+    # --- Carregar Todos os Dados (batch) ---
     df_config = load_config()
+    df_trans, df_assets = load_data()
+    df_recorrentes = load_recorrentes()
+    df_orcamentos = load_orcamentos()
+
+    # --- Config do Usuário ---
     user_config = UserConfig.from_df(df_config, user)
 
-    # --- Carregar Dados e Métricas ---
-    df_trans, df_assets = load_data()
+    # --- Métricas ---
     mx = compute_metrics(df_trans, df_assets, user, sel_mo, sel_yr, user_config)
 
     # --- Projeção (só mês atual) ---
     projection = compute_projection(mx, sel_mo, sel_yr)
 
-    # --- Recorrentes ---
-    df_recorrentes = load_recorrentes()
+    # --- Recorrentes Pendentes ---
     pendentes = detect_pending_recorrentes(df_recorrentes, df_trans, user, sel_mo, sel_yr)
 
     # --- Auto-gerar recorrentes (se habilitado) ---
@@ -4284,9 +4599,6 @@ def main() -> None:
                 detail = " + ".join(parts) if parts else ""
                 st.toast(f"⟳ Auto: {result['count']} recorrentes geradas ({detail})")
                 st.rerun()
-
-    # --- Orçamento ---
-    df_orcamentos = load_orcamentos()
     budget_data = compute_budget(df_orcamentos, mx.cat_breakdown, user)
     mx.budget_data = budget_data
 
@@ -4303,6 +4615,9 @@ def main() -> None:
     cashflow_forecast = compute_cashflow_forecast(
         df_trans, df_recorrentes, user, sel_mo, sel_yr,
     )
+
+    # --- Year-over-Year ---
+    yoy_data = compute_yoy(df_trans, user, sel_mo, sel_yr)
 
     # --- Evolução Patrimonial ---
     pat_evolution = compute_patrimonio_evolution(
@@ -4369,6 +4684,7 @@ def main() -> None:
             render_regra_503020(mx)
             render_prev_comparison(mx, sel_mo, sel_yr)
             render_annual_strip(annual)
+            render_yoy(yoy_data)
             render_cashflow_forecast(cashflow_forecast)
 
     # ===== LANÇAMENTO RÁPIDO =====
@@ -4392,11 +4708,13 @@ def main() -> None:
                     "Data", default_form_date(sel_mo, sel_yr),
                     min_value=q_min, max_value=q_max, format="DD/MM/YYYY"
                 )
-            qc5, _ = st.columns(2)
+            qc5, qc6 = st.columns(2)
             with qc5:
                 q_resp_opts = list(CFG.RESPONSAVEIS)
                 q_resp_idx = q_resp_opts.index(user) if user in q_resp_opts else 0
                 q_resp = st.selectbox("Responsável", q_resp_opts, index=q_resp_idx)
+            with qc6:
+                q_tag = st.text_input("Tag", placeholder="opcional", max_chars=50, key="q_tag")
             if st.form_submit_button("REGISTRAR GASTO", use_container_width=True):
                 entry = {
                     "Data": q_date,
@@ -4406,6 +4724,7 @@ def main() -> None:
                     "Tipo": CFG.TIPO_SAIDA,
                     "Responsavel": q_resp,
                     "Origem": CFG.ORIGEM_MANUAL,
+                    "Tag": q_tag.strip() if q_tag else "",
                 }
                 ok, err = validate_transaction(entry)
                 if not ok:
@@ -4457,6 +4776,9 @@ def main() -> None:
                 mx.top5_gastos,
                 mx.ticket_medio,
                 mx.split_gastos,
+                mx.dia_mais_caro,
+                mx.dia_mais_caro_val,
+                mx.dia_mais_caro_count,
             )
 
             # --- Gestão de Orçamentos ---
