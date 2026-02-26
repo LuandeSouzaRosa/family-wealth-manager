@@ -2079,6 +2079,168 @@ def compute_consistency(
         "overall_pct": ((months_aporte_ok + months_saldo_ok) / (months_with_data * 2)) * 100,
     }
 
+
+def compute_anomalies(
+    df_trans: pd.DataFrame,
+    user_filter: str,
+    target_month: int,
+    target_year: int,
+    threshold: float = 2.0,
+    months_back: int = 3,
+) -> list[dict]:
+    """Detecta gastos anômalos por categoria vs média histórica (I2)."""
+    df = filter_by_user(df_trans, user_filter)
+    if df.empty:
+        return []
+
+    df_mo = filter_by_month(df, target_month, target_year)
+    if df_mo.empty:
+        return []
+
+    curr_cats = df_mo[
+        (df_mo["Tipo"] == CFG.TIPO_SAIDA)
+        & (df_mo["Categoria"] != CFG.CAT_INVESTIMENTO)
+    ].groupby("Categoria")["Valor"].sum()
+
+    if curr_cats.empty:
+        return []
+
+    hist_totals: dict[str, list[float]] = {}
+    mo, yr = target_month, target_year
+    for _ in range(months_back):
+        mo -= 1
+        if mo == 0:
+            mo, yr = 12, yr - 1
+        df_hist = filter_by_month(df, mo, yr)
+        if not df_hist.empty:
+            cat_sums = df_hist[
+                (df_hist["Tipo"] == CFG.TIPO_SAIDA)
+                & (df_hist["Categoria"] != CFG.CAT_INVESTIMENTO)
+            ].groupby("Categoria")["Valor"].sum()
+            for cat, val in cat_sums.items():
+                hist_totals.setdefault(cat, []).append(val)
+
+    if not hist_totals:
+        return []
+
+    anomalies: list[dict] = []
+    for cat, curr_val in curr_cats.items():
+        hist = hist_totals.get(cat, [])
+        if not hist:
+            continue
+        avg = sum(hist) / len(hist)
+        if avg > 0 and curr_val > avg * threshold:
+            anomalies.append({
+                "categoria": str(cat),
+                "valor_atual": curr_val,
+                "media_historica": avg,
+                "ratio": curr_val / avg,
+                "excedente": curr_val - avg,
+            })
+
+    anomalies.sort(key=lambda x: x["ratio"], reverse=True)
+    return anomalies
+
+
+def compute_calendar_heatmap(
+    df_month: pd.DataFrame, month: int, year: int,
+) -> dict | None:
+    """Computa dados para heatmap calendário de gastos diários (V5)."""
+    if df_month.empty:
+        return None
+
+    despesas = df_month[
+        (df_month["Tipo"] == CFG.TIPO_SAIDA)
+        & (df_month["Categoria"] != CFG.CAT_INVESTIMENTO)
+    ].copy()
+
+    days_in_month = calendar.monthrange(year, month)[1]
+    first_weekday = date(year, month, 1).weekday()
+
+    daily: dict[int, float] = {}
+    daily_count: dict[int, int] = {}
+    if not despesas.empty:
+        despesas["_dia"] = despesas["Data"].dt.day
+        for d, grp in despesas.groupby("_dia"):
+            daily[int(d)] = grp["Valor"].sum()
+            daily_count[int(d)] = len(grp)
+
+    max_val = max(daily.values()) if daily else 0.0
+    total = sum(daily.values()) if daily else 0.0
+    dias_com_gasto = len(daily)
+    dias_sem_gasto = days_in_month - dias_com_gasto
+
+    dia_pesado, dia_pesado_val, dia_pesado_count = 0, 0.0, 0
+    if daily:
+        dia_pesado = max(daily, key=daily.get)
+        dia_pesado_val = daily[dia_pesado]
+        dia_pesado_count = daily_count.get(dia_pesado, 0)
+
+    return {
+        "month": month,
+        "year": year,
+        "days_in_month": days_in_month,
+        "first_weekday": first_weekday,
+        "daily": daily,
+        "daily_count": daily_count,
+        "max_val": max_val,
+        "total": total,
+        "dias_sem_gasto": dias_sem_gasto,
+        "media_diaria": total / max(1, dias_com_gasto),
+        "dia_pesado": dia_pesado,
+        "dia_pesado_val": dia_pesado_val,
+        "dia_pesado_count": dia_pesado_count,
+    }
+
+
+def compute_frequent_transactions(
+    df_trans: pd.DataFrame,
+    user_filter: str,
+    n: int = 5,
+    months_back: int = 3,
+) -> list[dict]:
+    """Identifica transações frequentes para templates rápidos (N2)."""
+    df = filter_by_user(df_trans, user_filter)
+    if df.empty:
+        return []
+
+    now = datetime.now()
+    mo, yr = now.month, now.year
+    for _ in range(months_back - 1):
+        mo -= 1
+        if mo == 0:
+            mo, yr = 12, yr - 1
+    start_date = datetime(yr, mo, 1)
+
+    df_range = df[
+        (df["Data"] >= start_date)
+        & (df["Data"] <= now)
+        & (df["Tipo"] == CFG.TIPO_SAIDA)
+        & (df["Categoria"] != CFG.CAT_INVESTIMENTO)
+    ].copy()
+
+    if df_range.empty:
+        return []
+
+    groups = (
+        df_range.groupby(["Descricao", "Categoria", "Responsavel"])
+        .agg(count=("Valor", "count"), avg_valor=("Valor", "mean"), last_valor=("Valor", "last"))
+        .reset_index()
+    )
+    groups = groups[groups["count"] >= 2].sort_values("count", ascending=False).head(n)
+
+    return [
+        {
+            "desc": str(row["Descricao"]),
+            "cat": str(row["Categoria"]),
+            "resp": str(row["Responsavel"]),
+            "count": int(row["count"]),
+            "avg_valor": float(row["avg_valor"]),
+            "last_valor": float(row["last_valor"]),
+        }
+        for _, row in groups.iterrows()
+    ]
+
 # ==============================================================================
 # 8. COMPONENTES VISUAIS
 # ==============================================================================
@@ -3443,6 +3605,125 @@ def render_consistency(consistency: dict | None, user_config: UserConfig | None 
     st.markdown(html, unsafe_allow_html=True)
 
 
+def render_anomalies(anomalies: list[dict]) -> None:
+    """Renderiza alertas de gastos anômalos (I2)."""
+    if not anomalies:
+        return
+
+    html = '<div class="intel-box" style="border-left-color:#FF4444;">'
+    html += '<div class="intel-title" style="color:#FF4444;">◆ Anomalias Detectadas</div>'
+
+    for a in anomalies:
+        cat = sanitize(a["categoria"])
+        ratio = a["ratio"]
+        color = "#FF4444" if ratio >= 3 else "#FFAA00"
+        icon = "▲▲" if ratio >= 3 else "▲"
+        html += (
+            f'<div style="display:flex;justify-content:space-between;align-items:center;'
+            f'padding:6px 0;font-family:JetBrains Mono,monospace;font-size:0.62rem;'
+            f'border-bottom:1px solid #0f0f0f;">'
+            f'<span style="color:{color};min-width:20px;">{icon}</span>'
+            f'<span style="color:#F0F0F0;flex:1;">{cat}</span>'
+            f'<span style="color:{color};min-width:90px;text-align:right;font-weight:700;">'
+            f'{fmt_brl(a["valor_atual"])}</span>'
+            f'<span style="color:#555;min-width:130px;text-align:right;">'
+            f'{a["ratio"]:.1f}x da média ({fmt_brl(a["media_historica"])})</span>'
+            f'</div>'
+        )
+
+    html += (
+        f'<div style="font-family:JetBrains Mono,monospace;font-size:0.5rem;'
+        f'color:#333;margin-top:6px;">Comparação: média 3 meses · Threshold: 2x</div>'
+        f'</div>'
+    )
+    st.markdown(html, unsafe_allow_html=True)
+
+
+def render_calendar_heatmap(heatmap: dict | None) -> None:
+    """Renderiza heatmap calendário de gastos diários (V5)."""
+    if not heatmap:
+        return
+
+    month_name = MESES_FULL[heatmap["month"]]
+    days_in_month = heatmap["days_in_month"]
+    first_wd = heatmap["first_weekday"]
+    daily = heatmap["daily"]
+    max_val = heatmap["max_val"]
+
+    def _color(val: float) -> str:
+        if val == 0 or max_val == 0:
+            return "#0a0a0a"
+        ratio = val / max_val
+        if ratio < 0.25:
+            return "#0a2a1a"
+        if ratio < 0.5:
+            return "#0d3d26"
+        if ratio < 0.75:
+            return "#115533"
+        return "#00FFCC"
+
+    dias_semana = ["S", "T", "Q", "Q", "S", "S", "D"]
+    header = "".join(
+        f'<div style="width:34px;text-align:center;font-family:JetBrains Mono,monospace;'
+        f'font-size:0.45rem;color:#444;">{d}</div>'
+        for d in dias_semana
+    )
+
+    cells = ""
+    for _ in range(first_wd):
+        cells += '<div style="width:34px;height:34px;"></div>'
+
+    for day in range(1, days_in_month + 1):
+        val = daily.get(day, 0)
+        bg = _color(val)
+        border = "1px solid #00FFCC" if val == max_val and max_val > 0 else "1px solid #111"
+        day_color = "#F0F0F0" if val > 0 else "#333"
+        cells += (
+            f'<div style="width:34px;height:34px;background:{bg};border:{border};'
+            f'display:flex;align-items:center;justify-content:center;'
+            f'font-family:JetBrains Mono,monospace;font-size:0.5rem;'
+            f'color:{day_color};">{day}</div>'
+        )
+
+    legend = (
+        f'<div style="display:flex;gap:8px;margin-top:8px;font-family:JetBrains Mono,monospace;'
+        f'font-size:0.45rem;color:#555;align-items:center;flex-wrap:wrap;">'
+        f'<span style="display:flex;align-items:center;gap:2px;">'
+        f'<span style="width:8px;height:8px;background:#0a0a0a;border:1px solid #111;"></span>R$0</span>'
+        f'<span style="display:flex;align-items:center;gap:2px;">'
+        f'<span style="width:8px;height:8px;background:#0a2a1a;"></span>Leve</span>'
+        f'<span style="display:flex;align-items:center;gap:2px;">'
+        f'<span style="width:8px;height:8px;background:#0d3d26;"></span>Médio</span>'
+        f'<span style="display:flex;align-items:center;gap:2px;">'
+        f'<span style="width:8px;height:8px;background:#115533;"></span>Alto</span>'
+        f'<span style="display:flex;align-items:center;gap:2px;">'
+        f'<span style="width:8px;height:8px;background:#00FFCC;"></span>Pico</span>'
+        f'</div>'
+    )
+
+    stats = ""
+    if heatmap["dia_pesado"] > 0:
+        stats = (
+            f'<div style="font-family:JetBrains Mono,monospace;font-size:0.55rem;'
+            f'color:#555;padding-top:6px;border-top:1px solid #111;margin-top:8px;">'
+            f'Mais pesado: <span style="color:#FF4444;">dia {heatmap["dia_pesado"]}</span> '
+            f'({fmt_brl(heatmap["dia_pesado_val"])} · {heatmap["dia_pesado_count"]}tx) · '
+            f'Sem gasto: <span style="color:#00FFCC;">{heatmap["dias_sem_gasto"]}d</span> · '
+            f'Média: {fmt_brl(heatmap["media_diaria"])}/dia'
+            f'</div>'
+        )
+
+    html = (
+        f'<div class="intel-box">'
+        f'<div class="intel-title">◆ Mapa de Gastos — {sanitize(month_name)} {heatmap["year"]}</div>'
+        f'<div style="display:flex;gap:2px;margin-bottom:4px;">{header}</div>'
+        f'<div style="display:flex;flex-wrap:wrap;gap:2px;">{cells}</div>'
+        f'{legend}{stats}'
+        f'</div>'
+    )
+    st.markdown(html, unsafe_allow_html=True)
+
+
 # ==============================================================================
 # 9. FORMULÁRIOS
 # ==============================================================================
@@ -4250,6 +4531,11 @@ def main() -> None:
         df_trans, user, sel_mo, sel_yr, user_config=user_config,
     )
 
+    # --- Phase 8B: Novas análises ---
+    anomalies = compute_anomalies(df_trans, user, sel_mo, sel_yr)
+    cal_heatmap = compute_calendar_heatmap(mx.df_month, sel_mo, sel_yr)
+    frequent_tx = compute_frequent_transactions(df_trans, user)
+
     month_label = fmt_month_year(sel_mo, sel_yr)
     has_data = mx.renda > 0 or mx.lifestyle > 0 or mx.investido_mes > 0
 
@@ -4296,36 +4582,36 @@ def main() -> None:
         # ===== META DE APORTE =====
         render_aporte_meta(mx)
 
-        # ===== ANÁLISE DETALHADA (colapsável) =====
+        # ===== ANÁLISE DETALHADA (colapsável com sub-tabs — X5) =====
         with st.expander("📊 Análise Detalhada", expanded=False):
-            # --- Score & Consistência ---
-            _ad_l, _ad_r = st.columns([1, 1])
-            with _ad_l:
-                render_score(score_data)
-            with _ad_r:
-                render_consistency(consistency, user_config)
+            ad_score, ad_regra, ad_comp, ad_forecast = st.tabs([
+                "SCORE", "REGRA", "COMPARATIVO", "FORECAST"
+            ])
 
-            # --- Regra de alocação ---
-            render_regra_503020(mx)
+            with ad_score:
+                _ad_l, _ad_r = st.columns([1, 1])
+                with _ad_l:
+                    render_score(score_data)
+                with _ad_r:
+                    render_consistency(consistency, user_config)
 
-            # --- Casal ---
-            if user == "Casal":
-                render_split_casal(mx.split_gastos, mx.split_renda)
-                render_divisao_casal(divisao_casal)
+            with ad_regra:
+                render_regra_503020(mx)
+                if user == "Casal":
+                    render_split_casal(mx.split_gastos, mx.split_renda)
+                    render_divisao_casal(divisao_casal)
 
-            # --- Comparativos lado a lado ---
-            _cmp_l, _cmp_r = st.columns([1, 1])
-            with _cmp_l:
-                render_prev_comparison(mx, sel_mo, sel_yr)
-            with _cmp_r:
-                render_yoy(yoy_data)
+            with ad_comp:
+                _cmp_l, _cmp_r = st.columns([1, 1])
+                with _cmp_l:
+                    render_prev_comparison(mx, sel_mo, sel_yr)
+                with _cmp_r:
+                    render_yoy(yoy_data)
+                render_annual_strip(annual)
+                render_savings_rate(savings_data)
 
-            # --- Anual & Poupança ---
-            render_annual_strip(annual)
-            render_savings_rate(savings_data)
-
-            # --- Forecast ---
-            render_cashflow_forecast(cashflow_forecast)
+            with ad_forecast:
+                render_cashflow_forecast(cashflow_forecast)
 
     # ===== LANÇAMENTO RÁPIDO =====
     with st.expander("⚡ Lançamento Rápido"):
@@ -4420,6 +4706,40 @@ def main() -> None:
                         st.toast(f"✓ Duplicado: {_l_desc} — {fmt_brl(_l_val)}")
                         st.rerun()
 
+        # --- Templates Rápidos (N2) ---
+        if frequent_tx:
+            st.markdown(
+                '<div style="font-family:JetBrains Mono,monospace;font-size:0.55rem;'
+                'color:#555;text-transform:uppercase;letter-spacing:0.15em;'
+                'padding:8px 0 4px 0;border-top:1px solid #111;margin-top:8px;">'
+                '◆ Templates Frequentes</div>',
+                unsafe_allow_html=True,
+            )
+            _tpl_cols = st.columns(min(len(frequent_tx), 3))
+            for i, tpl in enumerate(frequent_tx[:3]):
+                with _tpl_cols[i]:
+                    _tpl_label = f"{tpl['desc'][:18]}\n{tpl['cat']} · ~{fmt_brl(tpl['avg_valor'])}"
+                    if st.button(
+                        _tpl_label,
+                        key=f"tpl_{i}_{tpl['desc'][:10]}",
+                        use_container_width=True,
+                    ):
+                        tpl_entry = {
+                            "Data": default_form_date(sel_mo, sel_yr),
+                            "Descricao": tpl["desc"].strip(),
+                            "Valor": round(tpl["avg_valor"], 2),
+                            "Categoria": tpl["cat"],
+                            "Tipo": CFG.TIPO_SAIDA,
+                            "Responsavel": tpl["resp"],
+                            "Origem": CFG.ORIGEM_MANUAL,
+                            "Tag": "",
+                        }
+                        if save_entry(tpl_entry, "Transacoes"):
+                            st.toast(
+                                f"✓ Template: {tpl['desc']} — {fmt_brl(tpl['avg_valor'])}"
+                            )
+                            st.rerun()
+
     # ===== ABAS =====
     tab_ls, tab_renda, tab_pat, tab_rec, tab_hist, tab_cfg = st.tabs([
         "GASTOS", "RENDA", "PATRIMÔNIO", "FIXOS", "HISTÓRICO", "CONFIG"
@@ -4462,6 +4782,13 @@ def main() -> None:
                 mx.dia_mais_caro_val,
                 mx.dia_mais_caro_count,
             )
+
+            # --- Anomalias (I2) ---
+            if anomalies:
+                render_anomalies(anomalies)
+
+            # --- Heatmap calendário (V5) ---
+            render_calendar_heatmap(cal_heatmap)
 
             # --- Padrão semanal ---
             render_weekday_pattern(weekday_pattern)
