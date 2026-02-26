@@ -11,6 +11,7 @@ from io import BytesIO
 import time
 import logging
 import uuid
+from pathlib import Path
 
 
 # ==============================================================================
@@ -221,858 +222,19 @@ st.set_page_config(
 # ==============================================================================
 
 def inject_css() -> None:
+    """Injeta fontes Google e CSS externo (T3)."""
     st.markdown(
         '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800'
         '&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">',
         unsafe_allow_html=True,
     )
-    st.markdown("""
-    <style>
-
-        #MainMenu, footer, header { visibility: hidden; }
-        .stDeployButton { display: none; }
-        div[data-testid="stDecoration"] { display: none; }
-        div[data-testid="stToolbar"] { display: none; }
-
-        .block-container {
-            padding: 1rem 1.5rem 1rem 1.5rem !important;
-            max-width: 100% !important;
-        }
-
-        html, body, [class*="css"] {
-            font-family: 'Inter', sans-serif;
-            background-color: #000000;
-            color: #F0F0F0;
-        }
-        .stApp { background-color: #000000; }
-
-        @keyframes scan-line {
-            0%   { top: 0%; opacity: 1; }
-            50%  { opacity: 0.4; }
-            100% { top: 100%; opacity: 0; }
-        }
-        @keyframes pulse-glow {
-            0%, 100% { box-shadow: 0 0 20px rgba(0,255,204,0.1); }
-            50%      { box-shadow: 0 0 40px rgba(0,255,204,0.25); }
-        }
-        @keyframes number-breathe {
-            0%, 100% { text-shadow: 0 0 30px rgba(0,255,204,0.15); }
-            50%      { text-shadow: 0 0 60px rgba(0,255,204,0.35); }
-        }
-
-        .autonomia-hero {
-            background: #000000;
-            border: 2px solid #00FFCC;
-            border-radius: 0px;
-            padding: 48px 32px 40px 32px;
-            text-align: center;
-            position: relative;
-            overflow: hidden;
-            animation: pulse-glow 4s ease-in-out infinite;
-            margin-bottom: 16px;
-        }
-        .autonomia-hero::before {
-            content: '';
-            position: absolute;
-            top: 0; left: 0; right: 0;
-            height: 2px;
-            background: #00FFCC;
-            box-shadow: 0 0 20px #00FFCC, 0 0 60px rgba(0,255,204,0.3);
-        }
-        .autonomia-hero::after {
-            content: '';
-            position: absolute;
-            left: 0; right: 0;
-            height: 1px;
-            background: linear-gradient(90deg, transparent, #00FFCC, transparent);
-            animation: scan-line 3s ease-in-out infinite;
-            pointer-events: none;
-        }
-        .autonomia-tag {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.65rem;
-            color: #00FFCC;
-            text-transform: uppercase;
-            letter-spacing: 0.6em;
-            margin-bottom: 12px;
-            opacity: 0.5;
-        }
-        .autonomia-number {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 6rem;
-            font-weight: 700;
-            line-height: 1;
-            letter-spacing: -0.04em;
-            animation: number-breathe 3s ease-in-out infinite;
-        }
-        .autonomia-unit {
-            font-family: 'Inter', sans-serif;
-            font-size: 0.85rem;
-            color: #555;
-            text-transform: uppercase;
-            letter-spacing: 0.35em;
-            margin-top: 10px;
-        }
-        .autonomia-sub {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.7rem;
-            color: #333;
-            margin-top: 16px;
-            letter-spacing: 0.05em;
-        }
-
-        .t-panel {
-            background: #0a0a0a;
-            border: 1px solid #1a1a1a;
-            border-radius: 0px;
-            padding: 20px;
-            margin-bottom: 12px;
-            transition: border-color 0.3s ease, transform 0.2s ease;
-        }
-        .t-panel:hover {
-            border-color: #00FFCC;
-            transform: translateX(2px);
-        }
-
-        .kpi-mono {
-            font-family: 'JetBrains Mono', monospace;
-            border-left: 3px solid #1a1a1a;
-            padding: 14px 16px;
-            margin-bottom: 8px;
-            transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
-        }
-        .kpi-mono:hover {
-            border-left-color: #00FFCC;
-            background: rgba(0,255,204,0.03);
-            transform: translateX(4px);
-        }
-        .kpi-mono-label {
-            font-size: 0.6rem;
-            color: #555;
-            text-transform: uppercase;
-            letter-spacing: 0.2em;
-        }
-        .kpi-mono-value {
-            font-size: 1.35rem;
-            font-weight: 700;
-            color: #F0F0F0;
-            margin-top: 2px;
-        }
-        .kpi-mono-sub {
-            font-size: 0.65rem;
-            color: #444;
-            margin-top: 2px;
-        }
-        .kpi-delta {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.65rem;
-            margin-top: 3px;
-        }
-        .kpi-delta-up   { color: #00FFCC; }
-        .kpi-delta-down { color: #FF4444; }
-        .kpi-delta-neutral { color: #555; }
-
-        .rule-bar-container {
-            display: flex;
-            width: 100%;
-            height: 6px;
-            margin: 8px 0;
-            overflow: hidden;
-        }
-        .rule-bar-seg {
-            height: 100%;
-            transition: width 0.5s ease;
-        }
-
-        .deviation {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.72rem;
-            padding: 4px 8px;
-            border-radius: 0px;
-            display: inline-block;
-            margin: 2px 4px 2px 0;
-            transition: background 0.2s ease;
-        }
-        .deviation:hover { background: rgba(255,255,255,0.03); }
-        .dev-ok     { color: #00FFCC; border: 1px solid #00FFCC22; }
-        .dev-warn   { color: #FFAA00; border: 1px solid #FFAA0022; }
-        .dev-danger  { color: #FF4444; border: 1px solid #FF444422; }
-
-        .intel-box {
-            background: #0a0a0a;
-            border: 1px solid #1a1a1a;
-            border-left: 3px solid #00FFCC;
-            border-radius: 0px;
-            padding: 14px 16px;
-            margin-bottom: 12px;
-            transition: border-color 0.2s ease;
-        }
-        .intel-box:hover { border-color: #00FFCC; }
-        .intel-title {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.6rem;
-            color: #00FFCC;
-            text-transform: uppercase;
-            letter-spacing: 0.25em;
-            margin-bottom: 6px;
-        }
-        .intel-body {
-            font-size: 0.85rem;
-            color: #999;
-            line-height: 1.5;
-        }
-
-        .cat-bar-row {
-            display: flex;
-            align-items: center;
-            margin-bottom: 6px;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.7rem;
-        }
-        .cat-bar-label {
-            width: 100px;
-            color: #888;
-            flex-shrink: 0;
-        }
-        .cat-bar-track {
-            flex: 1;
-            height: 6px;
-            background: #111;
-            margin: 0 10px;
-            position: relative;
-        }
-        .cat-bar-fill {
-            height: 100%;
-            background: #00FFCC;
-            transition: width 0.4s ease;
-        }
-        .cat-bar-value {
-            width: 110px;
-            color: #666;
-            text-align: right;
-            flex-shrink: 0;
-        }
-
-        .month-nav {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.85rem;
-            color: #F0F0F0;
-            text-align: center;
-            letter-spacing: 0.1em;
-            padding: 6px 0;
-        }
-
-        .health-badge {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.7rem;
-            padding: 6px 12px;
-            text-align: center;
-            margin-bottom: 12px;
-            letter-spacing: 0.08em;
-        }
-        .health-excellent {
-            color: #00FFCC;
-            border: 1px solid #00FFCC33;
-            background: rgba(0,255,204,0.05);
-        }
-        .health-good {
-            color: #00FFCC;
-            border: 1px solid #00FFCC22;
-        }
-        .health-warning {
-            color: #FFAA00;
-            border: 1px solid #FFAA0022;
-            background: rgba(255,170,0,0.05);
-        }
-        .health-danger {
-            color: #FF4444;
-            border: 1px solid #FF444422;
-            background: rgba(255,68,68,0.05);
-        }
-
-        .alerts-container {
-            margin-bottom: 16px;
-        }
-        .alert-item {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.7rem;
-            padding: 8px 12px;
-            margin-bottom: 4px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            transition: transform 0.15s ease, background 0.15s ease;
-        }
-        .alert-item:hover {
-            transform: translateX(3px);
-        }
-        .alert-ok {
-            color: #00FFCC;
-            border-left: 2px solid #00FFCC;
-            background: rgba(0,255,204,0.03);
-        }
-        .alert-info {
-            color: #888;
-            border-left: 2px solid #333;
-            background: rgba(255,255,255,0.01);
-        }
-        .alert-warn {
-            color: #FFAA00;
-            border-left: 2px solid #FFAA00;
-            background: rgba(255,170,0,0.03);
-        }
-        .alert-danger {
-            color: #FF4444;
-            border-left: 2px solid #FF4444;
-            background: rgba(255,68,68,0.03);
-        }
-        .alert-icon {
-            font-size: 0.75rem;
-            flex-shrink: 0;
-            width: 16px;
-            text-align: center;
-        }
-        .alert-msg {
-            flex: 1;
-        }
-
-        .projection-box {
-            background: #0a0a0a;
-            border: 1px solid #1a1a1a;
-            border-radius: 0px;
-            padding: 16px;
-            margin-bottom: 12px;
-        }
-        .projection-header {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.6rem;
-            color: #555;
-            text-transform: uppercase;
-            letter-spacing: 0.2em;
-            margin-bottom: 10px;
-        }
-        .projection-track {
-            width: 100%;
-            height: 8px;
-            background: #111;
-            position: relative;
-            margin-bottom: 8px;
-        }
-        .projection-fill-actual {
-            height: 100%;
-            position: absolute;
-            left: 0;
-            top: 0;
-            transition: width 0.5s ease;
-        }
-        .projection-marker {
-            position: absolute;
-            top: -4px;
-            width: 2px;
-            height: 16px;
-            background: #F0F0F0;
-        }
-        .projection-labels {
-            display: flex;
-            justify-content: space-between;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.65rem;
-            color: #555;
-        }
-        .projection-main {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.9rem;
-            font-weight: 700;
-            margin-top: 6px;
-        }
-        .projection-sub {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.65rem;
-            color: #555;
-            margin-top: 4px;
-        }
-
-        .hist-summary {
-            display: flex;
-            gap: 16px;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.72rem;
-            padding: 10px 0;
-            border-bottom: 1px solid #1a1a1a;
-            margin-bottom: 12px;
-            flex-wrap: wrap;
-        }
-        .hist-summary-item {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-        .hist-dot {
-            width: 6px;
-            height: 6px;
-            border-radius: 0px;
-            flex-shrink: 0;
-        }
-
-        .stTextInput input, .stNumberInput input, .stDateInput input {
-            background-color: #0a0a0a !important;
-            border: 1px solid #1a1a1a !important;
-            border-radius: 0px !important;
-            color: #F0F0F0 !important;
-            font-family: 'JetBrains Mono', monospace !important;
-        }
-        .stTextInput input:focus, .stNumberInput input:focus, .stDateInput input:focus {
-            border-color: #00FFCC !important;
-            box-shadow: 0 0 0 1px #00FFCC33 !important;
-        }
-        .stSelectbox > div > div {
-            background-color: #0a0a0a !important;
-            border: 1px solid #1a1a1a !important;
-            border-radius: 0px !important;
-            color: #F0F0F0 !important;
-        }
-
-        .stTabs [data-baseweb="tab-list"] {
-            background-color: transparent;
-            gap: 0px;
-            border-bottom: 1px solid #1a1a1a;
-            margin-bottom: 20px;
-        }
-        .stTabs [data-baseweb="tab"] {
-            background: transparent;
-            color: #555;
-            font-family: 'JetBrains Mono', monospace;
-            font-weight: 400;
-            font-size: 0.75rem;
-            text-transform: uppercase;
-            letter-spacing: 0.12em;
-            border: none;
-            border-bottom: 2px solid transparent;
-            padding: 8px 16px 10px 16px;
-            transition: color 0.2s ease, border-color 0.2s ease;
-        }
-        .stTabs [data-baseweb="tab"]:hover { color: #F0F0F0; }
-        .stTabs [data-baseweb="tab"][aria-selected="true"] {
-            color: #00FFCC;
-            border-bottom: 2px solid #00FFCC;
-        }
-
-        .stFormSubmitButton button {
-            background: transparent !important;
-            border: 1px solid #00FFCC !important;
-            border-radius: 0px !important;
-            color: #00FFCC !important;
-            font-family: 'JetBrains Mono', monospace !important;
-            text-transform: uppercase !important;
-            letter-spacing: 0.12em !important;
-            transition: background 0.2s ease, color 0.2s ease !important;
-        }
-        .stFormSubmitButton button:hover {
-            background: #00FFCC !important;
-            color: #000000 !important;
-        }
-
-        .stButton button {
-            background: transparent !important;
-            border: 1px solid #333 !important;
-            border-radius: 0px !important;
-            color: #F0F0F0 !important;
-            font-family: 'JetBrains Mono', monospace !important;
-            transition: border-color 0.2s ease, transform 0.15s ease !important;
-        }
-        .stButton button:hover {
-            border-color: #00FFCC !important;
-            transform: translateY(-1px) !important;
-        }
-
-        .stDataFrame {
-            border: 1px solid #1a1a1a;
-            border-radius: 0px !important;
-        }
-
-        .status-line {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.6rem;
-            color: #333;
-            text-align: right;
-            padding: 8px 0;
-            letter-spacing: 0.05em;
-        }
-
-        .empty-month {
-            text-align: center;
-            padding: 40px 20px;
-        }
-
-        /* ===== MOBILE (consolidado) ===== */
-        @media (max-width: 768px) {
-            .autonomia-number { font-size: 4rem; }
-            .autonomia-hero { padding: 28px 16px 24px 16px; }
-            .block-container { padding: 0.5rem 0.8rem !important; }
-            .kpi-mono-value { font-size: 1.1rem; }
-            .kpi-mono { padding: 10px 12px; margin-bottom: 4px; }
-            .cat-bar-label { width: 70px; font-size: 0.6rem; }
-            .cat-bar-value { width: 80px; font-size: 0.6rem; }
-            .hist-summary { flex-direction: column; gap: 8px; font-size: 0.65rem; }
-            .alert-item { font-size: 0.63rem; padding: 6px 10px; }
-            .projection-main { font-size: 0.8rem; }
-            .projection-box { padding: 12px; }
-            .projection-labels { font-size: 0.58rem; }
-            .budget-label { width: 70px; font-size: 0.6rem; }
-            .budget-info { width: 140px; font-size: 0.6rem; }
-            .budget-row { font-size: 0.63rem; }
-            .budget-panel { padding: 10px 12px; }
-            .score-panel { flex-direction: column; gap: 12px; }
-            .score-value { font-size: 2rem; }
-            .score-detail-label { width: 80px; font-size: 0.55rem; }
-            .annual-strip { flex-direction: column; align-items: flex-start; gap: 8px; font-size: 0.6rem; }
-            .annual-meta { margin-left: 0; width: 100%; }
-            .annual-divider { display: none; }
-            .intel-box { padding: 10px 12px; }
-            .intel-body { font-size: 0.78rem; }
-            .health-badge { font-size: 0.62rem; padding: 5px 10px; }
-            .t-panel { padding: 14px; }
-            .rec-card { font-size: 0.65rem; padding: 10px 12px; }
-            .rec-card-left { min-width: 100px; }
-            .rec-pending-count { font-size: 1.4rem; }
-            .rec-pending-box { padding: 12px; }
-            .stFormSubmitButton button {
-                padding: 12px 16px !important;
-                font-size: 0.75rem !important;
-            }
-            .stButton button {
-                padding: 10px 14px !important;
-            }
-            .stTabs [data-baseweb="tab"] {
-                font-size: 0.65rem;
-                padding: 6px 10px 8px 10px;
-                letter-spacing: 0.08em;
-            }
-        }
-
-        @media (prefers-reduced-motion: reduce) {
-            .autonomia-hero::after { animation: none; }
-            .autonomia-hero { animation: none; }
-            .autonomia-number { animation: none; }
-        }
-
-        /* ===== SCORE FINANCEIRO ===== */
-        .score-panel {
-            background: #0a0a0a;
-            border: 1px solid #1a1a1a;
-            border-radius: 0px;
-            padding: 16px 20px;
-            margin-bottom: 12px;
-            display: flex;
-            gap: 24px;
-            align-items: center;
-            flex-wrap: wrap;
-            transition: border-color 0.3s ease;
-        }
-        .score-panel:hover { border-color: #00FFCC; }
-        .score-left {
-            text-align: center;
-            min-width: 90px;
-            flex-shrink: 0;
-        }
-        .score-label {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.55rem;
-            color: #555;
-            text-transform: uppercase;
-            letter-spacing: 0.25em;
-            margin-bottom: 4px;
-        }
-        .score-value {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 2.5rem;
-            font-weight: 700;
-            line-height: 1.1;
-        }
-        .score-grade {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.65rem;
-            letter-spacing: 0.1em;
-            margin-top: 2px;
-        }
-        .score-right {
-            flex: 1;
-            min-width: 200px;
-        }
-        .score-detail-row {
-            display: flex;
-            align-items: center;
-            margin-bottom: 5px;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.62rem;
-        }
-        .score-detail-label {
-            width: 110px;
-            color: #666;
-            flex-shrink: 0;
-        }
-        .score-detail-track {
-            flex: 1;
-            height: 4px;
-            background: #111;
-            margin: 0 8px;
-        }
-        .score-detail-fill {
-            height: 100%;
-            transition: width 0.5s ease;
-        }
-        .score-detail-pts {
-            width: 45px;
-            color: #555;
-            text-align: right;
-            flex-shrink: 0;
-        }
-
-        /* ===== RESUMO ANUAL ===== */
-        .annual-strip {
-            display: flex;
-            align-items: center;
-            gap: 16px;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.68rem;
-            padding: 10px 16px;
-            margin-bottom: 12px;
-            border: 1px solid #1a1a1a;
-            background: #0a0a0a;
-            flex-wrap: wrap;
-            transition: border-color 0.2s ease;
-        }
-        .annual-strip:hover { border-color: #00FFCC; }
-        .annual-year {
-            color: #00FFCC;
-            font-weight: 700;
-            font-size: 0.75rem;
-            letter-spacing: 0.05em;
-            flex-shrink: 0;
-        }
-        .annual-divider {
-            width: 1px;
-            height: 16px;
-            background: #1a1a1a;
-            flex-shrink: 0;
-        }
-        .annual-item {
-            color: #888;
-            display: flex;
-            align-items: center;
-            gap: 4px;
-        }
-        .annual-item strong {
-            color: #F0F0F0;
-        }
-        .annual-meta {
-            color: #444;
-            font-size: 0.6rem;
-            margin-left: auto;
-        }
-
-        /* ===== ORÇAMENTO ===== */
-        .budget-row {
-            display: flex;
-            align-items: center;
-            margin-bottom: 8px;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.7rem;
-            padding: 6px 0;
-        }
-        .budget-label {
-            width: 100px;
-            color: #888;
-            flex-shrink: 0;
-        }
-        .budget-track {
-            flex: 1;
-            height: 8px;
-            background: #111;
-            margin: 0 10px;
-            position: relative;
-        }
-        .budget-fill {
-            height: 100%;
-            transition: width 0.4s ease;
-            position: absolute;
-            left: 0;
-            top: 0;
-        }
-        .budget-limit-marker {
-            position: absolute;
-            top: -3px;
-            width: 2px;
-            height: 14px;
-            background: #F0F0F0;
-            opacity: 0.5;
-        }
-        .budget-info {
-            width: 180px;
-            color: #666;
-            text-align: right;
-            flex-shrink: 0;
-            display: flex;
-            align-items: center;
-            justify-content: flex-end;
-            gap: 6px;
-        }
-        .budget-pct {
-            font-weight: 700;
-            min-width: 40px;
-            text-align: right;
-        }
-        .budget-pct-ok { color: #00FFCC; }
-        .budget-pct-warn { color: #FFAA00; }
-        .budget-pct-over { color: #FF4444; }
-        .budget-panel {
-            background: #0a0a0a;
-            border: 1px solid #1a1a1a;
-            border-radius: 0px;
-            padding: 14px 16px;
-            margin-bottom: 12px;
-            transition: border-color 0.2s ease;
-        }
-        .budget-panel:hover { border-color: #00FFCC; }
-        .budget-header {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.6rem;
-            color: #555;
-            text-transform: uppercase;
-            letter-spacing: 0.2em;
-            margin-bottom: 10px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .budget-total {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.65rem;
-            color: #444;
-            padding-top: 8px;
-            margin-top: 6px;
-            border-top: 1px solid #111;
-            display: flex;
-            justify-content: space-between;
-        }
-
-        /* ===== RECORRENTES ===== */
-        .rec-card {
-            background: #0a0a0a;
-            border: 1px solid #1a1a1a;
-            border-left: 3px solid #FFAA00;
-            padding: 12px 16px;
-            margin-bottom: 8px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.72rem;
-            transition: border-color 0.2s ease, transform 0.15s ease;
-            flex-wrap: wrap;
-            gap: 8px;
-        }
-        .rec-card:hover {
-            border-color: #00FFCC;
-            transform: translateX(2px);
-        }
-        .rec-card-left {
-            display: flex;
-            flex-direction: column;
-            gap: 2px;
-            min-width: 150px;
-        }
-        .rec-card-desc {
-            color: #F0F0F0;
-            font-weight: 600;
-        }
-        .rec-card-meta {
-            color: #555;
-            font-size: 0.6rem;
-        }
-        .rec-card-right {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-        .rec-card-valor {
-            color: #F0F0F0;
-            font-weight: 700;
-        }
-        .rec-card-badge {
-            font-size: 0.55rem;
-            padding: 2px 6px;
-            letter-spacing: 0.05em;
-        }
-        .rec-badge-ativo {
-            color: #00FFCC;
-            border: 1px solid #00FFCC33;
-        }
-        .rec-badge-inativo {
-            color: #555;
-            border: 1px solid #333;
-        }
-        .rec-badge-entrada {
-            color: #00FFCC;
-            border: 1px solid #00FFCC22;
-        }
-        .rec-badge-saida {
-            color: #FF4444;
-            border: 1px solid #FF444422;
-        }
-        .rec-pending-box {
-            background: #0a0a0a;
-            border: 1px solid #FFAA00;
-            padding: 16px;
-            margin-bottom: 16px;
-            text-align: center;
-            font-family: 'JetBrains Mono', monospace;
-        }
-        .rec-pending-count {
-            font-size: 1.8rem;
-            font-weight: 700;
-            color: #FFAA00;
-            line-height: 1.2;
-        }
-        .rec-pending-label {
-            font-size: 0.6rem;
-            color: #888;
-            text-transform: uppercase;
-            letter-spacing: 0.15em;
-            margin-top: 4px;
-        }
-        .rec-summary {
-            display: flex;
-            gap: 16px;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.68rem;
-            padding: 8px 0;
-            margin-bottom: 12px;
-            flex-wrap: wrap;
-        }
-        .rec-summary-item {
-            color: #888;
-        }
-        .rec-summary-item strong {
-            color: #F0F0F0;
-        }
-
-        /* ===== EXPANDERS ===== */
-        div[data-testid="stExpander"] {
-            border: 1px solid #1a1a1a !important;
-            border-radius: 0px !important;
-            margin-bottom: 12px;
-        }
-        div[data-testid="stExpander"] details summary {
-            font-family: 'JetBrains Mono', monospace !important;
-            font-size: 0.75rem !important;
-            letter-spacing: 0.05em;
-        }
-        div[data-testid="stExpander"] details summary:hover {
-            color: #00FFCC !important;
-        }
-    </style>
-    """, unsafe_allow_html=True)
+    css_path = Path(__file__).parent / "style.css"
+    try:
+        css_text = css_path.read_text(encoding="utf-8")
+        st.markdown(f"<style>{css_text}</style>", unsafe_allow_html=True)
+    except FileNotFoundError:
+        logger.error(f"style.css não encontrado em {css_path}")
+        st.error("⚠ style.css não encontrado — crie o arquivo no diretório do app")
 
 # ==============================================================================
 # 4. UTILITÁRIOS
@@ -1497,8 +659,22 @@ def _log_audit(action: str, worksheet: str, details: str = "") -> None:
     except Exception as e:
         logger.warning(f"Audit log failed (non-blocking): {e}")
 
-def save_entry(data: dict, worksheet: str, *, skip_audit: bool = False) -> bool:
-    """Salva uma nova entrada na planilha com retry."""
+def _check_rate_limit(action: str = "save", cooldown: float = 2.0) -> bool:
+    """Verifica rate limit por ação. Retorna True se permitido."""
+    key = f"_rl_{action}"
+    now = time.time()
+    last = st.session_state.get(key, 0.0)
+    if now - last < cooldown:
+        return False
+    st.session_state[key] = now
+    return True
+
+
+def save_entry(data: dict, worksheet: str, *, skip_audit: bool = False, skip_rate_limit: bool = False) -> bool:
+    """Salva uma nova entrada na planilha com retry e rate limit."""
+    if not skip_rate_limit and not _check_rate_limit(f"save_{worksheet}"):
+        st.toast("⚠ Aguarde antes de salvar novamente")
+        return False
     if worksheet == "Transacoes" and "Id" not in data:
         data["Id"] = generate_id()
     conn = get_conn()
@@ -1529,7 +705,10 @@ def save_entry(data: dict, worksheet: str, *, skip_audit: bool = False) -> bool:
 
 
 def update_sheet(df_edited: pd.DataFrame, worksheet: str) -> bool:
-    """Atualiza planilha inteira com DataFrame editado (com retry)."""
+    """Atualiza planilha inteira com DataFrame editado (com retry e rate limit)."""
+    if not _check_rate_limit(f"update_{worksheet}"):
+        st.toast("⚠ Aguarde antes de salvar novamente")
+        return False
     conn = get_conn()
     for attempt in range(CFG.SAVE_RETRIES):
         try:
@@ -1547,6 +726,44 @@ def update_sheet(df_edited: pd.DataFrame, worksheet: str) -> bool:
                 return False
             time.sleep(0.5 * (attempt + 1))
     return False
+
+def validate_worksheets() -> None:
+    """Valida integridade das worksheets no boot (S4 + T5).
+
+    Verifica se todas as worksheets existem e têm as colunas esperadas.
+    Executa apenas uma vez por sessão.
+    """
+    if st.session_state.get("_ws_validated", False):
+        return
+    conn = get_conn()
+    worksheets = {
+        "Transacoes": list(CFG.COLS_TRANSACAO),
+        "Patrimonio": list(CFG.COLS_PATRIMONIO),
+        "Recorrentes": list(CFG.COLS_RECORRENTE),
+        "Orcamentos": list(CFG.COLS_ORCAMENTO),
+        "Configuracoes": list(CFG.COLS_CONFIG),
+        "AuditLog": list(CFG.COLS_AUDIT),
+    }
+    issues: list[str] = []
+    for ws_name, expected_cols in worksheets.items():
+        try:
+            df = conn.read(worksheet=ws_name)
+            if df is not None and not df.empty:
+                missing = set(expected_cols) - set(df.columns)
+                if missing:
+                    issues.append(
+                        f"{ws_name}: colunas faltando — {', '.join(sorted(missing))}"
+                    )
+        except Exception as e:
+            issues.append(f"{ws_name}: não encontrada ou inacessível")
+            logger.warning(f"[Integridade] {ws_name}: {e}")
+    if issues:
+        for issue in issues:
+            logger.warning(f"[Integridade] {issue}")
+    else:
+        logger.info("Integridade OK — todas as worksheets validadas")
+    st.session_state["_ws_validated"] = True
+
 
 # ==============================================================================
 # 7. MOTOR ANALÍTICO
@@ -1720,7 +937,7 @@ def generate_recorrentes(
 
         ok, err = validate_transaction(entry)
         if ok:
-            if save_entry(entry, "Transacoes", skip_audit=True):
+            if save_entry(entry, "Transacoes", skip_audit=True, skip_rate_limit=True):
                 entries_ok += 1
                 total_valor += float(rec["Valor"])
                 if str(rec["Tipo"]).strip() == CFG.TIPO_ENTRADA:
@@ -3311,17 +2528,43 @@ def render_recent_context(df_month: pd.DataFrame, tipo: str, n: int = 3) -> None
     st.markdown(html, unsafe_allow_html=True)
 
 def render_empty_month(month_label: str) -> None:
-    """Renderiza mensagem de mês vazio com guia de ações."""
+    """Renderiza onboarding visual para mês sem dados (X4)."""
+    steps = [
+        ("01", "💰", "Registre sua Renda", "Aba RENDA — salário, freelance, dividendos"),
+        ("02", "🔄", "Cadastre Fixos", "Aba FIXOS — aluguel, assinaturas, contas recorrentes"),
+        ("03", "⚡", "Lance Gastos", "Lançamento Rápido acima — mercado, uber, restaurante"),
+        ("04", "📊", "Acompanhe", "HISTÓRICO — edite, exporte e analise seus dados"),
+    ]
+    steps_html = ""
+    for num, icon, title, desc in steps:
+        steps_html += (
+            f'<div style="display:flex;align-items:flex-start;gap:12px;'
+            f'padding:12px 0;border-bottom:1px solid #0f0f0f;">'
+            f'<div style="font-family:JetBrains Mono,monospace;font-size:0.55rem;'
+            f'color:#00FFCC;min-width:24px;opacity:0.5;">{num}</div>'
+            f'<div style="font-size:1.1rem;min-width:24px;">{icon}</div>'
+            f'<div>'
+            f'<div style="font-family:JetBrains Mono,monospace;font-size:0.72rem;'
+            f'color:#F0F0F0;font-weight:600;">{title}</div>'
+            f'<div style="font-family:JetBrains Mono,monospace;font-size:0.6rem;'
+            f'color:#555;margin-top:2px;">{desc}</div>'
+            f'</div>'
+            f'</div>'
+        )
     st.markdown(f"""
-    <div class="intel-box empty-month">
-        <div class="intel-title">▮ Comece por aqui</div>
-        <div class="intel-body">
-            Nenhuma transação em <strong>{sanitize(month_label)}</strong>.<br><br>
-            <strong>1.</strong> Registre sua renda na aba <strong>RENDA</strong><br>
-            <strong>2.</strong> Cadastre gastos fixos na aba <strong>FIXOS</strong><br>
-            <strong>3.</strong> Lance gastos pelo <strong>⚡ Lançamento Rápido</strong> acima<br>
-            <strong>4.</strong> Acompanhe tudo no <strong>HISTÓRICO</strong>
+    <div style="background:#0a0a0a;border:1px solid #1a1a1a;padding:24px;
+         margin:16px 0;max-width:500px;margin-left:auto;margin-right:auto;">
+        <div style="font-family:JetBrains Mono,monospace;font-size:0.6rem;
+             color:#00FFCC;text-transform:uppercase;letter-spacing:0.4em;
+             margin-bottom:4px;opacity:0.5;">▮ Primeiros Passos</div>
+        <div style="font-family:JetBrains Mono,monospace;font-size:0.85rem;
+             color:#F0F0F0;margin-bottom:16px;">
+            Nenhuma transação em <strong>{sanitize(month_label)}</strong>
         </div>
+        {steps_html}
+        <div style="font-family:JetBrains Mono,monospace;font-size:0.5rem;
+             color:#333;margin-top:12px;text-align:center;">
+            Dica: comece pelo ⚡ Lançamento Rápido acima</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -4834,6 +4077,8 @@ def main() -> None:
         _render_login()
         return
 
+    validate_worksheets()
+
     now = datetime.now()
 
     # --- Barra de Controle ---
@@ -5131,6 +4376,48 @@ def main() -> None:
                             st.toast(f"⚠ Possível duplicata: {q_desc.strip()} — {fmt_brl(q_val)}")
                         else:
                             st.toast(f"✓ {q_desc.strip()} — {fmt_brl(q_val)}")
+                        st.rerun()
+
+        # --- Repetir Último Gasto (N4) ---
+        if not mx.df_month.empty:
+            _df_last_gastos = mx.df_month[
+                (mx.df_month["Tipo"] == CFG.TIPO_SAIDA)
+                & (mx.df_month["Categoria"] != CFG.CAT_INVESTIMENTO)
+            ].copy()
+            if not _df_last_gastos.empty:
+                _df_last_gastos["Data"] = pd.to_datetime(
+                    _df_last_gastos["Data"], errors="coerce"
+                )
+                _last = _df_last_gastos.sort_values("Data", ascending=False).iloc[0]
+                _l_desc = str(_last.get("Descricao", ""))
+                _l_val = float(_last.get("Valor", 0))
+                _l_cat = str(_last.get("Categoria", ""))
+                _l_resp = str(_last.get("Responsavel", ""))
+                _l_tag = str(_last.get("Tag", "")).strip()
+                st.markdown(
+                    f'<div style="font-family:JetBrains Mono,monospace;font-size:0.6rem;'
+                    f'color:#555;padding:8px 0;border-top:1px solid #111;margin-top:8px;">'
+                    f'Último: <span style="color:#888;">{sanitize(_l_desc)}</span>'
+                    f' · {sanitize(_l_cat)} · {fmt_brl(_l_val)}</div>',
+                    unsafe_allow_html=True,
+                )
+                if st.button(
+                    f"⟳ REPETIR: {_l_desc[:25]} — {fmt_brl(_l_val)}",
+                    key="dup_last_tx",
+                    use_container_width=True,
+                ):
+                    dup_entry = {
+                        "Data": default_form_date(sel_mo, sel_yr),
+                        "Descricao": _l_desc.strip(),
+                        "Valor": _l_val,
+                        "Categoria": _l_cat,
+                        "Tipo": CFG.TIPO_SAIDA,
+                        "Responsavel": _l_resp,
+                        "Origem": CFG.ORIGEM_MANUAL,
+                        "Tag": _l_tag,
+                    }
+                    if save_entry(dup_entry, "Transacoes"):
+                        st.toast(f"✓ Duplicado: {_l_desc} — {fmt_brl(_l_val)}")
                         st.rerun()
 
     # ===== ABAS =====
