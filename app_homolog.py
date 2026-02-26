@@ -19,7 +19,7 @@ import uuid
 
 @dataclass(frozen=True)
 class Config:
-    VERSION: str = "7.0"
+    VERSION: str = "8.0"
     NECESSIDADES: tuple = ("Moradia", "Alimentação", "Saúde", "Transporte")
     DESEJOS: tuple = ("Lazer", "Assinaturas", "Educação", "Outros")
     CATEGORIAS_SAIDA: tuple = (
@@ -48,16 +48,14 @@ class Config:
     CACHE_TTL: int = 120
     MAX_DESC_LENGTH: int = 200
     SAVE_RETRIES: int = 3
-    MESES_EVOLUCAO: int = 6
+    MESES_EVOLUCAO: int = 6  # Usado em evolução, savings rate, consistência
     TIPO_ENTRADA: str = "Entrada"
     TIPO_SAIDA: str = "Saída"
     CAT_INVESTIMENTO: str = "Investimento"
     ORIGEM_MANUAL: str = "Manual"
     ORIGEM_RECORRENTE: str = "Recorrente"
 
-
 CFG = Config()
-
 
 @dataclass
 class UserConfig:
@@ -2679,6 +2677,191 @@ def compute_divisao_casal(df_month: pd.DataFrame) -> dict | None:
     }
 
 
+
+def compute_weekday_pattern(df_month: pd.DataFrame) -> dict | None:
+    """Calcula padrão de gastos por dia da semana."""
+    if df_month.empty:
+        return None
+
+    despesas = df_month[
+        (df_month["Tipo"] == CFG.TIPO_SAIDA) &
+        (df_month["Categoria"] != CFG.CAT_INVESTIMENTO)
+    ].copy()
+
+    if despesas.empty:
+        return None
+
+    despesas["_wd"] = despesas["Data"].dt.dayofweek
+    _DIAS_PT = {0: "Seg", 1: "Ter", 2: "Qua", 3: "Qui", 4: "Sex", 5: "Sáb", 6: "Dom"}
+
+    agg = despesas.groupby("_wd")["Valor"].agg(["sum", "count"])
+
+    result: dict = {"dias": [], "max_val": 0.0}
+    for d in range(7):
+        if d in agg.index:
+            val = float(agg.loc[d, "sum"])
+            count = int(agg.loc[d, "count"])
+        else:
+            val, count = 0.0, 0
+        result["dias"].append({"dia": _DIAS_PT[d], "total": val, "count": count})
+        result["max_val"] = max(result["max_val"], val)
+
+    dias_ativos = [x for x in result["dias"] if x["total"] > 0]
+    if dias_ativos:
+        result["mais_caro"] = max(dias_ativos, key=lambda x: x["total"])
+        result["mais_leve"] = min(dias_ativos, key=lambda x: x["total"])
+
+    return result
+
+
+def compute_tag_summary(
+    df_trans: pd.DataFrame,
+    user_filter: str,
+    ref_month: int,
+    ref_year: int,
+) -> list[dict]:
+    """Análise transversal por tags nos últimos 6 meses."""
+    df = filter_by_user(df_trans, user_filter)
+    if df.empty or "Tag" not in df.columns:
+        return []
+
+    df_tagged = df[df["Tag"].str.strip() != ""].copy()
+    if df_tagged.empty:
+        return []
+
+    ref_end = end_of_month(ref_year, ref_month)
+    mo, yr = ref_month, ref_year
+    for _ in range(5):
+        mo -= 1
+        if mo == 0:
+            mo, yr = 12, yr - 1
+    start_date = datetime(yr, mo, 1)
+    df_tagged = df_tagged[
+        (df_tagged["Data"] >= start_date) & (df_tagged["Data"] <= ref_end)
+    ]
+
+    if df_tagged.empty:
+        return []
+
+    results: list[dict] = []
+    for tag, group in df_tagged.groupby("Tag"):
+        tag_str = str(tag).strip()
+        if not tag_str:
+            continue
+        gastos = group[
+            (group["Tipo"] == CFG.TIPO_SAIDA) &
+            (group["Categoria"] != CFG.CAT_INVESTIMENTO)
+        ]["Valor"].sum()
+        entradas = group[group["Tipo"] == CFG.TIPO_ENTRADA]["Valor"].sum()
+        results.append({
+            "tag": tag_str,
+            "gastos": gastos,
+            "entradas": entradas,
+            "n_transacoes": len(group),
+            "n_meses": group["Data"].dt.to_period("M").nunique(),
+        })
+
+    results.sort(key=lambda x: x["gastos"], reverse=True)
+    return results[:10]
+
+
+def compute_savings_rate(
+    df_trans: pd.DataFrame,
+    user_filter: str,
+    ref_month: int,
+    ref_year: int,
+    months_back: int = CFG.MESES_EVOLUCAO,
+) -> list[dict]:
+    """Calcula taxa de poupança mensal: (renda − gastos) / renda × 100."""
+    df = filter_by_user(df_trans, user_filter)
+    if df.empty:
+        return []
+
+    mo, yr = ref_month, ref_year
+    for _ in range(months_back - 1):
+        mo -= 1
+        if mo == 0:
+            mo, yr = 12, yr - 1
+
+    data: list[dict] = []
+    for _ in range(months_back):
+        df_m = filter_by_month(df, mo, yr)
+        renda, gastos = 0.0, 0.0
+        if not df_m.empty:
+            renda = df_m[df_m["Tipo"] == CFG.TIPO_ENTRADA]["Valor"].sum()
+            gastos = df_m[
+                (df_m["Tipo"] == CFG.TIPO_SAIDA) &
+                (df_m["Categoria"] != CFG.CAT_INVESTIMENTO)
+            ]["Valor"].sum()
+        rate = ((renda - gastos) / renda * 100) if renda > 0 else 0.0
+        data.append({
+            "label": f"{MESES_PT[mo]}/{yr}",
+            "renda": renda,
+            "gastos": gastos,
+            "poupanca": max(0, renda - gastos),
+            "rate": rate,
+            "has_data": renda > 0,
+        })
+        mo += 1
+        if mo > 12:
+            mo, yr = 1, yr + 1
+
+    return data
+
+
+def compute_consistency(
+    df_trans: pd.DataFrame,
+    user_filter: str,
+    ref_month: int,
+    ref_year: int,
+    months_back: int = CFG.MESES_EVOLUCAO,
+    user_config: UserConfig | None = None,
+) -> dict | None:
+    """Calcula índice de consistência: em quantos meses atingiu as metas."""
+    ucfg = user_config or UserConfig()
+    df = filter_by_user(df_trans, user_filter)
+    if df.empty:
+        return None
+
+    months_aporte_ok = 0
+    months_saldo_ok = 0
+    months_with_data = 0
+
+    mo, yr = ref_month, ref_year
+    for _ in range(months_back):
+        df_m = filter_by_month(df, mo, yr)
+        if not df_m.empty:
+            renda = df_m[df_m["Tipo"] == CFG.TIPO_ENTRADA]["Valor"].sum()
+            if renda > 0:
+                months_with_data += 1
+                investido = df_m[
+                    (df_m["Tipo"] == CFG.TIPO_SAIDA) &
+                    (df_m["Categoria"] == CFG.CAT_INVESTIMENTO)
+                ]["Valor"].sum()
+                gastos = df_m[
+                    (df_m["Tipo"] == CFG.TIPO_SAIDA) &
+                    (df_m["Categoria"] != CFG.CAT_INVESTIMENTO)
+                ]["Valor"].sum()
+                if (investido / renda * 100) >= ucfg.meta_investimento:
+                    months_aporte_ok += 1
+                if (renda - gastos - investido) >= 0:
+                    months_saldo_ok += 1
+        mo -= 1
+        if mo == 0:
+            mo, yr = 12, yr - 1
+
+    if months_with_data == 0:
+        return None
+
+    return {
+        "months_analyzed": months_with_data,
+        "aporte_ok": months_aporte_ok,
+        "aporte_pct": (months_aporte_ok / months_with_data) * 100,
+        "saldo_ok": months_saldo_ok,
+        "saldo_pct": (months_saldo_ok / months_with_data) * 100,
+        "overall_pct": ((months_aporte_ok + months_saldo_ok) / (months_with_data * 2)) * 100,
+    }
+
 # ==============================================================================
 # 8. COMPONENTES VISUAIS
 # ==============================================================================
@@ -3832,6 +4015,191 @@ def render_cashflow_forecast(forecast: list[dict] | None) -> None:
     )
     st.markdown(html, unsafe_allow_html=True)
 
+
+def render_weekday_pattern(pattern: dict | None) -> None:
+    """Renderiza padrão de gastos por dia da semana."""
+    if not pattern or not pattern.get("dias"):
+        return
+    max_val = pattern["max_val"]
+    if max_val == 0:
+        return
+
+    html = '<div class="intel-box">'
+    html += '<div class="intel-title">◆ Padrão por Dia da Semana</div>'
+
+    for d in pattern["dias"]:
+        pct = (d["total"] / max_val * 100) if max_val > 0 else 0
+        count_text = f'{d["count"]}tx' if d["count"] > 0 else "—"
+        val_text = fmt_brl(d["total"]) if d["total"] > 0 else "—"
+        if pct >= 80:
+            bar_color = "#FF4444"
+        elif pct >= 50:
+            bar_color = "#FFAA00"
+        elif pct > 0:
+            bar_color = "#00FFCC"
+        else:
+            bar_color = "#111"
+        html += (
+            f'<div class="cat-bar-row">'
+            f'<span class="cat-bar-label" style="width:36px;">{d["dia"]}</span>'
+            f'<div class="cat-bar-track">'
+            f'<div class="cat-bar-fill" style="width:{pct:.0f}%;background:{bar_color};"></div>'
+            f'</div>'
+            f'<span class="cat-bar-value" style="width:130px;">{count_text} · {val_text}</span>'
+            f'</div>'
+        )
+
+    if "mais_caro" in pattern and "mais_leve" in pattern:
+        mc = pattern["mais_caro"]
+        ml = pattern["mais_leve"]
+        html += (
+            f'<div style="font-family:JetBrains Mono,monospace;font-size:0.58rem;'
+            f'color:#555;padding-top:6px;border-top:1px solid #111;">'
+            f'Mais pesado: <span style="color:#FF4444;">{mc["dia"]}</span> '
+            f'({fmt_brl(mc["total"])}) · '
+            f'Mais leve: <span style="color:#00FFCC;">{ml["dia"]}</span> '
+            f'({fmt_brl(ml["total"])})'
+            f'</div>'
+        )
+
+    html += '</div>'
+    st.markdown(html, unsafe_allow_html=True)
+
+
+def render_tag_summary(tag_data: list[dict]) -> None:
+    """Renderiza resumo analítico por tags."""
+    if not tag_data:
+        return
+
+    html = '<div class="intel-box">'
+    html += '<div class="intel-title">◆ Análise por Tags (6 meses)</div>'
+
+    for t in tag_data:
+        tag = sanitize(t["tag"])
+        gastos_text = fmt_brl(t["gastos"]) if t["gastos"] > 0 else ""
+        entradas_text = f' +{fmt_brl(t["entradas"])}' if t["entradas"] > 0 else ""
+        html += (
+            f'<div style="display:flex;justify-content:space-between;align-items:center;'
+            f'padding:4px 0;font-family:JetBrains Mono,monospace;font-size:0.62rem;'
+            f'border-bottom:1px solid #0f0f0f;">'
+            f'<span style="color:#00FFCC;min-width:80px;">#{tag}</span>'
+            f'<span style="color:#555;flex:1;text-align:center;">'
+            f'{t["n_transacoes"]}tx · {t["n_meses"]}m</span>'
+            f'<span style="color:#F0F0F0;min-width:90px;text-align:right;">'
+            f'{gastos_text}{entradas_text}</span>'
+            f'</div>'
+        )
+
+    html += '</div>'
+    st.markdown(html, unsafe_allow_html=True)
+
+
+def render_savings_rate(savings_data: list[dict]) -> None:
+    """Renderiza taxa de poupança em barras HTML compactas."""
+    if not savings_data:
+        return
+
+    max_abs = max((abs(d["rate"]) for d in savings_data if d["has_data"]), default=1)
+    if max_abs == 0:
+        max_abs = 1
+
+    html = '<div class="intel-box">'
+    html += '<div class="intel-title">◆ Taxa de Poupança</div>'
+
+    for d in savings_data:
+        if not d["has_data"]:
+            html += (
+                f'<div class="cat-bar-row">'
+                f'<span class="cat-bar-label" style="width:60px;">{d["label"]}</span>'
+                f'<div class="cat-bar-track"></div>'
+                f'<span class="cat-bar-value" style="width:60px;color:#333;">—</span>'
+                f'</div>'
+            )
+            continue
+        rate = d["rate"]
+        pct = min(100, abs(rate) / max_abs * 100) if max_abs > 0 else 0
+        color = "#00FFCC" if rate >= 20 else ("#FFAA00" if rate >= 0 else "#FF4444")
+        sign = "+" if rate > 0 else ""
+        html += (
+            f'<div class="cat-bar-row">'
+            f'<span class="cat-bar-label" style="width:60px;">{d["label"]}</span>'
+            f'<div class="cat-bar-track">'
+            f'<div class="cat-bar-fill" style="width:{pct:.0f}%;background:{color};"></div>'
+            f'</div>'
+            f'<span class="cat-bar-value" style="width:60px;color:{color};">'
+            f'{sign}{rate:.0f}%</span>'
+            f'</div>'
+        )
+
+    active = [d for d in savings_data if d["has_data"]]
+    if active:
+        avg = sum(d["rate"] for d in active) / len(active)
+        avg_color = "#00FFCC" if avg >= 20 else ("#FFAA00" if avg >= 0 else "#FF4444")
+        html += (
+            f'<div style="font-family:JetBrains Mono,monospace;font-size:0.58rem;'
+            f'color:#555;padding-top:6px;border-top:1px solid #111;">'
+            f'Média: <span style="color:{avg_color};">{avg:.0f}%</span> · '
+            f'(Renda − Gastos) ÷ Renda'
+            f'</div>'
+        )
+
+    html += '</div>'
+    st.markdown(html, unsafe_allow_html=True)
+
+
+def render_consistency(consistency: dict | None, user_config: UserConfig | None = None) -> None:
+    """Renderiza índice de consistência financeira."""
+    if not consistency:
+        return
+
+    ucfg = user_config or UserConfig()
+    c = consistency
+
+    overall = c["overall_pct"]
+    if overall >= 80:
+        overall_color, grade = "#00FFCC", "Excelente"
+    elif overall >= 60:
+        overall_color, grade = "#00FFCC", "Bom"
+    elif overall >= 40:
+        overall_color, grade = "#FFAA00", "Regular"
+    else:
+        overall_color, grade = "#FF4444", "Fraco"
+
+    html = (
+        f'<div class="intel-box">'
+        f'<div class="intel-title">◆ Consistência ({c["months_analyzed"]} meses)</div>'
+        f'<div style="display:flex;gap:16px;flex-wrap:wrap;">'
+
+        f'<div style="text-align:center;min-width:70px;">'
+        f'<div style="font-family:JetBrains Mono,monospace;font-size:1.6rem;'
+        f'font-weight:700;color:{overall_color};">{overall:.0f}%</div>'
+        f'<div style="font-family:JetBrains Mono,monospace;font-size:0.5rem;'
+        f'color:#555;text-transform:uppercase;letter-spacing:0.1em;">{grade}</div>'
+        f'</div>'
+
+        f'<div style="flex:1;min-width:150px;">'
+
+        f'<div style="font-family:JetBrains Mono,monospace;font-size:0.62rem;'
+        f'color:#888;padding:3px 0;display:flex;justify-content:space-between;">'
+        f'<span>Meta aporte ({ucfg.meta_investimento}%)</span>'
+        f'<span style="color:{"#00FFCC" if c["aporte_pct"] >= 60 else "#FFAA00"};">'
+        f'{c["aporte_ok"]}/{c["months_analyzed"]} ({c["aporte_pct"]:.0f}%)</span>'
+        f'</div>'
+
+        f'<div style="font-family:JetBrains Mono,monospace;font-size:0.62rem;'
+        f'color:#888;padding:3px 0;display:flex;justify-content:space-between;">'
+        f'<span>Saldo positivo</span>'
+        f'<span style="color:{"#00FFCC" if c["saldo_pct"] >= 60 else "#FFAA00"};">'
+        f'{c["saldo_ok"]}/{c["months_analyzed"]} ({c["saldo_pct"]:.0f}%)</span>'
+        f'</div>'
+
+        f'</div>'
+        f'</div>'
+        f'</div>'
+    )
+    st.markdown(html, unsafe_allow_html=True)
+
+
 # ==============================================================================
 # 9. FORMULÁRIOS
 # ==============================================================================
@@ -4629,6 +4997,14 @@ def main() -> None:
     if user == "Casal":
         divisao_casal = compute_divisao_casal(mx.df_month)
 
+    # --- Phase 8A: Novas análises ---
+    weekday_pattern = compute_weekday_pattern(mx.df_month)
+    tag_summary = compute_tag_summary(df_trans, user, sel_mo, sel_yr)
+    savings_data = compute_savings_rate(df_trans, user, sel_mo, sel_yr)
+    consistency = compute_consistency(
+        df_trans, user, sel_mo, sel_yr, user_config=user_config,
+    )
+
     month_label = fmt_month_year(sel_mo, sel_yr)
     has_data = mx.renda > 0 or mx.lifestyle > 0 or mx.investido_mes > 0
 
@@ -4677,14 +5053,33 @@ def main() -> None:
 
         # ===== ANÁLISE DETALHADA (colapsável) =====
         with st.expander("📊 Análise Detalhada", expanded=False):
-            render_score(score_data)
+            # --- Score & Consistência ---
+            _ad_l, _ad_r = st.columns([1, 1])
+            with _ad_l:
+                render_score(score_data)
+            with _ad_r:
+                render_consistency(consistency, user_config)
+
+            # --- Regra de alocação ---
+            render_regra_503020(mx)
+
+            # --- Casal ---
             if user == "Casal":
                 render_split_casal(mx.split_gastos, mx.split_renda)
                 render_divisao_casal(divisao_casal)
-            render_regra_503020(mx)
-            render_prev_comparison(mx, sel_mo, sel_yr)
+
+            # --- Comparativos lado a lado ---
+            _cmp_l, _cmp_r = st.columns([1, 1])
+            with _cmp_l:
+                render_prev_comparison(mx, sel_mo, sel_yr)
+            with _cmp_r:
+                render_yoy(yoy_data)
+
+            # --- Anual & Poupança ---
             render_annual_strip(annual)
-            render_yoy(yoy_data)
+            render_savings_rate(savings_data)
+
+            # --- Forecast ---
             render_cashflow_forecast(cashflow_forecast)
 
     # ===== LANÇAMENTO RÁPIDO =====
@@ -4780,6 +5175,13 @@ def main() -> None:
                 mx.dia_mais_caro_val,
                 mx.dia_mais_caro_count,
             )
+
+            # --- Padrão semanal ---
+            render_weekday_pattern(weekday_pattern)
+
+            # --- Tags ---
+            if tag_summary:
+                render_tag_summary(tag_summary)
 
             # --- Gestão de Orçamentos ---
             st.markdown("---")
