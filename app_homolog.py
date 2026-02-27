@@ -4903,6 +4903,10 @@ def main() -> None:
 
     validate_worksheets()
 
+    # --- V2: Modo de exibição ---
+    if "display_mode" not in st.session_state:
+        st.session_state.display_mode = "expert"
+
     now = datetime.now()
 
     # --- Barra de Controle ---
@@ -5022,10 +5026,6 @@ def main() -> None:
     df_metas = load_metas()
     df_passivos = load_passivos()
     df_lixeira = load_lixeira()
-
-    # --- V2: Modo de exibição ---
-    if "display_mode" not in st.session_state:
-        st.session_state.display_mode = "expert"
 
     # --- Config do Usuário ---
     user_config = UserConfig.from_df(df_config, user)
@@ -6168,6 +6168,55 @@ def main() -> None:
                 "As configurações são salvas por perfil (Casal/Luan/Luana). "
                 "Se não houver config individual, o app usa os valores do perfil Casal ou os defaults (50/30/20)."
             )
+
+            # --- Backup (S1) ---
+            st.markdown("---")
+            render_intel(
+                "💾 Backup Completo",
+                "Exporte todos os dados (transações, patrimônio, passivos, "
+                "metas, recorrentes, orçamentos, configurações) em um arquivo Excel."
+            )
+            if st.button("GERAR BACKUP", key="backup_btn", use_container_width=True):
+                backup_buf = generate_full_backup()
+                if backup_buf:
+                    backup_date = datetime.now().strftime("%Y%m%d_%H%M")
+                    st.download_button(
+                        f"⬇ BAIXAR BACKUP ({backup_date})",
+                        backup_buf.getvalue(),
+                        f"backup_ll_finance_{backup_date}.xlsx",
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        use_container_width=True,
+                        key="backup_download",
+                    )
+                else:
+                    st.error("Falha ao gerar backup")
+
+            # --- Modo de exibição (V2) ---
+            st.markdown("---")
+            _mode_now = st.session_state.display_mode
+            render_intel(
+                "🖥 Modo de Exibição",
+                f"Atual: <strong>{'Expert (tudo visível)' if _mode_now == 'expert' else 'Clean (essencial)'}</strong>"
+            )
+            _v2_c1, _v2_c2 = st.columns(2)
+            with _v2_c1:
+                if st.button(
+                    "◉ EXPERT" if _mode_now != "expert" else "◉ EXPERT ✓",
+                    key="mode_expert",
+                    use_container_width=True,
+                    disabled=_mode_now == "expert",
+                ):
+                    st.session_state.display_mode = "expert"
+                    st.rerun()
+            with _v2_c2:
+                if st.button(
+                    "○ CLEAN" if _mode_now != "clean" else "○ CLEAN ✓",
+                    key="mode_clean",
+                    use_container_width=True,
+                    disabled=_mode_now == "clean",
+                ):
+                    st.session_state.display_mode = "clean"
+                    st.rerun()
 
 
 # ==============================================================================
