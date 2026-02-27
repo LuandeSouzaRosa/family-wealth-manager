@@ -42,6 +42,8 @@ class Config:
     COLS_CONFIG: tuple = ("Chave", "Valor", "Responsavel")
     COLS_AUDIT: tuple = ("Timestamp", "Usuario", "Acao", "Planilha", "Detalhes")
     COLS_METAS: tuple = ("Id", "Nome", "ValorAlvo", "ValorAtual", "Prazo", "Responsavel", "Ativo")
+    COLS_PASSIVOS: tuple = ("Item", "Valor", "Responsavel")
+    COLS_LIXEIRA: tuple = ("Id", "Data", "Descricao", "Valor", "Categoria", "Tipo", "Responsavel", "Origem", "Tag", "DeletadoEm")
     META_NECESSIDADES: int = 50
     META_DESEJOS: int = 30
     META_INVESTIMENTO: int = 20
@@ -425,6 +427,21 @@ def validate_orcamento(entry: dict) -> tuple[bool, str]:
     return True, ""
 
 
+def validate_passivo(entry: dict) -> tuple[bool, str]:
+    """Valida dados de um passivo (I5)."""
+    item = entry.get("Item", "")
+    if not item or not str(item).strip():
+        return False, "Nome do passivo obrigatório"
+    if len(str(item)) > CFG.MAX_DESC_LENGTH:
+        return False, f"Nome muito longo (máx {CFG.MAX_DESC_LENGTH})"
+    val = entry.get("Valor")
+    if not isinstance(val, (int, float)) or val <= 0:
+        return False, "Valor deve ser maior que zero"
+    if entry.get("Responsavel") not in CFG.RESPONSAVEIS:
+        return False, "Responsável inválido"
+    return True, ""
+
+
 def check_duplicate(df_month: pd.DataFrame, desc: str, valor: float, data_ref) -> bool:
     """Verifica se existe transação com mesma descrição, valor e data no mês."""
     if df_month.empty:
@@ -612,6 +629,124 @@ def load_metas() -> pd.DataFrame:
         df = pd.DataFrame(columns=expected)
     return df
 
+@st.cache_data(ttl=CFG.CACHE_TTL)
+def load_passivos() -> pd.DataFrame:
+    """Carrega passivos (dívidas/financiamentos) do Google Sheets (I5)."""
+    conn = get_conn()
+    expected = list(CFG.COLS_PASSIVOS)
+    try:
+        df = conn.read(worksheet="Passivos")
+        df = df.dropna(how="all")
+        missing = set(expected) - set(df.columns)
+        for col in missing:
+            df[col] = None
+        if not df.empty:
+            df["Valor"] = pd.to_numeric(df["Valor"], errors="coerce").fillna(0.0)
+            df = _normalize_strings(df, ["Item", "Responsavel"])
+    except Exception as e:
+        logger.warning(f"load_passivos: {e}")
+        df = pd.DataFrame(columns=expected)
+    return df
+
+
+@st.cache_data(ttl=CFG.CACHE_TTL)
+def load_lixeira() -> pd.DataFrame:
+    """Carrega transações da lixeira (S3)."""
+    conn = get_conn()
+    expected = list(CFG.COLS_LIXEIRA)
+    try:
+        df = conn.read(worksheet="Lixeira")
+        df = df.dropna(how="all")
+        missing = set(expected) - set(df.columns)
+        for col in missing:
+            df[col] = None
+        if not df.empty:
+            df["Data"] = pd.to_datetime(df["Data"], errors="coerce")
+            df["Valor"] = pd.to_numeric(df["Valor"], errors="coerce").fillna(0.0)
+            df = _normalize_strings(df, ["Tipo", "Categoria", "Responsavel", "Descricao"])
+    except Exception as e:
+        logger.warning(f"load_lixeira: {e}")
+        df = pd.DataFrame(columns=expected)
+    return df
+
+
+def _move_to_lixeira(rows: pd.DataFrame) -> bool:
+    """Move transações para a lixeira (soft delete — S3)."""
+    if rows.empty:
+        return True
+    conn = get_conn()
+    try:
+        try:
+            df_lixeira = conn.read(worksheet="Lixeira")
+            df_lixeira = df_lixeira.dropna(how="all")
+        except Exception:
+            df_lixeira = pd.DataFrame(columns=list(CFG.COLS_LIXEIRA))
+
+        df_to_trash = rows.copy()
+        df_to_trash["DeletadoEm"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        for col in CFG.COLS_LIXEIRA:
+            if col not in df_to_trash.columns:
+                df_to_trash[col] = ""
+
+        df_updated = pd.concat([df_lixeira, df_to_trash[list(CFG.COLS_LIXEIRA)]], ignore_index=True)
+
+        if len(df_updated) > 200:
+            df_updated = df_updated.sort_values("DeletadoEm", ascending=False).head(200).reset_index(drop=True)
+
+        df_updated = _serialize_for_sheet(df_updated)
+        conn.update(worksheet="Lixeira", data=df_updated)
+        logger.info(f"_move_to_lixeira: {len(rows)} registros movidos")
+        _log_audit("SOFT_DELETE", "Lixeira", f"{len(rows)} transações")
+        return True
+    except Exception as e:
+        logger.warning(f"_move_to_lixeira failed: {e}")
+        return False
+
+
+def _restore_from_lixeira(rows: pd.DataFrame) -> bool:
+    """Restaura transações da lixeira para Transacoes (S3)."""
+    if rows.empty:
+        return True
+    conn = get_conn()
+    try:
+        try:
+            df_trans = conn.read(worksheet="Transacoes")
+            df_trans = df_trans.dropna(how="all")
+        except Exception:
+            df_trans = pd.DataFrame(columns=list(CFG.COLS_TRANSACAO))
+
+        df_restore = rows.copy()
+        if "DeletadoEm" in df_restore.columns:
+            df_restore = df_restore.drop(columns=["DeletadoEm"])
+
+        for col in CFG.COLS_TRANSACAO:
+            if col not in df_restore.columns:
+                df_restore[col] = ""
+
+        df_updated = pd.concat([df_trans, df_restore[list(CFG.COLS_TRANSACAO)]], ignore_index=True)
+        df_updated = _serialize_for_sheet(df_updated)
+        conn.update(worksheet="Transacoes", data=df_updated)
+
+        try:
+            df_lixeira = conn.read(worksheet="Lixeira")
+            df_lixeira = df_lixeira.dropna(how="all")
+            restored_ids = set(rows["Id"].astype(str).str.strip())
+            df_lixeira = df_lixeira[~df_lixeira["Id"].astype(str).str.strip().isin(restored_ids)]
+            df_lixeira = _serialize_for_sheet(df_lixeira)
+            conn.update(worksheet="Lixeira", data=df_lixeira)
+        except Exception:
+            pass
+
+        st.cache_data.clear()
+        logger.info(f"_restore_from_lixeira: {len(rows)} restauradas")
+        _log_audit("RESTORE", "Transacoes", f"{len(rows)} da lixeira")
+        return True
+    except Exception as e:
+        logger.error(f"_restore_from_lixeira failed: {e}")
+        return False
+
+
 def save_config(user_config: UserConfig, responsavel: str) -> bool:
     """Salva configurações do usuário na planilha."""
     entries = [
@@ -772,6 +907,8 @@ def validate_worksheets() -> None:
         "Configuracoes": list(CFG.COLS_CONFIG),
         "AuditLog": list(CFG.COLS_AUDIT),
         "Metas": list(CFG.COLS_METAS),
+        "Passivos": list(CFG.COLS_PASSIVOS),
+        "Lixeira": list(CFG.COLS_LIXEIRA),
     }
     issues: list[str] = []
     for ws_name, expected_cols in worksheets.items():
@@ -4286,6 +4423,59 @@ def orcamento_form(default_resp: str = "Casal", df_existing: pd.DataFrame | None
                 st.rerun()
 
 
+def passivo_form(default_resp: str = "Casal") -> None:
+    """Formulário de passivo/dívida (I5)."""
+    with st.form("f_passivo", clear_on_submit=True):
+        item = st.text_input(
+            "Dívida / Financiamento",
+            placeholder="Ex: Financiamento Apto, Empréstimo, Cartão",
+            max_chars=CFG.MAX_DESC_LENGTH,
+        )
+        val = st.number_input("Saldo Devedor (R$)", min_value=0.01, step=100.0)
+        resp_options = list(CFG.RESPONSAVEIS)
+        resp_index = resp_options.index(default_resp) if default_resp in resp_options else 0
+        resp = st.selectbox("Responsável", resp_options, index=resp_index)
+        if st.form_submit_button("ADICIONAR PASSIVO"):
+            entry = {"Item": item.strip(), "Valor": val, "Responsavel": resp}
+            ok, err = validate_passivo(entry)
+            if not ok:
+                st.toast(f"⚠ {err}")
+            elif save_entry(entry, "Passivos"):
+                st.toast(f"✓ Passivo: {item.strip()} — {fmt_brl(val)}")
+                st.rerun()
+
+
+def generate_full_backup() -> BytesIO | None:
+    """Gera backup completo de todas as planilhas em Excel (S1)."""
+    try:
+        conn = get_conn()
+        buffer = BytesIO()
+        sheets_to_backup = [
+            "Transacoes", "Patrimonio", "Passivos", "Recorrentes",
+            "Orcamentos", "Metas", "Configuracoes",
+        ]
+        with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+            for ws_name in sheets_to_backup:
+                try:
+                    df = conn.read(worksheet=ws_name)
+                    df = df.dropna(how="all")
+                    if "Data" in df.columns:
+                        df["Data"] = pd.to_datetime(
+                            df["Data"], errors="coerce"
+                        ).dt.strftime("%Y-%m-%d")
+                    df.to_excel(writer, sheet_name=ws_name, index=False)
+                except Exception:
+                    pd.DataFrame().to_excel(
+                        writer, sheet_name=ws_name, index=False
+                    )
+        buffer.seek(0)
+        _log_audit("BACKUP", "ALL", f"{len(sheets_to_backup)} planilhas")
+        return buffer
+    except Exception as e:
+        logger.error(f"generate_full_backup failed: {e}")
+        return None
+
+
 def meta_form(default_resp: str = "Casal") -> None:
     """Formulário para criar meta financeira (G1)."""
     with st.form("f_meta", clear_on_submit=True):
@@ -4535,9 +4725,9 @@ def _save_historico_mensal(
     sel_mo: int,
     sel_yr: int,
 ) -> None:
-    """Salva edições do histórico mensal na planilha completa."""
+    """Salva edições do histórico mensal com soft delete (S3)."""
     st.cache_data.clear()
-    time.sleep(0.3)  # Delay para consistência com GSheets
+    time.sleep(0.3)
     df_full_fresh, _ = load_data()
 
     mask_month = (
@@ -4549,6 +4739,20 @@ def _save_historico_mensal(
         mask_remove = mask_month & mask_user
     else:
         mask_remove = mask_month
+
+    df_original_month = df_full_fresh[mask_remove].copy()
+
+    # --- Detectar linhas removidas e mover para Lixeira (S3) ---
+    if not df_original_month.empty and len(edited_month) < len(df_original_month):
+        if "Id" in df_original_month.columns and "Id" in edited_month.columns:
+            orig_ids = set(df_original_month["Id"].astype(str).str.strip())
+            edit_ids = set(edited_month["Id"].astype(str).str.strip())
+            removed_ids = orig_ids - edit_ids
+            if removed_ids:
+                df_removed = df_original_month[
+                    df_original_month["Id"].astype(str).str.strip().isin(removed_ids)
+                ]
+                _move_to_lixeira(df_removed)
 
     df_kept = df_full_fresh[~mask_remove].copy()
     df_merged = pd.concat([df_kept, edited_month], ignore_index=True)
@@ -4729,11 +4933,22 @@ def main() -> None:
             unsafe_allow_html=True,
         )
         cs1, cs2 = st.columns(2)
+        cs1, cs2, cs3 = st.columns(3)
         with cs1:
             if st.button("⟳", key="refresh_btn", help="Atualizar dados"):
                 st.cache_data.clear()
                 st.rerun()
         with cs2:
+            _mode_label = "◉" if st.session_state.display_mode == "expert" else "○"
+            if st.button(
+                _mode_label, key="mode_toggle",
+                help="Expert ↔ Clean",
+            ):
+                st.session_state.display_mode = (
+                    "clean" if st.session_state.display_mode == "expert" else "expert"
+                )
+                st.rerun()
+        with cs3:
             if auth_user:
                 if st.button("⏻", key="logout_btn", help="Sair"):
                     _logout()
@@ -4805,6 +5020,12 @@ def main() -> None:
     df_recorrentes = load_recorrentes()
     df_orcamentos = load_orcamentos()
     df_metas = load_metas()
+    df_passivos = load_passivos()
+    df_lixeira = load_lixeira()
+
+    # --- V2: Modo de exibição ---
+    if "display_mode" not in st.session_state:
+        st.session_state.display_mode = "expert"
 
     # --- Config do Usuário ---
     user_config = UserConfig.from_df(df_config, user)
@@ -4929,8 +5150,9 @@ def main() -> None:
         # ===== PROJEÇÃO (só mês atual) =====
         render_projection(projection, mx)
 
-        # ===== ANÁLISE DETALHADA (colapsável com sub-tabs — X5) =====
-        with st.expander("📊 Análise Detalhada", expanded=False):
+        # ===== ANÁLISE DETALHADA (colapsável com sub-tabs — X5, V2) =====
+        if st.session_state.display_mode == "expert":
+          with st.expander("📊 Análise Detalhada", expanded=False):
             ad_score, ad_regra, ad_comp, ad_forecast = st.tabs([
                 "SCORE", "REGRA", "COMPARATIVO", "FORECAST"
             ])
@@ -5243,11 +5465,18 @@ def main() -> None:
 
     with tab_pat:
         df_assets_view = filter_by_user(df_assets, user, include_shared=True)
+        df_passivos_view = filter_by_user(df_passivos, user, include_shared=True)
         total_pat = df_assets_view["Valor"].sum() if not df_assets_view.empty else 0
+        total_passivos = df_passivos_view["Valor"].sum() if not df_passivos_view.empty else 0
+        patrimonio_liquido = mx.sobrevivencia - total_passivos
 
+        _pl_color = "#00FFCC" if patrimonio_liquido >= 0 else "#FF4444"
         render_intel(
             "Patrimônio & Investimentos",
-            f"Reserva Total: <strong>{fmt_brl(mx.sobrevivencia)}</strong> · "
+            f"Patrimônio Líquido: <strong style='color:{_pl_color};'>"
+            f"{fmt_brl(patrimonio_liquido)}</strong><br>"
+            f"Ativos: <strong>{fmt_brl(mx.sobrevivencia)}</strong> · "
+            f"Passivos: <strong style='color:#FF4444;'>{fmt_brl(total_passivos)}</strong> · "
             f"Autonomia: <strong>{mx.autonomia:.1f} meses</strong><br>"
             f"Investido (mês): <strong>{fmt_brl(mx.investido_mes)}</strong> · "
             f"Acumulado: <strong>{fmt_brl(mx.investido_total)}</strong> · "
@@ -5297,6 +5526,70 @@ def main() -> None:
                 f"Saldos e ativos estáticos<br>{partes}"
             )
             patrimonio_form(default_resp=user)
+
+            # --- Passivos (I5) ---
+            st.markdown("---")
+            _passivos_total_text = (
+                f"Saldo devedor total: <strong style='color:#FF4444;'>"
+                f"{fmt_brl(total_passivos)}</strong>"
+                if total_passivos > 0
+                else "Nenhum passivo registrado"
+            )
+            render_intel("📉 Passivos (Dívidas)", _passivos_total_text)
+            passivo_form(default_resp=user)
+
+            if not df_passivos_view.empty:
+                edited_passivos = st.data_editor(
+                    df_passivos_view,
+                    use_container_width=True,
+                    num_rows="dynamic",
+                    column_config={
+                        "Item": st.column_config.TextColumn("Dívida", required=True),
+                        "Valor": st.column_config.NumberColumn(
+                            "Saldo Devedor", format="R$ %.2f",
+                            required=True, min_value=0.01,
+                        ),
+                        "Responsavel": st.column_config.SelectboxColumn(
+                            "Responsável", options=list(CFG.RESPONSAVEIS),
+                        ),
+                    },
+                    hide_index=True,
+                    key=f"editor_passivos_{user}",
+                )
+                if not _df_equals_safe(df_passivos_view, edited_passivos):
+                    c_save, c_cancel = st.columns(2)
+                    with c_save:
+                        if st.button(
+                            "✓ SALVAR PASSIVOS",
+                            key=f"save_pass_{user}",
+                            use_container_width=True,
+                        ):
+                            pass_errors = []
+                            for idx, row in edited_passivos.iterrows():
+                                entry = {
+                                    "Item": row.get("Item", ""),
+                                    "Valor": row.get("Valor", 0),
+                                    "Responsavel": row.get("Responsavel", ""),
+                                }
+                                ok, err = validate_passivo(entry)
+                                if not ok:
+                                    pass_errors.append(f"Linha {idx + 1}: {err}")
+                            if pass_errors:
+                                for pe in pass_errors[:5]:
+                                    st.error(f"⚠ {pe}")
+                            else:
+                                if _save_filtered_sheet(
+                                    df_passivos, edited_passivos, user, "Passivos"
+                                ):
+                                    st.toast("✓ Passivos atualizados")
+                                    st.rerun()
+                    with c_cancel:
+                        if st.button(
+                            "✗ DESCARTAR",
+                            key=f"discard_pass_{user}",
+                            use_container_width=True,
+                        ):
+                            st.rerun()
 
         with col_right:
             # --- Gráfico Evolução Patrimonial ---
@@ -5673,6 +5966,52 @@ def main() -> None:
 
         # [FIX B2] Removido df_trans da chamada
         _render_historico(mx, user, sel_mo, sel_yr)
+
+        # --- Lixeira (S3) ---
+        if not df_lixeira.empty:
+            with st.expander(f"🗑 Lixeira ({len(df_lixeira)} itens)"):
+                render_intel(
+                    "Transações Excluídas",
+                    f"{len(df_lixeira)} transações na lixeira (máx 200, auto-limpa)"
+                )
+                df_lixeira_display = df_lixeira.copy()
+                if "Data" in df_lixeira_display.columns:
+                    df_lixeira_display["Data"] = pd.to_datetime(
+                        df_lixeira_display["Data"], errors="coerce"
+                    )
+                df_lixeira_sorted = df_lixeira_display.sort_values(
+                    "DeletadoEm", ascending=False
+                ).head(20).reset_index(drop=True)
+
+                st.dataframe(
+                    df_lixeira_sorted[
+                        [c for c in ["DeletadoEm", "Data", "Descricao", "Valor", "Categoria", "Tipo"]
+                         if c in df_lixeira_sorted.columns]
+                    ],
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
+                _sel_restore = st.multiselect(
+                    "Selecione para restaurar",
+                    options=df_lixeira_sorted.index.tolist(),
+                    format_func=lambda i: (
+                        f"{df_lixeira_sorted.loc[i, 'Descricao']}"
+                        f" — {fmt_brl(float(df_lixeira_sorted.loc[i, 'Valor']))}"
+                    ),
+                    key="restore_sel",
+                )
+                if _sel_restore and st.button(
+                    f"↩ RESTAURAR {len(_sel_restore)} TRANSAÇÃO(ÕES)",
+                    key="restore_btn",
+                    use_container_width=True,
+                ):
+                    rows_to_restore = df_lixeira_sorted.loc[_sel_restore]
+                    if _restore_from_lixeira(rows_to_restore):
+                        st.toast(f"✓ {len(_sel_restore)} restaurada(s)")
+                        st.rerun()
+                    else:
+                        st.error("Falha ao restaurar")
 
     with tab_cfg:
         render_intel(
