@@ -41,6 +41,7 @@ class Config:
     COLS_ORCAMENTO: tuple = ("Categoria", "Limite", "Responsavel")
     COLS_CONFIG: tuple = ("Chave", "Valor", "Responsavel")
     COLS_AUDIT: tuple = ("Timestamp", "Usuario", "Acao", "Planilha", "Detalhes")
+    COLS_METAS: tuple = ("Id", "Nome", "ValorAlvo", "ValorAtual", "Prazo", "Responsavel", "Ativo")
     META_NECESSIDADES: int = 50
     META_DESEJOS: int = 30
     META_INVESTIMENTO: int = 20
@@ -584,6 +585,33 @@ def load_config() -> pd.DataFrame:
     return df
 
 
+@st.cache_data(ttl=CFG.CACHE_TTL)
+def load_metas() -> pd.DataFrame:
+    """Carrega metas financeiras do Google Sheets (G1)."""
+    conn = get_conn()
+    expected = list(CFG.COLS_METAS)
+    try:
+        df = conn.read(worksheet="Metas")
+        df = df.dropna(how="all")
+        missing = set(expected) - set(df.columns)
+        for col in missing:
+            df[col] = None
+        if not df.empty:
+            df["ValorAlvo"] = pd.to_numeric(df["ValorAlvo"], errors="coerce").fillna(0.0)
+            df["ValorAtual"] = pd.to_numeric(df["ValorAtual"], errors="coerce").fillna(0.0)
+            df["Ativo"] = df["Ativo"].apply(_parse_ativo)
+            df = _normalize_strings(df, ["Id", "Nome", "Prazo", "Responsavel"])
+            if "Id" not in df.columns:
+                df["Id"] = ""
+            df["Id"] = df["Id"].fillna("").astype(str)
+            empty_ids = df["Id"].str.strip() == ""
+            if empty_ids.any():
+                df.loc[empty_ids, "Id"] = [generate_id() for _ in range(empty_ids.sum())]
+    except Exception as e:
+        logger.warning(f"load_metas: {e}")
+        df = pd.DataFrame(columns=expected)
+    return df
+
 def save_config(user_config: UserConfig, responsavel: str) -> bool:
     """Salva configurações do usuário na planilha."""
     entries = [
@@ -743,6 +771,7 @@ def validate_worksheets() -> None:
         "Orcamentos": list(CFG.COLS_ORCAMENTO),
         "Configuracoes": list(CFG.COLS_CONFIG),
         "AuditLog": list(CFG.COLS_AUDIT),
+        "Metas": list(CFG.COLS_METAS),
     }
     issues: list[str] = []
     for ws_name, expected_cols in worksheets.items():
@@ -2241,6 +2270,215 @@ def compute_frequent_transactions(
         for _, row in groups.iterrows()
     ]
 
+
+def compute_meta_progress(
+    df_metas: pd.DataFrame, user_filter: str,
+) -> list[dict]:
+    """Calcula progresso de cada meta ativa (G1)."""
+    df = filter_by_user(df_metas, user_filter, include_shared=True)
+    if df.empty:
+        return []
+
+    now = datetime.now()
+    results: list[dict] = []
+
+    for _, row in df[df["Ativo"].eq(True)].iterrows():
+        nome = str(row.get("Nome", "")).strip()
+        alvo = float(row.get("ValorAlvo", 0))
+        atual = float(row.get("ValorAtual", 0))
+        prazo_str = str(row.get("Prazo", "")).strip()
+
+        if alvo <= 0 or not nome:
+            continue
+
+        pct = (atual / alvo) * 100
+        restante = max(0, alvo - atual)
+
+        prazo_date = None
+        months_remaining = None
+        monthly_needed = None
+
+        if prazo_str and prazo_str not in ("", "nan", "None"):
+            try:
+                if len(prazo_str) == 7 and prazo_str[4] == "-":
+                    prazo_date = datetime(int(prazo_str[:4]), int(prazo_str[5:7]), 28)
+                elif len(prazo_str) >= 10:
+                    prazo_date = datetime.strptime(prazo_str[:10], "%Y-%m-%d")
+            except (ValueError, IndexError):
+                pass
+
+        if prazo_date:
+            delta = (prazo_date.year - now.year) * 12 + (prazo_date.month - now.month)
+            months_remaining = max(0, delta)
+            if months_remaining > 0 and restante > 0:
+                monthly_needed = restante / months_remaining
+
+        if pct >= 100:
+            status = "achieved"
+        elif prazo_date and prazo_date < now:
+            status = "overdue"
+        else:
+            status = "active"
+
+        results.append({
+            "id": str(row.get("Id", "")),
+            "nome": nome,
+            "alvo": alvo,
+            "atual": atual,
+            "pct": min(100, pct),
+            "restante": restante,
+            "prazo": prazo_str if prazo_str not in ("nan", "None") else "",
+            "prazo_date": prazo_date,
+            "months_remaining": months_remaining,
+            "monthly_needed": monthly_needed,
+            "status": status,
+            "responsavel": str(row.get("Responsavel", "")),
+        })
+
+    results.sort(key=lambda x: x["pct"], reverse=True)
+    return results
+
+
+# --- N1: CSV Import ---
+
+_BANK_FORMATS: dict[str, dict] = {
+    "Nubank": {
+        "date_col": "data",
+        "desc_col": "descrição",
+        "value_col": "valor",
+        "date_formats": ["%Y-%m-%d", "%d/%m/%Y"],
+        "negative_is_expense": True,
+    },
+    "Inter": {
+        "date_col": "data lançamento",
+        "desc_col": "descrição",
+        "value_col": "valor",
+        "date_formats": ["%d/%m/%Y", "%Y-%m-%d"],
+        "negative_is_expense": True,
+    },
+}
+
+_AUTO_CAT_RULES: dict[str, list[str]] = {
+    "Transporte": ["uber", "99", "taxi", "cabify", "combustivel", "gasolina", "estacionamento", "pedágio"],
+    "Alimentação": ["mercado", "supermercado", "hortifruti", "padaria", "açougue", "ifood", "restaurante", "lanche"],
+    "Moradia": ["aluguel", "condominio", "iptu", "luz", "energia", "agua", "gás"],
+    "Saúde": ["farmacia", "drogaria", "medico", "hospital", "laboratorio", "consulta", "plano de saude"],
+    "Lazer": ["cinema", "teatro", "bar", "cerveja", "viagem", "hotel", "ingresso"],
+    "Assinaturas": ["netflix", "spotify", "amazon", "disney", "hbo", "youtube", "icloud", "apple"],
+    "Educação": ["curso", "escola", "faculdade", "livro", "udemy", "alura"],
+}
+
+
+def _auto_categorize(desc: str) -> str:
+    """Categoriza descrição automaticamente por keywords."""
+    desc_lower = desc.lower()
+    for cat, keywords in _AUTO_CAT_RULES.items():
+        for kw in keywords:
+            if kw in desc_lower:
+                return cat
+    return "Outros"
+
+
+def _find_csv_col(cols_lower: dict[str, str], target: str) -> str | None:
+    """Busca coluna no CSV por nome parcial case-insensitive."""
+    target_l = target.lower()
+    for key, original in cols_lower.items():
+        if target_l in key:
+            return original
+    return None
+
+
+def parse_bank_csv(
+    uploaded_file, bank_format: str, responsavel: str,
+) -> pd.DataFrame | None:
+    """Parse CSV bancário em DataFrame de transações (N1)."""
+    try:
+        content = uploaded_file.read()
+        uploaded_file.seek(0)
+        df = None
+        for enc in ["utf-8-sig", "utf-8", "latin-1", "cp1252"]:
+            try:
+                df = pd.read_csv(BytesIO(content), encoding=enc)
+                if df is not None and not df.empty:
+                    break
+            except Exception:
+                continue
+        if df is None or df.empty or len(df.columns) < 2:
+            return None
+    except Exception:
+        return None
+
+    cols_lower = {c.strip().lower(): c for c in df.columns}
+
+    fmt = _BANK_FORMATS.get(bank_format)
+    if fmt:
+        date_col = _find_csv_col(cols_lower, fmt["date_col"])
+        desc_col = _find_csv_col(cols_lower, fmt["desc_col"])
+        value_col = _find_csv_col(cols_lower, fmt["value_col"])
+        date_formats = fmt["date_formats"]
+        neg_is_expense = fmt["negative_is_expense"]
+    else:
+        date_col = _find_csv_col(cols_lower, "data")
+        desc_col = _find_csv_col(cols_lower, "descri")
+        value_col = _find_csv_col(cols_lower, "valor")
+        date_formats = ["%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y"]
+        neg_is_expense = True
+
+    if not all([date_col, desc_col, value_col]):
+        return None
+
+    results: list[dict] = []
+    for _, row in df.iterrows():
+        desc = str(row[desc_col]).strip()
+        if not desc or desc in ("nan", ""):
+            continue
+
+        val_raw = (
+            str(row[value_col])
+            .replace("R$", "").replace(" ", "")
+            .replace(".", "").replace(",", ".").strip()
+        )
+        try:
+            val = float(val_raw)
+        except ValueError:
+            continue
+
+        if neg_is_expense:
+            tipo = CFG.TIPO_SAIDA if val < 0 else CFG.TIPO_ENTRADA
+        else:
+            tipo = CFG.TIPO_SAIDA
+        val = abs(val)
+        if val == 0:
+            continue
+
+        date_str = str(row[date_col]).strip()[:10]
+        parsed_date = None
+        for dfmt in date_formats:
+            try:
+                parsed_date = datetime.strptime(date_str, dfmt).date()
+                break
+            except ValueError:
+                continue
+        if not parsed_date:
+            continue
+
+        cat = _auto_categorize(desc) if tipo == CFG.TIPO_SAIDA else "Extra"
+
+        results.append({
+            "Id": generate_id(),
+            "Data": parsed_date,
+            "Descricao": desc[: CFG.MAX_DESC_LENGTH],
+            "Valor": round(val, 2),
+            "Categoria": cat,
+            "Tipo": tipo,
+            "Responsavel": responsavel,
+            "Origem": "CSV",
+            "Tag": "",
+        })
+
+    return pd.DataFrame(results) if results else None
+
+
 # ==============================================================================
 # 8. COMPONENTES VISUAIS
 # ==============================================================================
@@ -3724,6 +3962,59 @@ def render_calendar_heatmap(heatmap: dict | None) -> None:
     st.markdown(html, unsafe_allow_html=True)
 
 
+def render_metas(metas_progress: list[dict]) -> None:
+    """Renderiza cards de metas financeiras com progresso (G1)."""
+    if not metas_progress:
+        render_intel("Metas", "Nenhuma meta ativa. Crie uma usando o formulário ao lado.")
+        return
+
+    for m in metas_progress:
+        pct = m["pct"]
+        if m["status"] == "achieved":
+            color, status_text = "#00FFCC", "✓ Atingida"
+        elif m["status"] == "overdue":
+            color, status_text = "#FF4444", "⚠ Prazo vencido"
+        else:
+            color = "#00FFCC" if pct >= 50 else "#FFAA00"
+            status_text = f"{pct:.0f}%"
+
+        prazo_info = ""
+        if m["months_remaining"] is not None:
+            if m["monthly_needed"] and m["monthly_needed"] > 0:
+                prazo_info = (
+                    f' · {m["months_remaining"]}m restantes '
+                    f'· precisa {fmt_brl(m["monthly_needed"])}/mês'
+                )
+            else:
+                prazo_info = f' · {m["months_remaining"]}m restantes'
+        elif m["prazo"]:
+            prazo_info = f' · Prazo: {m["prazo"]}'
+
+        html = (
+            f'<div class="intel-box">'
+            f'<div style="display:flex;justify-content:space-between;align-items:center;">'
+            f'<div class="intel-title" style="margin-bottom:0;">'
+            f'{sanitize(m["nome"])}</div>'
+            f'<span style="font-family:JetBrains Mono,monospace;font-size:0.6rem;'
+            f'color:{color};font-weight:700;">{status_text}</span>'
+            f'</div>'
+            f'<div style="font-family:JetBrains Mono,monospace;font-size:0.8rem;'
+            f'color:#F0F0F0;margin:8px 0 4px 0;">'
+            f'{fmt_brl(m["atual"])} / {fmt_brl(m["alvo"])}'
+            f'</div>'
+            f'<div style="width:100%;height:6px;background:#111;margin-bottom:4px;">'
+            f'<div style="width:{min(100, pct):.0f}%;height:100%;background:{color};'
+            f'transition:width 0.4s ease;"></div>'
+            f'</div>'
+            f'<div style="font-family:JetBrains Mono,monospace;font-size:0.55rem;'
+            f'color:#555;">'
+            f'Restante: {fmt_brl(m["restante"])}{prazo_info}'
+            f'</div>'
+            f'</div>'
+        )
+        st.markdown(html, unsafe_allow_html=True)
+
+
 # ==============================================================================
 # 9. FORMULÁRIOS
 # ==============================================================================
@@ -3993,6 +4284,54 @@ def orcamento_form(default_resp: str = "Casal", df_existing: pd.DataFrame | None
             elif save_entry(entry, "Orcamentos"):
                 st.toast(f"✓ Limite de {fmt_brl(limite)} definido para {cat}")
                 st.rerun()
+
+
+def meta_form(default_resp: str = "Casal") -> None:
+    """Formulário para criar meta financeira (G1)."""
+    with st.form("f_meta", clear_on_submit=True):
+        nome = st.text_input(
+            "Nome da Meta",
+            placeholder="Ex: Reserva de Emergência, Viagem Europa",
+            max_chars=100,
+        )
+        m1, m2 = st.columns(2)
+        with m1:
+            valor_alvo = st.number_input("Valor Alvo (R$)", min_value=0.01, step=500.0)
+        with m2:
+            valor_atual = st.number_input(
+                "Valor Atual (R$)", min_value=0.0, step=100.0, value=0.0,
+            )
+        m3, m4 = st.columns(2)
+        with m3:
+            prazo = st.text_input(
+                "Prazo (YYYY-MM)", placeholder="Ex: 2025-12", max_chars=7,
+            )
+        with m4:
+            resp_opts = list(CFG.RESPONSAVEIS)
+            resp_idx = resp_opts.index(default_resp) if default_resp in resp_opts else 0
+            resp = st.selectbox("Responsável", resp_opts, index=resp_idx)
+        if st.form_submit_button("CRIAR META", use_container_width=True):
+            if not nome or not nome.strip():
+                st.toast("⚠ Nome da meta obrigatório")
+            elif valor_alvo <= 0:
+                st.toast("⚠ Valor alvo deve ser maior que zero")
+            elif valor_atual < 0:
+                st.toast("⚠ Valor atual não pode ser negativo")
+            elif prazo and not (len(prazo.strip()) == 7 and prazo.strip()[4] == "-"):
+                st.toast("⚠ Prazo deve estar no formato YYYY-MM (ex: 2025-12)")
+            else:
+                entry = {
+                    "Id": generate_id(),
+                    "Nome": nome.strip(),
+                    "ValorAlvo": valor_alvo,
+                    "ValorAtual": valor_atual,
+                    "Prazo": prazo.strip() if prazo else "",
+                    "Responsavel": resp,
+                    "Ativo": True,
+                }
+                if save_entry(entry, "Metas"):
+                    st.toast(f"✓ Meta criada: {nome.strip()}")
+                    st.rerun()
 
 
 # ==============================================================================
@@ -4465,6 +4804,7 @@ def main() -> None:
     df_trans, df_assets = load_data()
     df_recorrentes = load_recorrentes()
     df_orcamentos = load_orcamentos()
+    df_metas = load_metas()
 
     # --- Config do Usuário ---
     user_config = UserConfig.from_df(df_config, user)
@@ -4539,8 +4879,42 @@ def main() -> None:
     month_label = fmt_month_year(sel_mo, sel_yr)
     has_data = mx.renda > 0 or mx.lifestyle > 0 or mx.investido_mes > 0
 
-    # ===== HERO =====
-    render_autonomia(mx.autonomia, mx.sobrevivencia, user_config)
+    # ===== DASHBOARD COMPACTO (V1) =====
+    if has_data:
+        _dash_l, _dash_r = st.columns([1, 2])
+        with _dash_l:
+            render_autonomia(mx.autonomia, mx.sobrevivencia, user_config)
+        with _dash_r:
+            _kr1, _kr2, _kr3 = st.columns(3)
+            with _kr1:
+                render_kpi("Renda", fmt_brl(mx.renda), "Entradas", mx.d_renda)
+            with _kr2:
+                render_kpi(
+                    "Gastos", fmt_brl(mx.lifestyle), "Consumo",
+                    mx.d_lifestyle, delta_invert=True,
+                )
+            with _kr3:
+                render_kpi(
+                    "Investido", fmt_brl(mx.investido_mes),
+                    f"Aporte: {mx.taxa_aporte:.1f}%", mx.d_investido,
+                )
+            _saldo_color = "#00FFCC" if mx.disponivel >= 0 else "#FF4444"
+            st.markdown(
+                f'<div style="font-family:JetBrains Mono,monospace;padding:4px 16px;'
+                f'display:flex;justify-content:space-between;align-items:center;'
+                f'border-left:3px solid {_saldo_color};margin-bottom:8px;">'
+                f'<span style="font-size:0.6rem;color:#555;text-transform:uppercase;'
+                f'letter-spacing:0.15em;">Saldo</span>'
+                f'<span style="font-size:1.1rem;font-weight:700;color:{_saldo_color};">'
+                f'{fmt_brl(mx.disponivel)}</span>'
+                f'<span style="font-size:0.55rem;color:#444;">Reserva: '
+                f'{fmt_brl(mx.sobrevivencia)}</span>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+            render_aporte_meta(mx)
+    else:
+        render_autonomia(mx.autonomia, mx.sobrevivencia, user_config)
 
     # ===== HEALTH + ALERTAS =====
     render_health_badge(mx.health, month_label, mx.month_tx_count)
@@ -4554,33 +4928,6 @@ def main() -> None:
     else:
         # ===== PROJEÇÃO (só mês atual) =====
         render_projection(projection, mx)
-
-        # ===== KPI STRIP =====
-        k1, k2 = st.columns(2)
-        k3, k4 = st.columns(2)
-        with k1:
-            render_kpi(
-                "Fluxo Mensal", fmt_brl(mx.disponivel),
-                "Entradas − Saídas − Aportes", mx.d_disponivel
-            )
-        with k2:
-            render_kpi(
-                "Renda", fmt_brl(mx.renda),
-                "Entradas do mês", mx.d_renda
-            )
-        with k3:
-            render_kpi(
-                "Investido", fmt_brl(mx.investido_mes),
-                f"Taxa de Aporte: {mx.taxa_aporte:.1f}%", mx.d_investido
-            )
-        with k4:
-            render_kpi(
-                "Reserva Total", fmt_brl(mx.sobrevivencia),
-                "Patrimônio acumulado"
-            )
-
-        # ===== META DE APORTE =====
-        render_aporte_meta(mx)
 
         # ===== ANÁLISE DETALHADA (colapsável com sub-tabs — X5) =====
         with st.expander("📊 Análise Detalhada", expanded=False):
@@ -4741,8 +5088,8 @@ def main() -> None:
                             st.rerun()
 
     # ===== ABAS =====
-    tab_ls, tab_renda, tab_pat, tab_rec, tab_hist, tab_cfg = st.tabs([
-        "GASTOS", "RENDA", "PATRIMÔNIO", "FIXOS", "HISTÓRICO", "CONFIG"
+    tab_ls, tab_renda, tab_pat, tab_rec, tab_metas, tab_hist, tab_cfg = st.tabs([
+        "GASTOS", "RENDA", "PATRIMÔNIO", "FIXOS", "METAS", "HISTÓRICO", "CONFIG"
     ])
 
     with tab_ls:
@@ -5161,7 +5508,169 @@ def main() -> None:
                     "Nenhuma recorrente cadastrada. Use o formulário ao lado."
                 )
 
+    with tab_metas:
+        render_intel(
+            "🎯 Metas Financeiras",
+            "Defina objetivos, acompanhe progresso e veja projeções."
+        )
+        metas_progress = compute_meta_progress(df_metas, user)
+
+        col_metas_l, col_metas_r = st.columns([1, 1])
+        with col_metas_l:
+            render_metas(metas_progress)
+        with col_metas_r:
+            render_intel("Nova Meta", "Defina um objetivo financeiro com prazo")
+            meta_form(default_resp=user)
+            df_metas_view = filter_by_user(df_metas, user, include_shared=True)
+            if not df_metas_view.empty:
+                st.markdown("---")
+                render_intel(
+                    "Gerenciar Metas",
+                    f"{len(df_metas_view)} meta(s) cadastrada(s)"
+                )
+                edited_metas = st.data_editor(
+                    df_metas_view,
+                    use_container_width=True,
+                    num_rows="dynamic",
+                    column_config={
+                        "Id": None,
+                        "Nome": st.column_config.TextColumn("Meta", required=True),
+                        "ValorAlvo": st.column_config.NumberColumn(
+                            "Alvo", format="R$ %.2f", required=True, min_value=0.01,
+                        ),
+                        "ValorAtual": st.column_config.NumberColumn(
+                            "Atual", format="R$ %.2f", required=True, min_value=0.0,
+                        ),
+                        "Prazo": st.column_config.TextColumn("Prazo", max_chars=7),
+                        "Responsavel": st.column_config.SelectboxColumn(
+                            "Responsável", options=list(CFG.RESPONSAVEIS),
+                        ),
+                        "Ativo": st.column_config.CheckboxColumn("Ativo", default=True),
+                    },
+                    hide_index=True,
+                    key=f"editor_metas_{user}",
+                )
+                if not _df_equals_safe(df_metas_view, edited_metas):
+                    c_save, c_cancel = st.columns(2)
+                    with c_save:
+                        if st.button(
+                            "✓ SALVAR METAS",
+                            key=f"save_metas_{user}",
+                            use_container_width=True,
+                        ):
+                            if _save_filtered_sheet(
+                                df_metas, edited_metas, user, "Metas"
+                            ):
+                                st.toast("✓ Metas atualizadas")
+                                st.rerun()
+                    with c_cancel:
+                        if st.button(
+                            "✗ DESCARTAR",
+                            key=f"discard_metas_{user}",
+                            use_container_width=True,
+                        ):
+                            st.rerun()
+
     with tab_hist:
+        # --- Import CSV (N1) ---
+        with st.expander("📎 Importar Extrato Bancário"):
+            csv_file = st.file_uploader(
+                "CSV do banco", type=["csv"], key="csv_upload",
+            )
+            _csv_c1, _csv_c2 = st.columns(2)
+            with _csv_c1:
+                csv_bank = st.selectbox(
+                    "Formato", ["Nubank", "Inter", "Manual"], key="csv_bank",
+                )
+            with _csv_c2:
+                _csv_resp_opts = list(CFG.RESPONSAVEIS)
+                _csv_resp_idx = (
+                    _csv_resp_opts.index(user)
+                    if user in _csv_resp_opts
+                    else 0
+                )
+                csv_resp = st.selectbox(
+                    "Responsável", _csv_resp_opts,
+                    index=_csv_resp_idx, key="csv_resp",
+                )
+
+            if csv_file is not None:
+                df_parsed = parse_bank_csv(csv_file, csv_bank, csv_resp)
+                if df_parsed is not None and not df_parsed.empty:
+                    n_dup = 0
+                    if not mx.df_month.empty:
+                        for _, _pr in df_parsed.iterrows():
+                            if check_duplicate(
+                                mx.df_month,
+                                str(_pr["Descricao"]),
+                                float(_pr["Valor"]),
+                                _pr["Data"],
+                            ):
+                                n_dup += 1
+
+                    _n_ent = len(
+                        df_parsed[df_parsed["Tipo"] == CFG.TIPO_ENTRADA]
+                    )
+                    _n_sai = len(
+                        df_parsed[df_parsed["Tipo"] == CFG.TIPO_SAIDA]
+                    )
+                    _dup_warn = (
+                        f"<br>⚠ {n_dup} possíveis duplicatas"
+                        if n_dup > 0
+                        else ""
+                    )
+
+                    st.markdown(
+                        f'<div class="intel-box">'
+                        f'<div class="intel-title">'
+                        f'Preview — {len(df_parsed)} transações</div>'
+                        f'<div class="intel-body">'
+                        f'Entradas: {_n_ent} · Saídas: {_n_sai}'
+                        f'{_dup_warn}</div></div>',
+                        unsafe_allow_html=True,
+                    )
+
+                    st.dataframe(
+                        df_parsed[
+                            ["Data", "Descricao", "Valor", "Categoria", "Tipo"]
+                        ].head(20),
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+
+                    if st.button(
+                        f"IMPORTAR {len(df_parsed)} TRANSAÇÕES",
+                        key="csv_import_btn",
+                        use_container_width=True,
+                    ):
+                        imported = 0
+                        for _, _row_csv in df_parsed.iterrows():
+                            entry = _row_csv.to_dict()
+                            ok, _ = validate_transaction(entry)
+                            if ok and save_entry(
+                                entry,
+                                "Transacoes",
+                                skip_audit=True,
+                                skip_rate_limit=True,
+                            ):
+                                imported += 1
+                        if imported > 0:
+                            _log_audit(
+                                "CSV_IMPORT",
+                                "Transacoes",
+                                f"{imported} via {csv_bank}",
+                            )
+                            st.toast(f"✓ {imported} transações importadas")
+                            st.rerun()
+                        else:
+                            st.error("Nenhuma transação importada")
+                else:
+                    if csv_file is not None:
+                        st.warning(
+                            "Não foi possível processar o CSV. "
+                            "Verifique se o formato corresponde ao banco selecionado."
+                        )
+
         # [FIX B2] Removido df_trans da chamada
         _render_historico(mx, user, sel_mo, sel_yr)
 
