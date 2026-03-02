@@ -12,6 +12,7 @@ import time
 import logging
 import uuid
 from pathlib import Path
+import streamlit.components.v1 as stc
 
 
 # ==============================================================================
@@ -44,6 +45,7 @@ class Config:
     COLS_METAS: tuple = ("Id", "Nome", "ValorAlvo", "ValorAtual", "Prazo", "Responsavel", "Ativo")
     COLS_PASSIVOS: tuple = ("Item", "Valor", "Responsavel")
     COLS_LIXEIRA: tuple = ("Id", "Data", "Descricao", "Valor", "Categoria", "Tipo", "Responsavel", "Origem", "Tag", "DeletadoEm")
+    COLS_FAVORITOS: tuple = ("Id", "Nome", "Descricao", "Valor", "Categoria", "Tipo", "Responsavel", "Tag", "Ordem")
     META_NECESSIDADES: int = 50
     META_DESEJOS: int = 30
     META_INVESTIMENTO: int = 20
@@ -239,6 +241,159 @@ def inject_css() -> None:
         logger.error(f"style.css não encontrado em {css_path}")
         st.error("⚠ style.css não encontrado — crie o arquivo no diretório do app")
 
+def _apply_theme() -> None:
+    """Aplica tema light/dark via classe CSS no body (V4)."""
+    theme = st.session_state.get("theme", "dark")
+    if theme == "light":
+        stc.html(
+            '<script>window.parent.document.body.classList.add("light-theme");</script>',
+            height=0,
+        )
+        st.markdown(_LIGHT_MODE_CSS, unsafe_allow_html=True)
+    else:
+        stc.html(
+            '<script>window.parent.document.body.classList.remove("light-theme");</script>',
+            height=0,
+        )
+
+
+_LIGHT_MODE_CSS = """<style>
+body.light-theme .stApp,
+body.light-theme .stMainBlockContainer,
+body.light-theme [data-testid="stAppViewContainer"] {
+    background-color: #FAFAFA !important;
+}
+body.light-theme .stApp { color: #1a1a1a !important; }
+body.light-theme .intel-box {
+    background: #FFFFFF !important; border-color: #E0E0E0 !important;
+}
+body.light-theme .intel-title { color: #1a1a1a !important; }
+body.light-theme .intel-body { color: #555 !important; }
+body.light-theme .kpi-mono {
+    background: #FFFFFF !important; border-color: #E0E0E0 !important;
+}
+body.light-theme .kpi-mono-label { color: #888 !important; }
+body.light-theme .kpi-mono-value { color: #1a1a1a !important; }
+body.light-theme .kpi-mono-sub { color: #888 !important; }
+body.light-theme .autonomia-hero {
+    background: #FFFFFF !important; border-color: #E0E0E0 !important;
+}
+body.light-theme .autonomia-unit { color: #888 !important; }
+body.light-theme .autonomia-sub { color: #888 !important; }
+body.light-theme .health-badge {
+    background: #F5F5F5 !important; border-color: #E0E0E0 !important;
+}
+body.light-theme .alert-item {
+    background: #F5F5F5 !important; border-color: #E0E0E0 !important;
+}
+body.light-theme .alert-msg { color: #333 !important; }
+body.light-theme .projection-box {
+    background: #FFFFFF !important; border-color: #E0E0E0 !important;
+}
+body.light-theme .projection-header { color: #1a1a1a !important; }
+body.light-theme .projection-sub { color: #888 !important; }
+body.light-theme .projection-track { background: #E8E8E8 !important; }
+body.light-theme .score-panel {
+    background: #FFFFFF !important; border-color: #E0E0E0 !important;
+}
+body.light-theme .score-label { color: #888 !important; }
+body.light-theme .score-detail-label { color: #555 !important; }
+body.light-theme .score-detail-track { background: #E8E8E8 !important; }
+body.light-theme .annual-strip {
+    background: #FFFFFF !important; border-color: #E0E0E0 !important;
+}
+body.light-theme .annual-item { color: #555 !important; }
+body.light-theme .annual-meta { color: #888 !important; }
+body.light-theme .budget-panel {
+    background: #FFFFFF !important; border-color: #E0E0E0 !important;
+}
+body.light-theme .budget-label { color: #555 !important; }
+body.light-theme .budget-track { background: #E8E8E8 !important; }
+body.light-theme .cat-bar-label { color: #555 !important; }
+body.light-theme .cat-bar-track { background: #E8E8E8 !important; }
+body.light-theme .cat-bar-value { color: #888 !important; }
+body.light-theme .rec-pending-box {
+    background: #FFFFFF !important; border-color: #E0E0E0 !important;
+}
+body.light-theme .rec-card {
+    background: #FFFFFF !important; border-color: #E0E0E0 !important;
+}
+body.light-theme .rec-card-desc { color: #1a1a1a !important; }
+body.light-theme .rec-card-meta { color: #888 !important; }
+body.light-theme .t-panel {
+    background: #FFFFFF !important; border-color: #E0E0E0 !important;
+}
+body.light-theme .deviation { border-color: #DDD !important; }
+body.light-theme .month-nav { color: #1a1a1a !important; }
+body.light-theme .status-line { color: #888 !important; }
+body.light-theme .tx-card {
+    background: #FFFFFF !important; border-color: #E0E0E0 !important;
+}
+body.light-theme .tx-card-desc { color: #1a1a1a !important; }
+body.light-theme .tx-card-meta { color: #888 !important; }
+body.light-theme .hist-summary {
+    background: #F5F5F5 !important; border-color: #E0E0E0 !important;
+}
+body.light-theme [style*="background:#0a0a0a"] { background: #F5F5F5 !important; }
+body.light-theme [style*="background: #0a0a0a"] { background: #F5F5F5 !important; }
+body.light-theme [style*="background:#000000"] { background: #FAFAFA !important; }
+body.light-theme [style*="color:#F0F0F0"] { color: #1a1a1a !important; }
+body.light-theme [style*="color: #F0F0F0"] { color: #1a1a1a !important; }
+body.light-theme [style*="color:#888"] { color: #666 !important; }
+body.light-theme [style*="color:#555"] { color: #888 !important; }
+body.light-theme [style*="color:#444"] { color: #999 !important; }
+body.light-theme [style*="color:#333"] { color: #AAA !important; }
+body.light-theme [style*="border-top:1px solid #111"] { border-top-color: #E0E0E0 !important; }
+body.light-theme [style*="border:1px solid #1a1a1a"] { border-color: #E0E0E0 !important; }
+body.light-theme [style*="background:#111"] { background: #E8E8E8 !important; }
+body.light-theme .stTabs [data-baseweb="tab-list"] { border-bottom-color: #E0E0E0 !important; }
+body.light-theme .stTabs [data-baseweb="tab"] { color: #555 !important; }
+body.light-theme .stTabs [aria-selected="true"] { color: #1a1a1a !important; }
+body.light-theme [data-testid="stExpander"] {
+    border-color: #E0E0E0 !important; background: #FFFFFF !important;
+}
+body.light-theme .stButton > button {
+    background: #F0F0F0 !important; color: #1a1a1a !important; border-color: #DDD !important;
+}
+body.light-theme .stButton > button:hover {
+    background: #E0E0E0 !important; border-color: #BBB !important;
+}
+body.light-theme .stDownloadButton > button {
+    background: #F0F0F0 !important; color: #1a1a1a !important; border-color: #DDD !important;
+}
+body.light-theme .stTextInput > div > div > input,
+body.light-theme .stNumberInput > div > div > input,
+body.light-theme .stSelectbox > div > div,
+body.light-theme .stDateInput > div > div > input {
+    background: #FFFFFF !important; color: #1a1a1a !important; border-color: #DDD !important;
+}
+body.light-theme .stMarkdown p,
+body.light-theme .stCaption { color: #555 !important; }
+/* V5: Heatmap — lighter green palette in light mode */
+body.light-theme [style*="background:#0a2a1a"] { background: #c8f7e0 !important; }
+body.light-theme [style*="background:#0d3d26"] { background: #8be8b8 !important; }
+body.light-theme [style*="background:#115533"] { background: #4dd695 !important; }
+/* G3: Challenge borders */
+body.light-theme [style*="border-bottom:1px solid #0f0f0f"] { border-bottom-color: #E8E8E8 !important; }
+/* Form submit buttons */
+body.light-theme .stFormSubmitButton > button {
+    background: #FFFFFF !important; color: #00AA88 !important; border-color: #00AA88 !important;
+}
+body.light-theme .stFormSubmitButton > button:hover {
+    background: #00AA88 !important; color: #FFFFFF !important;
+}
+/* Data editor */
+body.light-theme .stDataFrame { border-color: #E0E0E0 !important; }
+/* Radio/pills */
+body.light-theme [data-baseweb="radio"] label { color: #333 !important; }
+/* File uploader */
+body.light-theme [data-testid="stFileUploader"] { border-color: #E0E0E0 !important; }
+body.light-theme [data-testid="stFileUploader"] section { background: #FFFFFF !important; }
+/* Plotly chart backgrounds */
+body.light-theme .js-plotly-plot .plot-container { background: transparent !important; }
+</style>"""
+
+
 # ==============================================================================
 # 4. UTILITÁRIOS
 # ==============================================================================
@@ -296,6 +451,17 @@ def calc_delta(current: float, previous: float) -> float | None:
             return None
         return float("-inf")
     return ((current - previous) / abs(previous)) * 100
+
+
+def _chart_colors() -> dict:
+    """Retorna cores de background/grid para gráficos Plotly baseado no tema ativo."""
+    is_light = st.session_state.get("theme") == "light"
+    return {
+        "paper_bg": "#FAFAFA" if is_light else "#000000",
+        "plot_bg": "#FAFAFA" if is_light else "#000000",
+        "grid": "#E0E0E0" if is_light else "#111",
+        "font_color": "#555" if is_light else "#888",
+    }
 
 
 def _is_future_month(month: int, year: int) -> bool:
@@ -670,6 +836,32 @@ def load_lixeira() -> pd.DataFrame:
     return df
 
 
+@st.cache_data(ttl=CFG.CACHE_TTL)
+def load_favoritos() -> pd.DataFrame:
+    """Carrega favoritos de lançamento do Google Sheets (X6)."""
+    conn = get_conn()
+    expected = list(CFG.COLS_FAVORITOS)
+    try:
+        df = conn.read(worksheet="Favoritos")
+        df = df.dropna(how="all")
+        missing = set(expected) - set(df.columns)
+        for col in missing:
+            df[col] = None
+        if not df.empty:
+            df["Valor"] = pd.to_numeric(df["Valor"], errors="coerce").fillna(0.0)
+            df = _normalize_strings(df, ["Id", "Nome", "Descricao", "Categoria", "Tipo", "Responsavel", "Tag"])
+            if "Id" not in df.columns:
+                df["Id"] = ""
+            df["Id"] = df["Id"].fillna("").astype(str)
+            empty_ids = df["Id"].str.strip() == ""
+            if empty_ids.any():
+                df.loc[empty_ids, "Id"] = [generate_id() for _ in range(empty_ids.sum())]
+    except Exception as e:
+        logger.warning(f"load_favoritos: {e}")
+        df = pd.DataFrame(columns=expected)
+    return df
+
+
 def _move_to_lixeira(rows: pd.DataFrame) -> bool:
     """Move transações para a lixeira (soft delete — S3)."""
     if rows.empty:
@@ -909,6 +1101,7 @@ def validate_worksheets() -> None:
         "Metas": list(CFG.COLS_METAS),
         "Passivos": list(CFG.COLS_PASSIVOS),
         "Lixeira": list(CFG.COLS_LIXEIRA),
+        "Favoritos": list(CFG.COLS_FAVORITOS),
     }
     issues: list[str] = []
     for ws_name, expected_cols in worksheets.items():
@@ -2148,6 +2341,84 @@ def compute_tag_summary(
     return results[:10]
 
 
+def compute_category_sparklines(
+    df_trans: pd.DataFrame,
+    user_filter: str,
+    ref_month: int,
+    ref_year: int,
+    months_back: int = 6,
+) -> dict[str, list[float]]:
+    """Calcula sparkline por categoria: totais mensais dos últimos N meses (I4)."""
+    df = filter_by_user(df_trans, user_filter)
+    if df.empty:
+        return {}
+
+    ref_end = end_of_month(ref_year, ref_month)
+    mo, yr = ref_month, ref_year
+    for _ in range(months_back - 1):
+        mo -= 1
+        if mo == 0:
+            mo, yr = 12, yr - 1
+    start_date = datetime(yr, mo, 1)
+
+    df_range = df[
+        (df["Data"] >= start_date)
+        & (df["Data"] <= ref_end)
+        & (df["Tipo"] == CFG.TIPO_SAIDA)
+        & (df["Categoria"] != CFG.CAT_INVESTIMENTO)
+    ].copy()
+
+    if df_range.empty:
+        return {}
+
+    df_range["_period"] = df_range["Data"].dt.to_period("M")
+    all_periods = sorted(df_range["_period"].unique())
+
+    result: dict[str, list[float]] = {}
+    for cat, grp in df_range.groupby("Categoria"):
+        cat_by_period = grp.groupby("_period")["Valor"].sum()
+        values = [float(cat_by_period.get(p, 0)) for p in all_periods]
+        result[str(cat)] = values
+
+    return result
+
+
+def _sparkline_html(values: list[float]) -> str:
+    """Gera sparkline unicode a partir de valores mensais."""
+    if not values or all(v == 0 for v in values):
+        return ""
+    blocks = "▁▂▃▄▅▆▇█"
+    max_v = max(values)
+    if max_v == 0:
+        return ""
+    chars = []
+    for v in values:
+        idx = int((v / max_v) * 7)
+        idx = min(7, max(0, idx))
+        chars.append(blocks[idx])
+    spark = "".join(chars)
+
+    first_half = values[: len(values) // 2]
+    second_half = values[len(values) // 2 :]
+    avg_first = sum(first_half) / max(1, len(first_half))
+    avg_second = sum(second_half) / max(1, len(second_half))
+    if avg_first > 0:
+        trend_pct = ((avg_second - avg_first) / avg_first) * 100
+        if trend_pct > 10:
+            trend = f' <span style="color:#FF4444;">▲</span>'
+        elif trend_pct < -10:
+            trend = f' <span style="color:#00FFCC;">▼</span>'
+        else:
+            trend = ""
+    else:
+        trend = ""
+
+    return (
+        f'<span style="font-size:0.55rem;letter-spacing:1px;color:#555;">'
+        f'{spark}</span>{trend}'
+    )
+
+
 def compute_savings_rate(
     df_trans: pd.DataFrame,
     user_filter: str,
@@ -2407,7 +2678,6 @@ def compute_frequent_transactions(
         for _, row in groups.iterrows()
     ]
 
-
 def compute_meta_progress(
     df_metas: pd.DataFrame, user_filter: str,
 ) -> list[dict]:
@@ -2475,6 +2745,51 @@ def compute_meta_progress(
     results.sort(key=lambda x: x["pct"], reverse=True)
     return results
 
+
+def compute_challenges(mx: MonthMetrics) -> list[dict]:
+    """Gera micro-desafios mensais baseados no perfil atual (G3)."""
+    challenges: list[dict] = []
+    if mx.renda <= 0:
+        return challenges
+
+    ucfg = mx.user_config
+
+    # 1. Categoria mais cara — reduzir 10%
+    if mx.cat_breakdown:
+        top_cat = list(mx.cat_breakdown.keys())[0]
+        top_val = list(mx.cat_breakdown.values())[0]
+        target = round(top_val * 0.9, 2)
+        challenges.append({
+            "title": f"Manter {top_cat} abaixo de {fmt_brl(target)}",
+            "desc": f"Atual: {fmt_brl(top_val)}",
+            "progress": min(100, max(0, (1 - top_val / (target * 1.111)) * 100)) if target > 0 else 0,
+            "done": top_val <= target,
+            "icon": "🎯",
+        })
+
+    # 2. Taxa de poupança ≥ 20%
+    savings_rate = ((mx.renda - mx.lifestyle) / mx.renda * 100) if mx.renda > 0 else 0
+    target_rate = max(20, ucfg.meta_investimento)
+    challenges.append({
+        "title": f"Poupança acima de {target_rate:.0f}%",
+        "desc": f"Atual: {savings_rate:.0f}%",
+        "progress": min(100, max(0, savings_rate / target_rate * 100)) if target_rate > 0 else 0,
+        "done": savings_rate >= target_rate,
+        "icon": "💰",
+    })
+
+    # 3. Meta de aporte
+    meta_inv = mx.renda * (ucfg.meta_investimento / 100)
+    if meta_inv > 0:
+        challenges.append({
+            "title": f"Atingir aporte de {ucfg.meta_investimento}%",
+            "desc": f"{fmt_brl(mx.investido_mes)} / {fmt_brl(meta_inv)}",
+            "progress": min(100, max(0, mx.taxa_aporte / ucfg.meta_investimento * 100)),
+            "done": mx.taxa_aporte >= ucfg.meta_investimento,
+            "icon": "📈",
+        })
+
+    return challenges[:3]
 
 # --- N1: CSV Import ---
 
@@ -2824,8 +3139,8 @@ def render_regra_503020(mx: MonthMetrics) -> None:
     """, unsafe_allow_html=True)
 
 
-def render_cat_breakdown(cat_dict: dict) -> None:
-    """Renderiza barras de breakdown por categoria."""
+def render_cat_breakdown(cat_dict: dict, sparklines: dict | None = None) -> None:
+    """Renderiza barras de breakdown por categoria com sparklines opcionais (I4)."""
     if not cat_dict:
         return
     total = sum(cat_dict.values())
@@ -2834,14 +3149,20 @@ def render_cat_breakdown(cat_dict: dict) -> None:
     html = ""
     for cat, val in cat_dict.items():
         pct = (val / total) * 100
-        html += f"""
-        <div class="cat-bar-row">
-            <span class="cat-bar-label">{sanitize(str(cat))}</span>
-            <div class="cat-bar-track">
-                <div class="cat-bar-fill" style="width:{pct:.0f}%;"></div>
-            </div>
-            <span class="cat-bar-value">{pct:.0f}%  {fmt_brl(val)}</span>
-        </div>"""
+        spark_html = ""
+        if sparklines and cat in sparklines:
+            spark_html = _sparkline_html(sparklines[cat])
+            if spark_html:
+                spark_html = f'<span style="margin-left:6px;">{spark_html}</span>'
+        html += (
+            f'<div class="cat-bar-row">'
+            f'<span class="cat-bar-label">{sanitize(str(cat))}{spark_html}</span>'
+            f'<div class="cat-bar-track">'
+            f'<div class="cat-bar-fill" style="width:{pct:.0f}%;"></div>'
+            f'</div>'
+            f'<span class="cat-bar-value">{pct:.0f}%  {fmt_brl(val)}</span>'
+            f'</div>'
+        )
     st.markdown(html, unsafe_allow_html=True)
 
 
@@ -2921,19 +3242,20 @@ def render_evolution_chart(evo_data: list[dict]) -> None:
         line=dict(color="#FF4444", width=1.5, dash="dash"),
     ))
 
+    _cc = _chart_colors()
     fig.update_layout(
         barmode="stack",
-        paper_bgcolor="#000000",
-        plot_bgcolor="#000000",
-        font=dict(family="JetBrains Mono, monospace", color="#888", size=11),
+        paper_bgcolor=_cc["paper_bg"],
+        plot_bgcolor=_cc["plot_bg"],
+        font=dict(family="JetBrains Mono, monospace", color=_cc["font_color"], size=11),
         legend=dict(
             orientation="h", yanchor="bottom", y=1.02,
             xanchor="center", x=0.5, font=dict(size=9)
         ),
         margin=dict(l=0, r=0, t=30, b=0),
         height=300,
-        xaxis=dict(gridcolor="#111", showline=False),
-        yaxis=dict(gridcolor="#111", showline=False, tickformat=",.0f"),
+        xaxis=dict(gridcolor=_cc["grid"], showline=False),
+        yaxis=dict(gridcolor=_cc["grid"], showline=False, tickformat=",.0f"),
     )
     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
@@ -3525,19 +3847,20 @@ def render_renda_chart(renda_data: list[dict]) -> None:
             line=dict(color="#FF4444", width=1, dash="dash"),
         ))
 
+    _cc = _chart_colors()
     fig.update_layout(
         barmode="stack",
-        paper_bgcolor="#000000",
-        plot_bgcolor="#000000",
-        font=dict(family="JetBrains Mono, monospace", color="#888", size=11),
+        paper_bgcolor=_cc["paper_bg"],
+        plot_bgcolor=_cc["plot_bg"],
+        font=dict(family="JetBrains Mono, monospace", color=_cc["font_color"], size=11),
         legend=dict(
             orientation="h", yanchor="bottom", y=1.02,
             xanchor="center", x=0.5, font=dict(size=9),
         ),
         margin=dict(l=0, r=0, t=30, b=0),
         height=280,
-        xaxis=dict(gridcolor="#111", showline=False),
-        yaxis=dict(gridcolor="#111", showline=False, tickformat=",.0f"),
+        xaxis=dict(gridcolor=_cc["grid"], showline=False),
+        yaxis=dict(gridcolor=_cc["grid"], showline=False, tickformat=",.0f"),
     )
     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
@@ -3592,18 +3915,19 @@ def render_patrimonio_chart(pat_data: list[dict]) -> None:
         marker_color="rgba(255,170,0,0.6)",
     ))
 
+    _cc = _chart_colors()
     fig.update_layout(
-        paper_bgcolor="#000000",
-        plot_bgcolor="#000000",
-        font=dict(family="JetBrains Mono, monospace", color="#888", size=11),
+        paper_bgcolor=_cc["paper_bg"],
+        plot_bgcolor=_cc["plot_bg"],
+        font=dict(family="JetBrains Mono, monospace", color=_cc["font_color"], size=11),
         legend=dict(
             orientation="h", yanchor="bottom", y=1.02,
             xanchor="center", x=0.5, font=dict(size=9),
         ),
         margin=dict(l=0, r=0, t=30, b=0),
         height=280,
-        xaxis=dict(gridcolor="#111", showline=False),
-        yaxis=dict(gridcolor="#111", showline=False, tickformat=",.0f"),
+        xaxis=dict(gridcolor=_cc["grid"], showline=False),
+        yaxis=dict(gridcolor=_cc["grid"], showline=False, tickformat=",.0f"),
         barmode="overlay",
     )
     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
@@ -4098,6 +4422,76 @@ def render_calendar_heatmap(heatmap: dict | None) -> None:
     )
     st.markdown(html, unsafe_allow_html=True)
 
+def render_transaction_cards(df: pd.DataFrame, max_items: int = 25) -> None:
+    """Renderiza transações como cards compactos mobile-friendly (V6)."""
+    if df.empty:
+        st.caption("Nenhuma transação para exibir.")
+        return
+
+    df_sorted = df.copy()
+    df_sorted["Data"] = pd.to_datetime(df_sorted["Data"], errors="coerce")
+    df_sorted = df_sorted.sort_values("Data", ascending=False).head(max_items)
+
+    html = '<div class="tx-cards-container">'
+    for _, row in df_sorted.iterrows():
+        tipo = str(row.get("Tipo", ""))
+        val = float(row.get("Valor", 0))
+        desc = sanitize(str(row.get("Descricao", "")))[:40]
+        cat = sanitize(str(row.get("Categoria", "")))
+        resp = sanitize(str(row.get("Responsavel", "")))
+        tag = str(row.get("Tag", "")).strip()
+        dt = row.get("Data")
+
+        if isinstance(dt, pd.Timestamp) and not pd.isna(dt):
+            date_str = dt.strftime("%d/%m")
+        else:
+            date_str = "—"
+
+        if tipo == CFG.TIPO_ENTRADA:
+            val_color = "#00FFCC"
+            val_prefix = "+"
+            badge_cls = "tx-badge-entrada"
+            badge_text = "entrada"
+        elif str(row.get("Categoria", "")) == CFG.CAT_INVESTIMENTO:
+            val_color = "#FFAA00"
+            val_prefix = ""
+            badge_cls = "tx-badge-investimento"
+            badge_text = "investimento"
+        else:
+            val_color = "#FF4444"
+            val_prefix = "-"
+            badge_cls = "tx-badge-saida"
+            badge_text = "saída"
+
+        tag_html = (
+            f' <span style="color:#00FFCC;opacity:0.5;">#{sanitize(tag)}</span>'
+            if tag else ""
+        )
+
+        html += (
+            f'<div class="tx-card">'
+            f'<div class="tx-card-left">'
+            f'<div class="tx-card-desc">{desc}</div>'
+            f'<div class="tx-card-meta">'
+            f'{cat} · {resp} · {date_str}{tag_html}</div>'
+            f'</div>'
+            f'<div class="tx-card-right">'
+            f'<div class="tx-card-valor" style="color:{val_color};">'
+            f'{val_prefix}{fmt_brl(val)}</div>'
+            f'<div class="tx-card-badge {badge_cls}">{badge_text}</div>'
+            f'</div>'
+            f'</div>'
+        )
+    html += '</div>'
+
+    if len(df) > max_items:
+        html += (
+            f'<div style="font-family:JetBrains Mono,monospace;font-size:0.5rem;'
+            f'color:#333;text-align:center;padding:8px 0;">'
+            f'Exibindo {max_items} de {len(df)} transações</div>'
+        )
+
+    st.markdown(html, unsafe_allow_html=True)
 
 def render_metas(metas_progress: list[dict]) -> None:
     """Renderiza cards de metas financeiras com progresso (G1)."""
@@ -4150,6 +4544,41 @@ def render_metas(metas_progress: list[dict]) -> None:
             f'</div>'
         )
         st.markdown(html, unsafe_allow_html=True)
+
+
+def render_challenges(challenges: list[dict]) -> None:
+    """Renderiza micro-desafios do mês (G3)."""
+    if not challenges:
+        return
+    html = '<div class="intel-box">'
+    html += '<div class="intel-title">◆ Desafios do Mês</div>'
+    for c in challenges:
+        if c["done"]:
+            check = "✓"
+            check_style = "color:#00FFCC;font-weight:700;"
+        else:
+            check = f'{c["progress"]:.0f}%'
+            check_style = "color:#FFAA00;font-weight:700;" if c["progress"] >= 50 else "color:#FF4444;font-weight:700;"
+        fill_color = "#00FFCC" if c["done"] else "#FFAA00"
+        html += (
+            f'<div style="padding:8px 0;border-bottom:1px solid #0f0f0f;">'
+            f'<div style="display:flex;align-items:center;gap:8px;'
+            f'font-family:JetBrains Mono,monospace;font-size:0.62rem;">'
+            f'<span style="font-size:0.9rem;">{c["icon"]}</span>'
+            f'<div style="flex:1;">'
+            f'<div style="color:#F0F0F0;">{c["title"]}</div>'
+            f'<div style="color:#555;font-size:0.55rem;">{c["desc"]}</div>'
+            f'</div>'
+            f'<span style="{check_style}">{check}</span>'
+            f'</div>'
+            f'<div style="width:100%;height:3px;background:#111;margin-top:4px;">'
+            f'<div style="width:{c["progress"]:.0f}%;height:100%;background:{fill_color};'
+            f'transition:width 0.4s ease;"></div>'
+            f'</div>'
+            f'</div>'
+        )
+    html += '</div>'
+    st.markdown(html, unsafe_allow_html=True)
 
 
 # ==============================================================================
@@ -4640,6 +5069,20 @@ def _render_historico(
     if search and search.strip():
         st.caption("⚠ A busca filtra apenas a visualização/export. A edição abaixo mostra todos os registros do mês.")
 
+    # --- Toggle Tabela/Cards (V6) ---
+    _hist_vc1, _hist_vc2 = st.columns([1, 3])
+    with _hist_vc1:
+        _hist_view = st.radio(
+            "Vista", ["Tabela", "Cards"],
+            horizontal=True, label_visibility="collapsed",
+            key=f"hist_view_{user}_{sel_mo}_{sel_yr}",
+        )
+
+    if _hist_view == "Cards":
+        render_transaction_cards(df_display)
+        st.caption("💡 Para editar/excluir, mude para visualização Tabela.")
+        return
+
     st.caption("💡 Para excluir transações, selecione a linha e pressione Delete.")
 
     edited = st.data_editor(
@@ -4895,6 +5338,7 @@ def _logout() -> None:
 
 def main() -> None:
     inject_css()
+    _apply_theme()
 
     # --- Autenticação ---
     if not _check_auth():
@@ -4906,6 +5350,10 @@ def main() -> None:
     # --- V2: Modo de exibição ---
     if "display_mode" not in st.session_state:
         st.session_state.display_mode = "expert"
+
+    # --- V4: Tema ---
+    if "theme" not in st.session_state:
+        st.session_state.theme = "dark"
 
     now = datetime.now()
 
@@ -4936,8 +5384,7 @@ def main() -> None:
             f'<div class="status-line">{" — ".join(status_parts)}</div>',
             unsafe_allow_html=True,
         )
-        cs1, cs2 = st.columns(2)
-        cs1, cs2, cs3 = st.columns(3)
+        cs1, cs2, cs3, cs4 = st.columns(4)
         with cs1:
             if st.button("⟳", key="refresh_btn", help="Atualizar dados"):
                 st.cache_data.clear()
@@ -4953,6 +5400,16 @@ def main() -> None:
                 )
                 st.rerun()
         with cs3:
+            _theme_icon = "☀" if st.session_state.get("theme") == "dark" else "☽"
+            if st.button(
+                _theme_icon, key="theme_toggle",
+                help="Light ↔ Dark",
+            ):
+                st.session_state.theme = (
+                    "light" if st.session_state.get("theme") == "dark" else "dark"
+                )
+                st.rerun()
+        with cs4:
             if auth_user:
                 if st.button("⏻", key="logout_btn", help="Sair"):
                     _logout()
@@ -5026,6 +5483,7 @@ def main() -> None:
     df_metas = load_metas()
     df_passivos = load_passivos()
     df_lixeira = load_lixeira()
+    df_favoritos = load_favoritos()
 
     # --- Config do Usuário ---
     user_config = UserConfig.from_df(df_config, user)
@@ -5059,43 +5517,6 @@ def main() -> None:
 
     # --- Alertas ---
     alerts = compute_alerts(mx, sel_mo, sel_yr, projection, n_pendentes=len(pendentes))
-
-    # --- Score Financeiro ---
-    score_data = compute_score(mx)
-
-    # --- Resumo Anual ---
-    annual = compute_annual_summary(df_trans, user, sel_yr)
-
-    # --- Forecast Cashflow ---
-    cashflow_forecast = compute_cashflow_forecast(
-        df_trans, df_recorrentes, user, sel_mo, sel_yr,
-    )
-
-    # --- Year-over-Year ---
-    yoy_data = compute_yoy(df_trans, user, sel_mo, sel_yr)
-
-    # --- Evolução Patrimonial ---
-    pat_evolution = compute_patrimonio_evolution(
-        df_trans, df_assets, user, sel_mo, sel_yr,
-    )
-
-    # --- Divisão Casal ---
-    divisao_casal = None
-    if user == "Casal":
-        divisao_casal = compute_divisao_casal(mx.df_month)
-
-    # --- Phase 8A: Novas análises ---
-    weekday_pattern = compute_weekday_pattern(mx.df_month)
-    tag_summary = compute_tag_summary(df_trans, user, sel_mo, sel_yr)
-    savings_data = compute_savings_rate(df_trans, user, sel_mo, sel_yr)
-    consistency = compute_consistency(
-        df_trans, user, sel_mo, sel_yr, user_config=user_config,
-    )
-
-    # --- Phase 8B: Novas análises ---
-    anomalies = compute_anomalies(df_trans, user, sel_mo, sel_yr)
-    cal_heatmap = compute_calendar_heatmap(mx.df_month, sel_mo, sel_yr)
-    frequent_tx = compute_frequent_transactions(df_trans, user)
 
     month_label = fmt_month_year(sel_mo, sel_yr)
     has_data = mx.renda > 0 or mx.lifestyle > 0 or mx.investido_mes > 0
@@ -5150,6 +5571,11 @@ def main() -> None:
         # ===== PROJEÇÃO (só mês atual) =====
         render_projection(projection, mx)
 
+        # ===== DESAFIOS (G3) =====
+        _challenges = compute_challenges(mx)
+        if _challenges:
+            render_challenges(_challenges)
+
         # ===== ANÁLISE DETALHADA (colapsável com sub-tabs — X5, V2) =====
         if st.session_state.display_mode == "expert":
           with st.expander("📊 Análise Detalhada", expanded=False):
@@ -5158,29 +5584,40 @@ def main() -> None:
             ])
 
             with ad_score:
+                _score_data = compute_score(mx)
+                _consistency = compute_consistency(
+                    df_trans, user, sel_mo, sel_yr, user_config=user_config,
+                )
                 _ad_l, _ad_r = st.columns([1, 1])
                 with _ad_l:
-                    render_score(score_data)
+                    render_score(_score_data)
                 with _ad_r:
-                    render_consistency(consistency, user_config)
+                    render_consistency(_consistency, user_config)
 
             with ad_regra:
                 render_regra_503020(mx)
                 if user == "Casal":
                     render_split_casal(mx.split_gastos, mx.split_renda)
-                    render_divisao_casal(divisao_casal)
+                    _divisao = compute_divisao_casal(mx.df_month)
+                    render_divisao_casal(_divisao)
 
             with ad_comp:
+                _yoy = compute_yoy(df_trans, user, sel_mo, sel_yr)
+                _annual = compute_annual_summary(df_trans, user, sel_yr)
+                _savings = compute_savings_rate(df_trans, user, sel_mo, sel_yr)
                 _cmp_l, _cmp_r = st.columns([1, 1])
                 with _cmp_l:
                     render_prev_comparison(mx, sel_mo, sel_yr)
                 with _cmp_r:
-                    render_yoy(yoy_data)
-                render_annual_strip(annual)
-                render_savings_rate(savings_data)
+                    render_yoy(_yoy)
+                render_annual_strip(_annual)
+                render_savings_rate(_savings)
 
             with ad_forecast:
-                render_cashflow_forecast(cashflow_forecast)
+                _forecast = compute_cashflow_forecast(
+                    df_trans, df_recorrentes, user, sel_mo, sel_yr,
+                )
+                render_cashflow_forecast(_forecast)
 
     # ===== LANÇAMENTO RÁPIDO =====
     with st.expander("⚡ Lançamento Rápido"):
@@ -5233,6 +5670,46 @@ def main() -> None:
                             st.toast(f"✓ {q_desc.strip()} — {fmt_brl(q_val)}")
                         st.rerun()
 
+        # --- Favoritos (X6) ---
+        df_fav_user = filter_by_user(df_favoritos, user, include_shared=True)
+        if not df_fav_user.empty:
+            df_fav_sorted = df_fav_user.sort_values(
+                "Ordem", ascending=True
+            ).reset_index(drop=True)
+            st.markdown(
+                '<div style="font-family:JetBrains Mono,monospace;font-size:0.55rem;'
+                'color:#555;text-transform:uppercase;letter-spacing:0.15em;'
+                'padding:8px 0 4px 0;border-top:1px solid #111;margin-top:8px;">'
+                '⭐ Favoritos</div>',
+                unsafe_allow_html=True,
+            )
+            _n_fav_show = min(len(df_fav_sorted), 6)
+            _fav_cols = st.columns(min(_n_fav_show, 3))
+            for i, (_, fav) in enumerate(df_fav_sorted.head(_n_fav_show).iterrows()):
+                with _fav_cols[i % min(_n_fav_show, 3)]:
+                    _fv_desc = str(fav.get("Descricao", fav.get("Nome", "")))[:18]
+                    _fv_cat = str(fav["Categoria"])
+                    _fv_val = float(fav["Valor"])
+                    _fv_tipo = str(fav["Tipo"]).strip()
+                    if st.button(
+                        f"⭐ {_fv_desc}\n{_fv_cat} · {fmt_brl(_fv_val)}",
+                        key=f"fav_{i}_{fav['Id']}",
+                        use_container_width=True,
+                    ):
+                        fav_entry = {
+                            "Data": default_form_date(sel_mo, sel_yr),
+                            "Descricao": str(fav.get("Descricao", fav.get("Nome", ""))).strip(),
+                            "Valor": _fv_val,
+                            "Categoria": _fv_cat,
+                            "Tipo": _fv_tipo,
+                            "Responsavel": str(fav["Responsavel"]).strip(),
+                            "Origem": CFG.ORIGEM_MANUAL,
+                            "Tag": str(fav.get("Tag", "")).strip(),
+                        }
+                        if save_entry(fav_entry, "Transacoes"):
+                            st.toast(f"✓ {_fv_desc} — {fmt_brl(_fv_val)}")
+                            st.rerun()
+
         # --- Repetir Último Gasto (N4) ---
         if not mx.df_month.empty:
             _df_last_gastos = mx.df_month[
@@ -5275,8 +5752,9 @@ def main() -> None:
                         st.toast(f"✓ Duplicado: {_l_desc} — {fmt_brl(_l_val)}")
                         st.rerun()
 
-        # --- Templates Rápidos (N2) ---
-        if frequent_tx:
+        # --- Templates Rápidos (N2 — lazy P1) ---
+        _frequent_tx = compute_frequent_transactions(df_trans, user)
+        if _frequent_tx:
             st.markdown(
                 '<div style="font-family:JetBrains Mono,monospace;font-size:0.55rem;'
                 'color:#555;text-transform:uppercase;letter-spacing:0.15em;'
@@ -5284,8 +5762,8 @@ def main() -> None:
                 '◆ Templates Frequentes</div>',
                 unsafe_allow_html=True,
             )
-            _tpl_cols = st.columns(min(len(frequent_tx), 3))
-            for i, tpl in enumerate(frequent_tx[:3]):
+            _tpl_cols = st.columns(min(len(_frequent_tx), 3))
+            for i, tpl in enumerate(_frequent_tx[:3]):
                 with _tpl_cols[i]:
                     _tpl_label = f"{tpl['desc'][:18]}\n{tpl['cat']} · ~{fmt_brl(tpl['avg_valor'])}"
                     if st.button(
@@ -5324,7 +5802,8 @@ def main() -> None:
             if budget_data:
                 render_budget_bars(budget_data)
             if mx.cat_breakdown:
-                render_cat_breakdown(mx.cat_breakdown)
+                _sparklines = compute_category_sparklines(df_trans, user, sel_mo, sel_yr)
+                render_cat_breakdown(mx.cat_breakdown, sparklines=_sparklines)
             transaction_form(
                 form_key="f_lifestyle",
                 tipo=CFG.TIPO_SAIDA,
@@ -5352,19 +5831,23 @@ def main() -> None:
                 mx.dia_mais_caro_count,
             )
 
-            # --- Anomalias (I2) ---
-            if anomalies:
-                render_anomalies(anomalies)
+            # --- Anomalias (I2 — lazy P1) ---
+            _anomalies = compute_anomalies(df_trans, user, sel_mo, sel_yr)
+            if _anomalies:
+                render_anomalies(_anomalies)
 
-            # --- Heatmap calendário (V5) ---
-            render_calendar_heatmap(cal_heatmap)
+            # --- Heatmap calendário (V5 — lazy P1) ---
+            _heatmap = compute_calendar_heatmap(mx.df_month, sel_mo, sel_yr)
+            render_calendar_heatmap(_heatmap)
 
-            # --- Padrão semanal ---
-            render_weekday_pattern(weekday_pattern)
+            # --- Padrão semanal (lazy P1) ---
+            _weekday = compute_weekday_pattern(mx.df_month)
+            render_weekday_pattern(_weekday)
 
-            # --- Tags ---
-            if tag_summary:
-                render_tag_summary(tag_summary)
+            # --- Tags (lazy P1) ---
+            _tags = compute_tag_summary(df_trans, user, sel_mo, sel_yr)
+            if _tags:
+                render_tag_summary(_tags)
 
             # --- Gestão de Orçamentos ---
             st.markdown("---")
@@ -5592,8 +6075,11 @@ def main() -> None:
                             st.rerun()
 
         with col_right:
-            # --- Gráfico Evolução Patrimonial ---
-            render_patrimonio_chart(pat_evolution)
+            # --- Gráfico Evolução Patrimonial (lazy P1) ---
+            _pat_evo = compute_patrimonio_evolution(
+                df_trans, df_assets, user, sel_mo, sel_yr,
+            )
+            render_patrimonio_chart(_pat_evo)
 
             render_intel(
                 "Ativos Registrados",
@@ -6190,6 +6676,142 @@ def main() -> None:
                     )
                 else:
                     st.error("Falha ao gerar backup")
+
+            # --- Favoritos (X6) ---
+            st.markdown("---")
+            render_intel(
+                "⭐ Favoritos de Lançamento",
+                "Atalhos personalizados para o ⚡ Lançamento Rápido."
+            )
+            with st.form("f_add_favorito", clear_on_submit=True):
+                _fav_fc1, _fav_fc2 = st.columns([2, 1])
+                with _fav_fc1:
+                    _fav_desc = st.text_input(
+                        "Descrição", placeholder="Ex: Mercado semanal",
+                        max_chars=CFG.MAX_DESC_LENGTH, key="fav_desc",
+                    )
+                with _fav_fc2:
+                    _fav_val = st.number_input(
+                        "Valor (R$)", min_value=0.01, step=10.0, key="fav_val",
+                    )
+                _fav_fc3, _fav_fc4, _fav_fc5 = st.columns(3)
+                with _fav_fc3:
+                    _fav_tipo = st.selectbox("Tipo", list(CFG.TIPOS), key="fav_tipo")
+                with _fav_fc4:
+                    if _fav_tipo == CFG.TIPO_SAIDA:
+                        _fav_cat_opts = list(CFG.CATEGORIAS_SAIDA) + [CFG.CAT_INVESTIMENTO]
+                    else:
+                        _fav_cat_opts = list(CFG.CATEGORIAS_ENTRADA)
+                    _fav_cat = st.selectbox("Categoria", _fav_cat_opts, key="fav_cat")
+                with _fav_fc5:
+                    _fav_resp_opts = list(CFG.RESPONSAVEIS)
+                    _fav_resp_idx = (
+                        _fav_resp_opts.index(user) if user in _fav_resp_opts else 0
+                    )
+                    _fav_resp = st.selectbox(
+                        "Responsável", _fav_resp_opts,
+                        index=_fav_resp_idx, key="fav_resp",
+                    )
+                _fav_tag = st.text_input(
+                    "Tag (opcional)", placeholder="Ex: semanal",
+                    max_chars=50, key="fav_tag_input",
+                )
+                if st.form_submit_button("⭐ SALVAR FAVORITO", use_container_width=True):
+                    if not _fav_desc or not _fav_desc.strip():
+                        st.toast("⚠ Descrição obrigatória")
+                    elif _fav_val <= 0:
+                        st.toast("⚠ Valor deve ser maior que zero")
+                    else:
+                        _fav_entry = {
+                            "Id": generate_id(),
+                            "Nome": _fav_desc.strip(),
+                            "Descricao": _fav_desc.strip(),
+                            "Valor": _fav_val,
+                            "Categoria": _fav_cat,
+                            "Tipo": _fav_tipo,
+                            "Responsavel": _fav_resp,
+                            "Tag": _fav_tag.strip() if _fav_tag else "",
+                            "Ordem": 0,
+                        }
+                        if save_entry(_fav_entry, "Favoritos"):
+                            st.toast(f"✓ Favorito: {_fav_desc.strip()}")
+                            st.rerun()
+
+            _df_fav_cfg = filter_by_user(df_favoritos, user, include_shared=True)
+            if not _df_fav_cfg.empty:
+                _edited_favs = st.data_editor(
+                    _df_fav_cfg,
+                    use_container_width=True,
+                    num_rows="dynamic",
+                    column_config={
+                        "Id": None,
+                        "Nome": st.column_config.TextColumn("Nome", required=True),
+                        "Descricao": st.column_config.TextColumn("Descrição", required=True),
+                        "Valor": st.column_config.NumberColumn(
+                            "Valor", format="R$ %.2f", required=True, min_value=0.01,
+                        ),
+                        "Categoria": st.column_config.SelectboxColumn(
+                            "Categoria", options=list(CFG.CATEGORIAS_TODAS), required=True,
+                        ),
+                        "Tipo": st.column_config.SelectboxColumn(
+                            "Tipo", options=list(CFG.TIPOS), required=True,
+                        ),
+                        "Responsavel": st.column_config.SelectboxColumn(
+                            "Responsável", options=list(CFG.RESPONSAVEIS),
+                        ),
+                        "Tag": st.column_config.TextColumn("Tag", max_chars=50),
+                        "Ordem": st.column_config.NumberColumn("Ordem", min_value=0, step=1),
+                    },
+                    hide_index=True,
+                    key=f"editor_favoritos_{user}",
+                )
+                if not _df_equals_safe(_df_fav_cfg, _edited_favs):
+                    _fv_s, _fv_d = st.columns(2)
+                    with _fv_s:
+                        if st.button(
+                            "✓ SALVAR FAVORITOS",
+                            key=f"save_favs_{user}",
+                            use_container_width=True,
+                        ):
+                            if _save_filtered_sheet(
+                                df_favoritos, _edited_favs, user, "Favoritos"
+                            ):
+                                st.toast("✓ Favoritos atualizados")
+                                st.rerun()
+                    with _fv_d:
+                        if st.button(
+                            "✗ DESCARTAR",
+                            key=f"discard_favs_{user}",
+                            use_container_width=True,
+                        ):
+                            st.rerun()
+
+            # --- Tema (V4) ---
+            st.markdown("---")
+            _theme_now = st.session_state.get("theme", "dark")
+            render_intel(
+                "🎨 Tema",
+                f"Atual: <strong>{'Dark' if _theme_now == 'dark' else 'Light'}</strong>"
+            )
+            _th_c1, _th_c2 = st.columns(2)
+            with _th_c1:
+                if st.button(
+                    "☽ DARK" if _theme_now != "dark" else "☽ DARK ✓",
+                    key="theme_dark_cfg",
+                    use_container_width=True,
+                    disabled=_theme_now == "dark",
+                ):
+                    st.session_state.theme = "dark"
+                    st.rerun()
+            with _th_c2:
+                if st.button(
+                    "☀ LIGHT" if _theme_now != "light" else "☀ LIGHT ✓",
+                    key="theme_light_cfg",
+                    use_container_width=True,
+                    disabled=_theme_now == "light",
+                ):
+                    st.session_state.theme = "light"
+                    st.rerun()
 
             # --- Modo de exibição (V2) ---
             st.markdown("---")

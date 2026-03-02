@@ -1144,3 +1144,100 @@ div[data-testid="stExpander"] details summary {
 div[data-testid="stExpander"] details summary:hover {
     color: #00FFCC !important;
 }
+
+/* ==============================================================
+   V6: Transaction Cards — Mobile-First
+   ============================================================== */
+.tx-cards-container {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.tx-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 12px;
+    background: #0a0a0a;
+    border: 1px solid #111;
+    border-left: 3px solid #1a1a1a;
+    font-family: 'JetBrains Mono', monospace;
+    transition: border-left-color 0.2s ease;
+}
+
+.tx-card:hover {
+    border-left-color: #00FFCC;
+}
+
+.tx-card-left {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.tx-card-desc {
+    font-size: 0.68rem;
+    color: #F0F0F0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tx-card-meta {
+    font-size: 0.5rem;
+    color: #555;
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tx-card-right {
+    text-align: right;
+    margin-left: 12px;
+    flex-shrink: 0;
+}
+
+.tx-card-valor {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+}
+
+.tx-card-badge {
+    font-size: 0.4rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-top: 2px;
+}
+
+.tx-badge-entrada {
+    color: #00FFCC;
+}
+
+.tx-badge-saida {
+    color: #FF4444;
+}
+
+.tx-badge-investimento {
+    color: #FFAA00;
+}
+
+@media (max-width: 768px) {
+    .tx-card {
+        padding: 8px 10px;
+    }
+
+    .tx-card-desc {
+        font-size: 0.62rem;
+    }
+
+    .tx-card-valor {
+        font-size: 0.65rem;
+    }
+
+    .tx-card-meta {
+        font-size: 0.45rem;
+    }
+}
