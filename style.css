@@ -625,6 +625,109 @@ body,
     padding: 40px 20px;
 }
 
+/* ===== U5: Save confirmation visual feedback ===== */
+div[data-testid="stToast"] {
+    font-family: 'JetBrains Mono', monospace !important;
+    border-radius: 0px !important;
+    border: 1px solid #00FFCC !important;
+    background: #0a0a0a !important;
+    animation: fade-slide-in 0.3s ease-out both !important;
+}
+
+div[data-testid="stToast"] [data-testid="stMarkdownContainer"] p {
+    font-size: 0.72rem !important;
+    letter-spacing: 0.03em !important;
+}
+
+/* ===== D2: Micro-animations ===== */
+@keyframes fade-slide-in {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes bar-grow {
+    from {
+        width: 0%;
+    }
+}
+
+.t-panel,
+.intel-box,
+.score-panel,
+.budget-panel,
+.rec-card,
+.tx-card,
+.annual-strip {
+    animation: fade-slide-in 0.35s ease-out both;
+}
+
+.cat-bar-fill,
+.budget-fill,
+.score-detail-fill,
+.projection-fill-actual {
+    animation: bar-grow 0.6s ease-out both;
+}
+
+.kpi-mono-value {
+    transition: color 0.3s ease;
+}
+
+.autonomia-number {
+    transition: color 0.5s ease;
+}
+
+/* Stagger animation for sequential elements */
+.alert-item:nth-child(1) {
+    animation-delay: 0.05s;
+}
+
+.alert-item:nth-child(2) {
+    animation-delay: 0.10s;
+}
+
+.alert-item:nth-child(3) {
+    animation-delay: 0.15s;
+}
+
+.alert-item:nth-child(4) {
+    animation-delay: 0.20s;
+}
+
+.alert-item:nth-child(5) {
+    animation-delay: 0.25s;
+}
+
+.tx-card:nth-child(1) {
+    animation-delay: 0.02s;
+}
+
+.tx-card:nth-child(2) {
+    animation-delay: 0.04s;
+}
+
+.tx-card:nth-child(3) {
+    animation-delay: 0.06s;
+}
+
+.tx-card:nth-child(4) {
+    animation-delay: 0.08s;
+}
+
+.tx-card:nth-child(5) {
+    animation-delay: 0.10s;
+}
+
+.alert-item {
+    animation: fade-slide-in 0.3s ease-out both;
+}
+
 /* ===== MOBILE (consolidado) ===== */
 @media (max-width: 768px) {
     .autonomia-number {
@@ -772,21 +875,21 @@ body,
     }
 
     .stFormSubmitButton button {
-        padding: 12px 16px !important;
-        font-size: 0.75rem !important;
-        min-height: 48px !important;
+        padding: 14px 16px !important;
+        font-size: 0.78rem !important;
+        min-height: 52px !important;
     }
 
     .stButton button {
-        padding: 10px 14px !important;
+        padding: 12px 14px !important;
         min-height: 48px !important;
     }
 
     .stTabs [data-baseweb="tab"] {
         font-size: 0.65rem;
-        padding: 6px 10px 8px 10px;
+        padding: 8px 12px 10px 12px;
         letter-spacing: 0.08em;
-        min-height: 44px;
+        min-height: 48px;
     }
 
     /* M7: Stack columns vertically on mobile */
@@ -797,6 +900,66 @@ body,
 
     div[data-testid="stHorizontalBlock"] {
         flex-wrap: wrap !important;
+    }
+
+    /* M1: Form inputs — more vertical breathing room */
+    .stTextInput,
+    .stNumberInput,
+    .stSelectbox,
+    .stDateInput {
+        margin-bottom: 4px !important;
+    }
+
+    .stTextInput input,
+    .stNumberInput input,
+    .stDateInput input {
+        min-height: 48px !important;
+        font-size: 16px !important;
+    }
+
+    .stSelectbox>div>div {
+        min-height: 48px !important;
+        font-size: 16px !important;
+    }
+
+    /* M7: Transaction cards — bigger touch targets */
+    .tx-card {
+        padding: 12px 12px;
+        min-height: 52px;
+    }
+
+    .tx-card-desc {
+        font-size: 0.68rem;
+    }
+
+    .tx-card-valor {
+        font-size: 0.72rem;
+    }
+
+    .tx-card-meta {
+        font-size: 0.5rem;
+    }
+
+    /* M1: Expander headers bigger touch target */
+    div[data-testid="stExpander"] details summary {
+        min-height: 48px !important;
+        padding: 12px 16px !important;
+    }
+
+    /* M1: Alert items touch-friendly */
+    .alert-item {
+        min-height: 44px;
+        padding: 10px 12px;
+        font-size: 0.65rem;
+    }
+}
+
+/* ===== M5: Mobile nav improvements ===== */
+@media (max-width: 768px) {
+    .month-nav {
+        font-size: 0.95rem;
+        font-weight: 600;
+        padding: 10px 0;
     }
 }
 
@@ -811,6 +974,25 @@ body,
 
     .autonomia-number {
         animation: none;
+    }
+
+    /* D2: Disable micro-animations for users who prefer reduced motion */
+    .t-panel,
+    .intel-box,
+    .score-panel,
+    .budget-panel,
+    .rec-card,
+    .tx-card,
+    .annual-strip,
+    .alert-item {
+        animation: none !important;
+    }
+
+    .cat-bar-fill,
+    .budget-fill,
+    .score-detail-fill,
+    .projection-fill-actual {
+        animation: none !important;
     }
 }
 

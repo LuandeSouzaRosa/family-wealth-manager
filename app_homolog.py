@@ -3293,8 +3293,17 @@ def render_evolution_chart(evo_data: list[dict]) -> None:
         height=300,
         xaxis=dict(gridcolor=_cc["grid"], showline=False),
         yaxis=dict(gridcolor=_cc["grid"], showline=False, tickformat=",.0f"),
+        hovermode="x unified",
+        hoverlabel=dict(
+            bgcolor="#0a0a0a", bordercolor="#1a1a1a",
+            font=dict(family="JetBrains Mono, monospace", size=10, color="#F0F0F0"),
+        ),
     )
-    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    st.plotly_chart(fig, use_container_width=True, config={
+        "displayModeBar": False,
+        "scrollZoom": False,
+        "doubleClick": False,
+    })
 
     # --- Indicador de tendência ---
     last = evo_data[-1]
@@ -3898,8 +3907,17 @@ def render_renda_chart(renda_data: list[dict]) -> None:
         height=280,
         xaxis=dict(gridcolor=_cc["grid"], showline=False),
         yaxis=dict(gridcolor=_cc["grid"], showline=False, tickformat=",.0f"),
+        hovermode="x unified",
+        hoverlabel=dict(
+            bgcolor="#0a0a0a", bordercolor="#1a1a1a",
+            font=dict(family="JetBrains Mono, monospace", size=10, color="#F0F0F0"),
+        ),
     )
-    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    st.plotly_chart(fig, use_container_width=True, config={
+        "displayModeBar": False,
+        "scrollZoom": False,
+        "doubleClick": False,
+    })
 
     if len(renda_data) >= 2:
         curr = renda_data[-1]["total"]
@@ -3966,8 +3984,17 @@ def render_patrimonio_chart(pat_data: list[dict]) -> None:
         xaxis=dict(gridcolor=_cc["grid"], showline=False),
         yaxis=dict(gridcolor=_cc["grid"], showline=False, tickformat=",.0f"),
         barmode="overlay",
+        hovermode="x unified",
+        hoverlabel=dict(
+            bgcolor="#0a0a0a", bordercolor="#1a1a1a",
+            font=dict(family="JetBrains Mono, monospace", size=10, color="#F0F0F0"),
+        ),
     )
-    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    st.plotly_chart(fig, use_container_width=True, config={
+        "displayModeBar": False,
+        "scrollZoom": False,
+        "doubleClick": False,
+    })
 
     # Variação
     if len(pat_data) >= 2:
@@ -5665,6 +5692,12 @@ def main() -> None:
 
     # ===== LANÇAMENTO RÁPIDO =====
     with st.expander("⚡ Lançamento Rápido"):
+        # U6: Remember last category/responsavel used
+        _last_cat_key = f"_last_cat_{user}"
+        _last_cat = st.session_state.get(_last_cat_key, None)
+        _cat_list = list(CFG.CATEGORIAS_SAIDA)
+        _cat_idx = _cat_list.index(_last_cat) if _last_cat and _last_cat in _cat_list else 0
+
         with st.form("f_quick", clear_on_submit=True):
             qc1, qc2 = st.columns([3, 1])
             with qc1:
@@ -5676,7 +5709,7 @@ def main() -> None:
                 q_val = st.number_input("Valor (R$)", min_value=0.01, step=10.0)
             qc3, qc4 = st.columns(2)
             with qc3:
-                q_cat = st.selectbox("Categoria", list(CFG.CATEGORIAS_SAIDA))
+                q_cat = st.selectbox("Categoria", _cat_list, index=_cat_idx)
             with qc4:
                 q_min = date(sel_yr, sel_mo, 1)
                 q_max = date(sel_yr, sel_mo, calendar.monthrange(sel_yr, sel_mo)[1])
@@ -5708,6 +5741,8 @@ def main() -> None:
                 else:
                     is_dup = check_duplicate(mx.df_month, q_desc.strip(), q_val, q_date)
                     if save_entry(entry, "Transacoes"):
+                        # U6: Remember last category
+                        st.session_state[_last_cat_key] = q_cat
                         if is_dup:
                             st.toast(f"⚠ Possível duplicata: {q_desc.strip()} — {fmt_brl(q_val)}")
                         else:
