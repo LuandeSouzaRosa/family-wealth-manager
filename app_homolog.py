@@ -227,8 +227,13 @@ st.set_page_config(
 # ==============================================================================
 
 def inject_css() -> None:
-    """Injeta fontes Google e CSS externo (T3)."""
+    """Injeta fontes Google, meta tags mobile e CSS externo (T3, M1, M4)."""
     st.markdown(
+        '<meta name="viewport" content="width=device-width, initial-scale=1.0, '
+        'maximum-scale=1.0, viewport-fit=cover">'
+        '<meta name="apple-mobile-web-app-capable" content="yes">'
+        '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">'
+        '<meta name="theme-color" content="#000000">'
         '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800'
         '&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">',
         unsafe_allow_html=True,
@@ -391,6 +396,14 @@ body.light-theme [data-testid="stFileUploader"] { border-color: #E0E0E0 !importa
 body.light-theme [data-testid="stFileUploader"] section { background: #FFFFFF !important; }
 /* Plotly chart backgrounds */
 body.light-theme .js-plotly-plot .plot-container { background: transparent !important; }
+/* Phase 9: Inline-style overrides for renders with hardcoded colors */
+body.light-theme [style*="border-bottom:1px solid #111"] { border-bottom-color: #E0E0E0 !important; }
+body.light-theme [style*="border-top:1px solid #0f0f0f"] { border-top-color: #E8E8E8 !important; }
+body.light-theme [style*="border-top:1px solid #1a1a1a"] { border-top-color: #E8E8E8 !important; }
+body.light-theme [style*="border:1px solid #111"] { border-color: #E0E0E0 !important; }
+body.light-theme [style*="border-left:3px solid #1a1a1a"] { border-left-color: #E0E0E0 !important; }
+body.light-theme [style*="color:#222"] { color: #BBB !important; }
+body.light-theme [style*="background:#0f0f0f"] { background: #F0F0F0 !important; }
 </style>"""
 
 
@@ -2754,18 +2767,38 @@ def compute_challenges(mx: MonthMetrics) -> list[dict]:
 
     ucfg = mx.user_config
 
-    # 1. Categoria mais cara — reduzir 10%
+    # 1. Categoria mais cara — manter sob controle
     if mx.cat_breakdown:
         top_cat = list(mx.cat_breakdown.keys())[0]
         top_val = list(mx.cat_breakdown.values())[0]
-        target = round(top_val * 0.9, 2)
-        challenges.append({
-            "title": f"Manter {top_cat} abaixo de {fmt_brl(target)}",
-            "desc": f"Atual: {fmt_brl(top_val)}",
-            "progress": min(100, max(0, (1 - top_val / (target * 1.111)) * 100)) if target > 0 else 0,
-            "done": top_val <= target,
-            "icon": "🎯",
-        })
+
+        # Usar limite do orçamento se existir, senão 30% da renda
+        _ch_target = None
+        for _b in mx.budget_data:
+            if _b["categoria"] == top_cat:
+                _ch_target = _b["limite"]
+                break
+
+        if _ch_target and _ch_target > 0:
+            _ch_progress = min(100, max(0, (1 - top_val / _ch_target) * 100))
+            challenges.append({
+                "title": f"Manter {top_cat} no orçamento",
+                "desc": f"{fmt_brl(top_val)} / {fmt_brl(_ch_target)}",
+                "progress": _ch_progress,
+                "done": top_val <= _ch_target,
+                "icon": "🎯",
+            })
+        elif mx.renda > 0:
+            _ch_limit_pct = 30
+            _ch_target_renda = mx.renda * _ch_limit_pct / 100
+            _ch_progress = min(100, max(0, (1 - top_val / _ch_target_renda) * 100))
+            challenges.append({
+                "title": f"Manter {top_cat} abaixo de {_ch_limit_pct}% da renda",
+                "desc": f"{fmt_brl(top_val)} / {fmt_brl(_ch_target_renda)} ({top_val / mx.renda * 100:.0f}%)",
+                "progress": _ch_progress,
+                "done": top_val <= _ch_target_renda,
+                "icon": "🎯",
+            })
 
     # 2. Taxa de poupança ≥ 20%
     savings_rate = ((mx.renda - mx.lifestyle) / mx.renda * 100) if mx.renda > 0 else 0
@@ -3149,14 +3182,18 @@ def render_cat_breakdown(cat_dict: dict, sparklines: dict | None = None) -> None
     html = ""
     for cat, val in cat_dict.items():
         pct = (val / total) * 100
-        spark_html = ""
+        spark_col = ""
         if sparklines and cat in sparklines:
-            spark_html = _sparkline_html(sparklines[cat])
-            if spark_html:
-                spark_html = f'<span style="margin-left:6px;">{spark_html}</span>'
+            _spark = _sparkline_html(sparklines[cat])
+            if _spark:
+                spark_col = (
+                    f'<span class="cat-spark" style="width:52px;flex-shrink:0;'
+                    f'text-align:center;line-height:1;">{_spark}</span>'
+                )
         html += (
             f'<div class="cat-bar-row">'
-            f'<span class="cat-bar-label">{sanitize(str(cat))}{spark_html}</span>'
+            f'<span class="cat-bar-label">{sanitize(str(cat))}</span>'
+            f'{spark_col}'
             f'<div class="cat-bar-track">'
             f'<div class="cat-bar-fill" style="width:{pct:.0f}%;"></div>'
             f'</div>'
@@ -5079,7 +5116,14 @@ def _render_historico(
         )
 
     if _hist_view == "Cards":
-        render_transaction_cards(df_display)
+        _show_all_cards = len(df_display) > 25 and st.checkbox(
+            f"Mostrar todas ({len(df_display)})",
+            key=f"cards_all_{user}_{sel_mo}_{sel_yr}",
+        )
+        render_transaction_cards(
+            df_display,
+            max_items=len(df_display) if _show_all_cards else 25,
+        )
         st.caption("💡 Para editar/excluir, mude para visualização Tabela.")
         return
 
@@ -5692,9 +5736,10 @@ def main() -> None:
                     _fv_val = float(fav["Valor"])
                     _fv_tipo = str(fav["Tipo"]).strip()
                     if st.button(
-                        f"⭐ {_fv_desc}\n{_fv_cat} · {fmt_brl(_fv_val)}",
+                        f"⭐ {_fv_desc} — {fmt_brl(_fv_val)}",
                         key=f"fav_{i}_{fav['Id']}",
                         use_container_width=True,
+                        help=f"{_fv_cat} · {_fv_tipo}",
                     ):
                         fav_entry = {
                             "Data": default_form_date(sel_mo, sel_yr),

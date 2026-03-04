@@ -18,6 +18,9 @@ div[data-testid="stToolbar"] {
 
 .block-container {
     padding: 1rem 1.5rem 1rem 1.5rem !important;
+    padding-left: max(1.5rem, env(safe-area-inset-left)) !important;
+    padding-right: max(1.5rem, env(safe-area-inset-right)) !important;
+    padding-bottom: max(1rem, env(safe-area-inset-bottom)) !important;
     max-width: 100% !important;
 }
 
@@ -27,10 +30,14 @@ body,
     font-family: 'Inter', sans-serif;
     background-color: #000000;
     color: #F0F0F0;
+    -webkit-tap-highlight-color: rgba(0, 255, 204, 0.15);
+    overscroll-behavior: none;
 }
 
 .stApp {
     background-color: #000000;
+    min-height: 100vh;
+    min-height: 100dvh;
 }
 
 @keyframes scan-line {
@@ -560,6 +567,8 @@ body,
     text-transform: uppercase !important;
     letter-spacing: 0.12em !important;
     transition: background 0.2s ease, color 0.2s ease !important;
+    min-height: 44px !important;
+    touch-action: manipulation !important;
 }
 
 .stFormSubmitButton button:hover {
@@ -574,11 +583,27 @@ body,
     color: #F0F0F0 !important;
     font-family: 'JetBrains Mono', monospace !important;
     transition: border-color 0.2s ease, transform 0.15s ease !important;
+    min-height: 44px !important;
+    touch-action: manipulation !important;
 }
 
 .stButton button:hover {
     border-color: #00FFCC !important;
     transform: translateY(-1px) !important;
+}
+
+/* Touch targets — inputs & selects */
+.stTextInput input,
+.stNumberInput input,
+.stDateInput input,
+.stSelectbox>div>div {
+    min-height: 44px !important;
+    touch-action: manipulation !important;
+}
+
+/* Tabs touch targets */
+.stTabs [data-baseweb="tab"] {
+    min-height: 44px !important;
 }
 
 .stDataFrame {
@@ -612,6 +637,9 @@ body,
 
     .block-container {
         padding: 0.5rem 0.8rem !important;
+        padding-left: max(0.8rem, env(safe-area-inset-left)) !important;
+        padding-right: max(0.8rem, env(safe-area-inset-right)) !important;
+        padding-bottom: max(0.5rem, env(safe-area-inset-bottom)) !important;
     }
 
     .kpi-mono-value {
@@ -631,6 +659,11 @@ body,
     .cat-bar-value {
         width: 80px;
         font-size: 0.6rem;
+    }
+
+    /* I4: Hide sparklines on mobile to prevent overflow */
+    .cat-spark {
+        display: none !important;
     }
 
     .hist-summary {
@@ -741,16 +774,29 @@ body,
     .stFormSubmitButton button {
         padding: 12px 16px !important;
         font-size: 0.75rem !important;
+        min-height: 48px !important;
     }
 
     .stButton button {
         padding: 10px 14px !important;
+        min-height: 48px !important;
     }
 
     .stTabs [data-baseweb="tab"] {
         font-size: 0.65rem;
         padding: 6px 10px 8px 10px;
         letter-spacing: 0.08em;
+        min-height: 44px;
+    }
+
+    /* M7: Stack columns vertically on mobile */
+    [data-testid="column"] {
+        width: 100% !important;
+        flex: unset !important;
+    }
+
+    div[data-testid="stHorizontalBlock"] {
+        flex-wrap: wrap !important;
     }
 }
 
