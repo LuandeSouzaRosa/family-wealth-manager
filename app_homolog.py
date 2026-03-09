@@ -2423,7 +2423,7 @@ def patrimonio_form(
 def recorrente_form(default_resp: str = "Casal", df_existing: pd.DataFrame | None = None) -> None:
     """Formulário para cadastrar transação recorrente."""
     with st.form("f_recorrente", clear_on_submit=True):
-        tipo = st.selectbox("Tipo", list(CFG.TIPOS))
+        tipo = st.selectbox("Tipo", list(reversed(CFG.TIPOS)))
         desc = st.text_input(
             "Descrição", placeholder="Ex: Aluguel, Netflix, Salário",
             max_chars=CFG.MAX_DESC_LENGTH,
@@ -2433,7 +2433,7 @@ def recorrente_form(default_resp: str = "Casal", df_existing: pd.DataFrame | Non
             cat_options = list(CFG.CATEGORIAS_SAIDA) + [CFG.CAT_INVESTIMENTO]
         else:
             cat_options = list(CFG.CATEGORIAS_ENTRADA)
-        cat = st.selectbox("Categoria", cat_options)
+        cat = st.selectbox("Categoria", cat_options, key=f"rec_cat_{tipo}")
         dia = st.number_input(
             "Dia do vencimento", min_value=1, max_value=28, value=1, step=1
         )

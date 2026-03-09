@@ -313,16 +313,27 @@ class SupabaseRepository(BaseRepository):
 
     def update_table(self, df: pd.DataFrame, table: str) -> bool:
         sb_table = self._table_for_worksheet(table)
+        # Tables with SERIAL (auto-increment) PK — id must NOT be sent on insert
+        _SERIAL_PK_TABLES = {
+            "recorrentes", "patrimonio", "orcamentos", "passivos", "configuracoes",
+        }
         try:
             # Delete all existing rows
             self._client.table(sb_table).delete().neq("id", "___impossible___").execute()
             # Insert new rows
             if not df.empty:
                 df_snake = _to_snake(df.copy())
+                # Drop auto-generated columns
+                drop_cols = ["created_at"]
+                if sb_table in _SERIAL_PK_TABLES:
+                    drop_cols.append("id")
+                for col in drop_cols:
+                    if col in df_snake.columns:
+                        df_snake = df_snake.drop(columns=[col])
                 records = df_snake.to_dict("records")
-                # Convert dates
+                # Convert dates and NaN
                 for rec in records:
-                    for k, v in rec.items():
+                    for k, v in list(rec.items()):
                         if hasattr(v, "strftime"):
                             rec[k] = v.strftime("%Y-%m-%d") if k == "data" else str(v)
                         if pd.isna(v):
