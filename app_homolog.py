@@ -11,186 +11,31 @@ from io import BytesIO
 import time
 import logging
 import uuid
+import hashlib
+import secrets
+import re
 from pathlib import Path
 import streamlit.components.v1 as stc
 
+# --- Core Modules (Fase 2) ---
+from core.config import Config, CFG, UserConfig, MESES_PT, MESES_FULL
+from core.models import MonthMetrics
+from core.auth import verify_password as _verify_password_core
+from core.utils import (
+    sanitize, _sanitize_for_sheet, generate_id,
+    fmt_brl, fmt_date, fmt_month_year,
+    end_of_month, default_form_date, calc_delta, _is_future_month,
+    validate_transaction, validate_asset, validate_recorrente,
+    validate_orcamento, validate_passivo, check_duplicate,
+)
+
 
 # ==============================================================================
-# 1. CONFIGURAÇÃO CENTRALIZADA
+# 1. CONFIGURAÇÃO — Importado de core/ (Fase 2)
 # ==============================================================================
-
-@dataclass(frozen=True)
-class Config:
-    VERSION: str = "8.0"
-    NECESSIDADES: tuple = ("Moradia", "Alimentação", "Saúde", "Transporte")
-    DESEJOS: tuple = ("Lazer", "Assinaturas", "Educação", "Outros")
-    CATEGORIAS_SAIDA: tuple = (
-        "Moradia", "Alimentação", "Lazer", "Saúde",
-        "Transporte", "Assinaturas", "Educação", "Outros"
-    )
-    CATEGORIAS_ENTRADA: tuple = ("Salário", "Dividendos", "Bônus", "Extra", "Reembolso")
-    CATEGORIAS_TODAS: tuple = (
-        "Moradia", "Alimentação", "Lazer", "Saúde", "Transporte",
-        "Investimento", "Salário", "Outros", "Assinaturas", "Educação",
-        "Dividendos", "Bônus", "Extra", "Reembolso"
-    )
-    RESPONSAVEIS: tuple = ("Casal", "Luan", "Luana")
-    TIPOS: tuple = ("Entrada", "Saída")
-    COLS_TRANSACAO: tuple = ("Id", "Data", "Descricao", "Valor", "Categoria", "Tipo", "Responsavel", "Origem", "Tag")
-    COLS_PATRIMONIO: tuple = ("Item", "Valor", "Responsavel")
-    COLS_RECORRENTE: tuple = ("Descricao", "Valor", "Categoria", "Tipo", "Responsavel", "DiaVencimento", "Ativo")
-    COLS_ORCAMENTO: tuple = ("Categoria", "Limite", "Responsavel")
-    COLS_CONFIG: tuple = ("Chave", "Valor", "Responsavel")
-    COLS_AUDIT: tuple = ("Timestamp", "Usuario", "Acao", "Planilha", "Detalhes")
-    COLS_METAS: tuple = ("Id", "Nome", "ValorAlvo", "ValorAtual", "Prazo", "Responsavel", "Ativo")
-    COLS_PASSIVOS: tuple = ("Item", "Valor", "Responsavel")
-    COLS_LIXEIRA: tuple = ("Id", "Data", "Descricao", "Valor", "Categoria", "Tipo", "Responsavel", "Origem", "Tag", "DeletadoEm")
-    COLS_FAVORITOS: tuple = ("Id", "Nome", "Descricao", "Valor", "Categoria", "Tipo", "Responsavel", "Tag", "Ordem")
-    META_NECESSIDADES: int = 50
-    META_DESEJOS: int = 30
-    META_INVESTIMENTO: int = 20
-    AUTONOMIA_OK: int = 12
-    AUTONOMIA_WARN: int = 6
-    CACHE_TTL: int = 120
-    MAX_DESC_LENGTH: int = 200
-    SAVE_RETRIES: int = 3
-    MESES_EVOLUCAO: int = 6  # Usado em evolução, savings rate, consistência
-    TIPO_ENTRADA: str = "Entrada"
-    TIPO_SAIDA: str = "Saída"
-    CAT_INVESTIMENTO: str = "Investimento"
-    ORIGEM_MANUAL: str = "Manual"
-    ORIGEM_RECORRENTE: str = "Recorrente"
-
-CFG = Config()
-
-@dataclass
-class UserConfig:
-    """Configurações personalizáveis do usuário."""
-    meta_necessidades: int = CFG.META_NECESSIDADES
-    meta_desejos: int = CFG.META_DESEJOS
-    meta_investimento: int = CFG.META_INVESTIMENTO
-    autonomia_alvo: int = CFG.AUTONOMIA_OK
-    autonomia_warn: int = CFG.AUTONOMIA_WARN
-    auto_gerar_recorrentes: bool = False
-
-    @classmethod
-    def from_df(cls, df: pd.DataFrame, responsavel: str = "Casal") -> "UserConfig":
-        """Carrega config do DataFrame. Fallback: defaults do CFG."""
-        cfg = cls()
-        if df.empty:
-            return cfg
-
-        df_user = df[df["Responsavel"].str.strip() == responsavel]
-        if df_user.empty:
-            df_user = df[df["Responsavel"].str.strip() == "Casal"]
-        if df_user.empty:
-            return cfg
-
-        kv: dict[str, str] = {}
-        for _, row in df_user.iterrows():
-            key = str(row.get("Chave", "")).strip().lower()
-            val = str(row.get("Valor", "")).strip()
-            if key:
-                kv[key] = val
-
-        def _int(k: str, default: int) -> int:
-            try:
-                return int(float(kv[k]))
-            except (KeyError, ValueError, TypeError):
-                return default
-
-        def _bool(k: str, default: bool) -> bool:
-            try:
-                return kv[k].lower() in ("true", "1", "sim", "yes")
-            except (KeyError, ValueError):
-                return default
-
-        cfg.meta_necessidades = _int("meta_necessidades", cfg.meta_necessidades)
-        cfg.meta_desejos = _int("meta_desejos", cfg.meta_desejos)
-        cfg.meta_investimento = _int("meta_investimento", cfg.meta_investimento)
-        cfg.autonomia_alvo = _int("autonomia_alvo", cfg.autonomia_alvo)
-        cfg.auto_gerar_recorrentes = _bool("auto_gerar_recorrentes", cfg.auto_gerar_recorrentes)
-
-        # Validar: metas devem somar 100
-        total = cfg.meta_necessidades + cfg.meta_desejos + cfg.meta_investimento
-        if total != 100:
-            cfg.meta_necessidades = CFG.META_NECESSIDADES
-            cfg.meta_desejos = CFG.META_DESEJOS
-            cfg.meta_investimento = CFG.META_INVESTIMENTO
-
-        # Derivar warn como metade do alvo
-        cfg.autonomia_warn = max(1, cfg.autonomia_alvo // 2)
-
-        return cfg
-
-
-@dataclass
-class MonthMetrics:
-    """Métricas financeiras computadas para um mês/usuário."""
-    # --- Core ---
-    renda: float = 0.0
-    lifestyle: float = 0.0
-    investido_mes: float = 0.0
-    disponivel: float = 0.0
-    sobrevivencia: float = 0.0
-    investido_total: float = 0.0
-    taxa_aporte: float = 0.0
-    autonomia: float = 0.0
-    
-    # --- Regra 50/30/20 ---
-    nec_pct: float = 0.0
-    des_pct: float = 0.0
-    inv_pct: float = 0.0
-    nec_delta: float = 0.0
-    des_delta: float = 0.0
-    inv_delta: float = 0.0
-    
-    # --- Top gastos ---
-    top_cat: str = "—"
-    top_cat_val: float = 0.0
-    top_gasto_desc: str = "—"
-    top_gasto_val: float = 0.0
-    top5_gastos: list = field(default_factory=list)
-    ticket_medio: float = 0.0
-    dia_mais_caro: int = 0
-    dia_mais_caro_val: float = 0.0
-    dia_mais_caro_count: int = 0
-    
-    # --- DataFrames ---
-    df_user: pd.DataFrame = field(default_factory=pd.DataFrame)
-    df_month: pd.DataFrame = field(default_factory=pd.DataFrame)
-    
-    # --- Insights ---
-    insight_ls: str = ""
-    insight_renda: str = ""
-    
-    # --- Deltas ---
-    d_renda: float | None = None
-    d_lifestyle: float | None = None
-    d_investido: float | None = None
-    d_disponivel: float | None = None
-    prev_renda: float = 0.0
-    prev_lifestyle: float = 0.0
-    prev_investido: float = 0.0
-    prev_disponivel: float = 0.0
-    
-    # --- Breakdowns ---
-    cat_breakdown: dict = field(default_factory=dict)
-    renda_breakdown: dict = field(default_factory=dict)
-    split_gastos: dict = field(default_factory=dict)
-    split_renda: dict = field(default_factory=dict)
-    
-    # --- Contadores ---
-    month_tx_count: int = 0
-    month_entradas: int = 0
-    month_saidas: int = 0
-    month_investimentos: int = 0
-    
-    # --- Status ---
-    health: str = "neutral"
-    budget_data: list = field(default_factory=list)
-    user_config: UserConfig = field(default_factory=UserConfig)
-
+# Config, CFG, UserConfig → core/config.py
+# MonthMetrics → core/models.py
+# MESES_PT, MESES_FULL → core/config.py
 
 logging.basicConfig(
     level=logging.INFO,
@@ -198,16 +43,6 @@ logging.basicConfig(
     datefmt="%H:%M:%S",
 )
 logger = logging.getLogger("ll_finance")
-
-MESES_PT: dict[int, str] = {
-    1: "Jan", 2: "Fev", 3: "Mar", 4: "Abr", 5: "Mai", 6: "Jun",
-    7: "Jul", 8: "Ago", 9: "Set", 10: "Out", 11: "Nov", 12: "Dez"
-}
-MESES_FULL: dict[int, str] = {
-    1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril",
-    5: "Maio", 6: "Junho", 7: "Julho", 8: "Agosto",
-    9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"
-}
 
 
 # ==============================================================================
@@ -408,62 +243,14 @@ body.light-theme [style*="background:#0f0f0f"] { background: #F0F0F0 !important;
 
 
 # ==============================================================================
-# 4. UTILITÁRIOS
+# 4. UTILITÁRIOS — Importado de core/utils.py (Fase 2)
 # ==============================================================================
-
-def sanitize(text: str) -> str:
-    """Escapa HTML para prevenir injeção."""
-    return html_lib.escape(str(text))
-
-
-def generate_id() -> str:
-    """Gera ID único de 12 caracteres hex."""
-    return uuid.uuid4().hex[:12]
-
-
-def fmt_brl(val: float) -> str:
-    """Formata valor float para padrão BRL: R$ 1.234,56 / -R$ 1.234,56"""
-    if val < 0:
-        return f"-R$ {abs(val):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-    return f"R$ {val:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-
-def fmt_date(dt: datetime) -> str:
-    """Formata datetime para '01 Jan 2025'."""
-    return f"{dt.day:02d} {MESES_PT[dt.month]} {dt.year}"
-
-
-def fmt_month_year(mo: int, yr: int) -> str:
-    """Retorna 'Janeiro 2025'."""
-    return f"{MESES_FULL[mo]} {yr}"
-
-
-def end_of_month(year: int, month: int) -> datetime:
-    """Retorna datetime do último segundo do mês."""
-    last_day = calendar.monthrange(year, month)[1]
-    return datetime(year, month, last_day, 23, 59, 59)
-
-
-def default_form_date(sel_mo: int, sel_yr: int) -> date:
-    """Data default para formulários baseada no mês selecionado."""
-    now = datetime.now()
-    if sel_mo == now.month and sel_yr == now.year:
-        return now.date()
-    elif (sel_yr < now.year) or (sel_yr == now.year and sel_mo < now.month):
-        last_day = calendar.monthrange(sel_yr, sel_mo)[1]
-        return date(sel_yr, sel_mo, last_day)
-    else:
-        return now.date()
-
-
-def calc_delta(current: float, previous: float) -> float | None:
-    """Calcula variação percentual entre dois valores."""
-    if previous == 0:
-        if current > 0:
-            return float("inf")
-        if current == 0:
-            return None
-        return float("-inf")
-    return ((current - previous) / abs(previous)) * 100
+# sanitize, _sanitize_for_sheet, generate_id, fmt_brl, fmt_date,
+# fmt_month_year, end_of_month, default_form_date, calc_delta,
+# _is_future_month → core/utils.py
+#
+# validate_transaction, validate_asset, validate_recorrente,
+# validate_orcamento, validate_passivo, check_duplicate → core/utils.py
 
 
 def _chart_colors() -> dict:
@@ -475,171 +262,6 @@ def _chart_colors() -> dict:
         "grid": "#E0E0E0" if is_light else "#111",
         "font_color": "#555" if is_light else "#888",
     }
-
-
-def _is_future_month(month: int, year: int) -> bool:
-    """Verifica se mês/ano é futuro em relação a agora."""
-    now = datetime.now()
-    return (year > now.year) or (year == now.year and month > now.month)
-
-
-# ==============================================================================
-# 5. VALIDAÇÃO
-# ==============================================================================
-
-def validate_transaction(entry: dict) -> tuple[bool, str]:
-    """Valida dados de uma transação antes de salvar."""
-    # --- Descrição ---
-    desc = entry.get("Descricao", "")
-    if not desc or not str(desc).strip():
-        return False, "Descrição obrigatória"
-    if len(str(desc)) > CFG.MAX_DESC_LENGTH:
-        return False, f"Descrição muito longa (máx {CFG.MAX_DESC_LENGTH})"
-
-    # --- Valor ---
-    val = entry.get("Valor")
-    if not isinstance(val, (int, float)) or val <= 0:
-        return False, "Valor deve ser maior que zero"
-
-    # --- Tipo ---
-    tipo = entry.get("Tipo")
-    if tipo not in CFG.TIPOS:
-        return False, "Tipo inválido"
-
-    # --- Categoria [FIX B3] ---
-    cat = entry.get("Categoria", "")
-    if tipo == CFG.TIPO_SAIDA:
-        cats_validas = set(CFG.CATEGORIAS_SAIDA) | {CFG.CAT_INVESTIMENTO}
-    else:
-        cats_validas = set(CFG.CATEGORIAS_ENTRADA)
-    if cat not in cats_validas:
-        return False, f"Categoria '{cat}' inválida para tipo '{tipo}'"
-
-    # --- Responsável ---
-    if entry.get("Responsavel") not in CFG.RESPONSAVEIS:
-        return False, "Responsável inválido"
-
-    # --- Data [FIX B4] ---
-    dt = entry.get("Data")
-    if dt is not None:
-        # Tratar NaT do pandas (vem do data_editor)
-        if isinstance(dt, pd.Timestamp) and pd.isna(dt):
-            return False, "Data obrigatória"
-        if isinstance(dt, pd.Timestamp):
-            dt_check = dt.to_pydatetime()
-        elif isinstance(dt, date) and not isinstance(dt, datetime):
-            dt_check = datetime.combine(dt, datetime.min.time())
-        elif isinstance(dt, datetime):
-            dt_check = dt
-        else:
-            return False, "Data inválida"
-        now = datetime.now()
-        # Não permite datas mais de 30 dias no futuro
-        if dt_check > now + timedelta(days=30):
-            return False, "Data muito distante no futuro"
-        # Não permite datas antes de 2020
-        if dt_check.year < 2020:
-            return False, "Data muito antiga (anterior a 2020)"
-
-    return True, ""
-
-
-def validate_asset(entry: dict) -> tuple[bool, str]:
-    """Valida dados de um ativo patrimonial antes de salvar."""
-    item = entry.get("Item", "")
-    if not item or not str(item).strip():
-        return False, "Nome do ativo obrigatório"
-    if len(str(item)) > CFG.MAX_DESC_LENGTH:
-        return False, f"Nome muito longo (máx {CFG.MAX_DESC_LENGTH})"
-    val = entry.get("Valor")
-    if not isinstance(val, (int, float)) or val <= 0:
-        return False, "Valor deve ser maior que zero"
-    if entry.get("Responsavel") not in CFG.RESPONSAVEIS:
-        return False, "Responsável inválido"
-    return True, ""
-
-
-def validate_recorrente(entry: dict) -> tuple[bool, str]:
-    """Valida dados de uma transação recorrente."""
-    desc = entry.get("Descricao", "")
-    if not desc or not str(desc).strip():
-        return False, "Descrição obrigatória"
-    if len(str(desc)) > CFG.MAX_DESC_LENGTH:
-        return False, f"Descrição muito longa (máx {CFG.MAX_DESC_LENGTH})"
-
-    val = entry.get("Valor")
-    if not isinstance(val, (int, float)) or val <= 0:
-        return False, "Valor deve ser maior que zero"
-
-    tipo = entry.get("Tipo")
-    if tipo not in CFG.TIPOS:
-        return False, "Tipo inválido"
-
-    cat = entry.get("Categoria", "")
-    if tipo == CFG.TIPO_SAIDA:
-        cats_validas = set(CFG.CATEGORIAS_SAIDA) | {CFG.CAT_INVESTIMENTO}
-    else:
-        cats_validas = set(CFG.CATEGORIAS_ENTRADA)
-    if cat not in cats_validas:
-        return False, f"Categoria '{cat}' inválida para tipo '{tipo}'"
-
-    if entry.get("Responsavel") not in CFG.RESPONSAVEIS:
-        return False, "Responsável inválido"
-
-    dia = entry.get("DiaVencimento")
-    if not isinstance(dia, int) or dia < 1 or dia > 28:
-        return False, "Dia deve ser entre 1 e 28"
-
-    return True, ""
-
-
-def validate_orcamento(entry: dict) -> tuple[bool, str]:
-    """Valida dados de um orçamento por categoria."""
-    cat = entry.get("Categoria", "")
-    if not cat or cat not in CFG.CATEGORIAS_SAIDA:
-        return False, f"Categoria inválida: '{cat}'"
-    limite = entry.get("Limite")
-    if not isinstance(limite, (int, float)) or limite <= 0:
-        return False, "Limite deve ser maior que zero"
-    if entry.get("Responsavel") not in CFG.RESPONSAVEIS:
-        return False, "Responsável inválido"
-    return True, ""
-
-
-def validate_passivo(entry: dict) -> tuple[bool, str]:
-    """Valida dados de um passivo (I5)."""
-    item = entry.get("Item", "")
-    if not item or not str(item).strip():
-        return False, "Nome do passivo obrigatório"
-    if len(str(item)) > CFG.MAX_DESC_LENGTH:
-        return False, f"Nome muito longo (máx {CFG.MAX_DESC_LENGTH})"
-    val = entry.get("Valor")
-    if not isinstance(val, (int, float)) or val <= 0:
-        return False, "Valor deve ser maior que zero"
-    if entry.get("Responsavel") not in CFG.RESPONSAVEIS:
-        return False, "Responsável inválido"
-    return True, ""
-
-
-def check_duplicate(df_month: pd.DataFrame, desc: str, valor: float, data_ref) -> bool:
-    """Verifica se existe transação com mesma descrição, valor e data no mês."""
-    if df_month.empty:
-        return False
-    try:
-        if isinstance(data_ref, datetime):
-            data_check = data_ref.date()
-        elif isinstance(data_ref, date):
-            data_check = data_ref
-        else:
-            return False
-        mask = (
-            (df_month["Descricao"].str.strip().str.lower() == desc.strip().lower()) &
-            (df_month["Valor"].round(2) == round(float(valor), 2)) &
-            (df_month["Data"].dt.date == data_check)
-        )
-        return bool(mask.any())
-    except Exception:
-        return False
 
 
 # ==============================================================================
@@ -5328,13 +4950,39 @@ def _save_filtered_sheet(
     return update_sheet(df_final, worksheet)
 
 # ==============================================================================
-# 12. AUTENTICAÇÃO
+# 12. AUTENTICAÇÃO (Fase 1 — Hardened)
 # ==============================================================================
+
+def _verify_password(stored_hash: str, password: str) -> bool:
+    """Delega para core.auth.verify_password (Fase 2)."""
+    return _verify_password_core(stored_hash, password)
+
+
+def _check_login_rate_limit() -> tuple[bool, int]:
+    """Rate limit de login com backoff exponencial.
+
+    Retorna (permitido, segundos_restantes).
+    """
+    attempts = st.session_state.get("_login_attempts", 0)
+    last_attempt = st.session_state.get("_login_last_attempt", 0.0)
+
+    if attempts >= CFG.LOGIN_MAX_ATTEMPTS:
+        cooldown = CFG.LOGIN_COOLDOWN_BASE ** min(attempts - CFG.LOGIN_MAX_ATTEMPTS + 1, 6)
+        elapsed = time.time() - last_attempt
+        if elapsed < cooldown:
+            remaining = int(cooldown - elapsed) + 1
+            return False, remaining
+        # Cooldown expirou — reset parcial
+        st.session_state["_login_attempts"] = max(0, attempts - 2)
+
+    return True, 0
+
 
 def _check_auth() -> bool:
     """Verifica se o usuário está autenticado.
 
     Se auth não está configurado em secrets.toml, permite acesso livre.
+    Verifica expiração da sessão (SESSION_TTL_HOURS).
     """
     try:
         auth_cfg = st.secrets.get("auth", {})
@@ -5342,7 +4990,20 @@ def _check_auth() -> bool:
             return True
     except (FileNotFoundError, KeyError, Exception):
         return True
-    return st.session_state.get("authenticated", False)
+
+    if not st.session_state.get("authenticated", False):
+        return False
+
+    # Verificar expiração da sessão
+    login_ts = st.session_state.get("_session_created", 0.0)
+    if login_ts > 0:
+        hours_elapsed = (time.time() - login_ts) / 3600
+        if hours_elapsed > CFG.SESSION_TTL_HOURS:
+            logger.info("Sessão expirada — forçando re-login")
+            _logout()
+            return False
+
+    return True
 
 
 def _render_login() -> None:
@@ -5358,6 +5019,12 @@ def _render_login() -> None:
              color:#333; letter-spacing:0.05em;">Acesso restrito</div>
     </div>
     """, unsafe_allow_html=True)
+
+    # Mostrar rate limit se ativo
+    allowed, remaining = _check_login_rate_limit()
+    if not allowed:
+        st.error(f"⚠ Muitas tentativas. Aguarde {remaining}s antes de tentar novamente.")
+        return
 
     _, col_center, _ = st.columns([1, 1, 1])
     with col_center:
@@ -5376,14 +5043,43 @@ def _render_login() -> None:
                     user_key = username.strip().lower()
                     user_data = users.get(user_key, None)
 
-                    if user_data and str(user_data.get("password", "")) == password:
+                    if user_data and _verify_password(
+                        str(user_data.get("password", "")), password
+                    ):
                         st.session_state.authenticated = True
-                        st.session_state.auth_user = str(user_data.get("name", username.strip()))
+                        st.session_state.auth_user = str(
+                            user_data.get("name", username.strip())
+                        )
+                        st.session_state["_session_created"] = time.time()
+                        st.session_state["_login_attempts"] = 0
                         logger.info(f"Login OK: {user_key}")
+                        _log_audit("LOGIN", "Auth", f"user={user_key}")
                         st.rerun()
                     else:
-                        st.error("Usuário ou senha incorretos")
-                        logger.warning(f"Login falhou: {user_key}")
+                        # Incrementar tentativas
+                        attempts = st.session_state.get("_login_attempts", 0) + 1
+                        st.session_state["_login_attempts"] = attempts
+                        st.session_state["_login_last_attempt"] = time.time()
+                        remaining_attempts = max(
+                            0, CFG.LOGIN_MAX_ATTEMPTS - attempts
+                        )
+                        if remaining_attempts > 0:
+                            st.error(
+                                f"Usuário ou senha incorretos "
+                                f"({remaining_attempts} tentativa"
+                                f"{'s' if remaining_attempts != 1 else ''} restante"
+                                f"{'s' if remaining_attempts != 1 else ''})"  
+                            )
+                        else:
+                            st.error("⚠ Conta temporariamente bloqueada")
+                        logger.warning(
+                            f"Login falhou: {user_key} "
+                            f"(tentativa {attempts})"
+                        )
+                        _log_audit(
+                            "LOGIN_FAILED", "Auth",
+                            f"user={user_key} attempt={attempts}",
+                        )
                 except Exception as e:
                     st.error("Erro na autenticação")
                     logger.error(f"Auth error: {e}")
@@ -5397,8 +5093,11 @@ def _render_login() -> None:
 
 def _logout() -> None:
     """Limpa sessão de autenticação."""
-    for key in ["authenticated", "auth_user"]:
+    auth_user = st.session_state.get("auth_user", "")
+    for key in ["authenticated", "auth_user", "_session_created"]:
         st.session_state.pop(key, None)
+    if auth_user:
+        _log_audit("LOGOUT", "Auth", f"user={auth_user}")
     logger.info("Logout")
     st.rerun()
 

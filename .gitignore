@@ -1,5 +1,8 @@
 # Python
 __pycache__/
+.streamlit/secrets.toml
+google-credentials.json
+.env
 *.py[cod]
 *$py.class
 venv/
