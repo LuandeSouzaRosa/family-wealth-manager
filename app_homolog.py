@@ -265,12 +265,54 @@ def _chart_colors() -> dict:
 
 
 # ==============================================================================
-# 6. CAMADA DE DADOS
+# 6. CAMADA DE DADOS — Repository Pattern (Fase 4)
 # ==============================================================================
+# A lógica completa do data layer agora vive em:
+#   core/repository.py       — Interface abstrata (ABC)
+#   core/sheets_repository.py — Implementação Google Sheets
+#   core/supabase_repository.py — Implementação Supabase
+# As funções abaixo são wrappers finos para manter compatibilidade
+# com o restante do app (motor analítico, UI, etc.).
+# ==============================================================================
+
+from core import get_repository, BaseRepository
+from core.sheets_repository import _parse_ativo, _serialize_for_sheet
+
+
+def _get_data_backend() -> str:
+    """Retorna backend configurado: 'sheets' ou 'supabase'."""
+    try:
+        # Top-level key (correto)
+        val = st.secrets.get("data_backend")
+        if val:
+            return val
+        # Fallback: dentro de [supabase] (caso TOML esteja com escopo errado)
+        sb = st.secrets.get("supabase", {})
+        if hasattr(sb, "get"):
+            val = sb.get("data_backend")
+            if val:
+                return val
+        return "sheets"
+    except Exception:
+        return "sheets"
+
 
 def get_conn() -> GSheetsConnection:
     """Retorna conexão com Google Sheets."""
     return st.connection("gsheets", type=GSheetsConnection)
+
+
+def _get_repo() -> BaseRepository:
+    """Retorna instância do repositório configurado (cached em session_state)."""
+    if "_repo" not in st.session_state:
+        backend = _get_data_backend()
+        if backend == "supabase":
+            st.session_state["_repo"] = get_repository(backend="supabase")
+        else:
+            conn = get_conn()
+            st.session_state["_repo"] = get_repository(backend="sheets", conn=conn)
+        logger.info(f"Repository inicializado: {backend}")
+    return st.session_state["_repo"]
 
 
 def _normalize_strings(df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
@@ -283,371 +325,87 @@ def _normalize_strings(df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
 
 @st.cache_data(ttl=CFG.CACHE_TTL)
 def load_data() -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Carrega transações e patrimônio do Google Sheets."""
-    conn = get_conn()
-
-    expected_trans = list(CFG.COLS_TRANSACAO)
-    try:
-        df_trans = conn.read(worksheet="Transacoes")
-        df_trans = df_trans.dropna(how="all")
-        missing = set(expected_trans) - set(df_trans.columns)
-        for col in missing:
-            df_trans[col] = None
-        if not df_trans.empty:
-            df_trans["Data"] = pd.to_datetime(df_trans["Data"], errors="coerce")
-            df_trans["Valor"] = pd.to_numeric(df_trans["Valor"], errors="coerce").fillna(0.0)
-            df_trans = df_trans.dropna(subset=["Data"])
-            df_trans = _normalize_strings(df_trans, ["Tipo", "Categoria", "Responsavel", "Descricao"])
-            if "Origem" not in df_trans.columns:
-                df_trans["Origem"] = CFG.ORIGEM_MANUAL
-            df_trans["Origem"] = df_trans["Origem"].fillna(CFG.ORIGEM_MANUAL)
-            # Backfill Tag para registros existentes sem Tag
-            if "Tag" not in df_trans.columns:
-                df_trans["Tag"] = ""
-            df_trans["Tag"] = df_trans["Tag"].fillna("").astype(str).str.strip()
-            # Backfill IDs para registros existentes sem Id
-            if "Id" not in df_trans.columns:
-                df_trans["Id"] = ""
-            df_trans["Id"] = df_trans["Id"].fillna("").astype(str)
-            empty_ids = df_trans["Id"].str.strip() == ""
-            if empty_ids.any():
-                df_trans.loc[empty_ids, "Id"] = [generate_id() for _ in range(empty_ids.sum())]
-    except Exception as e:
-        logger.error(f"load_data [Transacoes]: {e}")
-        df_trans = pd.DataFrame(columns=expected_trans)
-
-    expected_pat = list(CFG.COLS_PATRIMONIO)
-    try:
-        df_assets = conn.read(worksheet="Patrimonio")
-        df_assets = df_assets.dropna(how="all")
-        missing = set(expected_pat) - set(df_assets.columns)
-        for col in missing:
-            df_assets[col] = None
-        if not df_assets.empty:
-            df_assets["Valor"] = pd.to_numeric(df_assets["Valor"], errors="coerce").fillna(0.0)
-            df_assets = _normalize_strings(df_assets, ["Item", "Responsavel"])
-    except Exception as e:
-        logger.error(f"load_data [Patrimonio]: {e}")
-        df_assets = pd.DataFrame(columns=expected_pat)
-
-    return df_trans, df_assets
-
-def _parse_ativo(val) -> bool:
-    """Converte valor para booleano (coluna Ativo)."""
-    if isinstance(val, bool):
-        return val
-    if isinstance(val, (int, float)):
-        return bool(val)
-    return str(val).strip().lower() in ("true", "1", "1.0", "sim", "s", "yes")
+    """Carrega transações e patrimônio."""
+    repo = _get_repo()
+    return repo.load_transacoes(), repo.load_patrimonio()
 
 
 @st.cache_data(ttl=CFG.CACHE_TTL)
 def load_recorrentes() -> pd.DataFrame:
-    """Carrega transações recorrentes do Google Sheets."""
-    conn = get_conn()
-    expected = list(CFG.COLS_RECORRENTE)
-    try:
-        df = conn.read(worksheet="Recorrentes")
-        df = df.dropna(how="all")
-        missing = set(expected) - set(df.columns)
-        for col in missing:
-            df[col] = None
-        if not df.empty:
-            df["Valor"] = pd.to_numeric(df["Valor"], errors="coerce").fillna(0.0)
-            df["DiaVencimento"] = pd.to_numeric(
-                df["DiaVencimento"], errors="coerce"
-            ).fillna(1).astype(int)
-            df["Ativo"] = df["Ativo"].apply(_parse_ativo)
-            df = _normalize_strings(df, ["Descricao", "Tipo", "Categoria", "Responsavel"])
-    except Exception as e:
-        logger.error(f"load_recorrentes: {e}")
-        df = pd.DataFrame(columns=expected)
-    return df
+    """Carrega transações recorrentes."""
+    return _get_repo().load_recorrentes()
+
 
 @st.cache_data(ttl=CFG.CACHE_TTL)
 def load_orcamentos() -> pd.DataFrame:
-    """Carrega orçamentos por categoria do Google Sheets."""
-    conn = get_conn()
-    expected = list(CFG.COLS_ORCAMENTO)
-    try:
-        df = conn.read(worksheet="Orcamentos")
-        df = df.dropna(how="all")
-        missing = set(expected) - set(df.columns)
-        for col in missing:
-            df[col] = None
-        if not df.empty:
-            df["Limite"] = pd.to_numeric(df["Limite"], errors="coerce").fillna(0.0)
-            df = _normalize_strings(df, ["Categoria", "Responsavel"])
-    except Exception as e:
-        logger.error(f"load_orcamentos: {e}")
-        df = pd.DataFrame(columns=expected)
-    return df
+    """Carrega orçamentos por categoria."""
+    return _get_repo().load_orcamentos()
 
 
 @st.cache_data(ttl=CFG.CACHE_TTL)
 def load_config() -> pd.DataFrame:
-    """Carrega configurações do usuário do Google Sheets."""
-    conn = get_conn()
-    expected = list(CFG.COLS_CONFIG)
-    try:
-        df = conn.read(worksheet="Configuracoes")
-        df = df.dropna(how="all")
-        missing = set(expected) - set(df.columns)
-        for col in missing:
-            df[col] = None
-        if not df.empty:
-            df = _normalize_strings(df, ["Chave", "Responsavel"])
-    except Exception as e:
-        logger.warning(f"load_config: {e} (worksheet pode não existir)")
-        df = pd.DataFrame(columns=expected)
-    return df
+    """Carrega configurações do usuário."""
+    return _get_repo().load_config()
 
 
 @st.cache_data(ttl=CFG.CACHE_TTL)
 def load_metas() -> pd.DataFrame:
-    """Carrega metas financeiras do Google Sheets (G1)."""
-    conn = get_conn()
-    expected = list(CFG.COLS_METAS)
-    try:
-        df = conn.read(worksheet="Metas")
-        df = df.dropna(how="all")
-        missing = set(expected) - set(df.columns)
-        for col in missing:
-            df[col] = None
-        if not df.empty:
-            df["ValorAlvo"] = pd.to_numeric(df["ValorAlvo"], errors="coerce").fillna(0.0)
-            df["ValorAtual"] = pd.to_numeric(df["ValorAtual"], errors="coerce").fillna(0.0)
-            df["Ativo"] = df["Ativo"].apply(_parse_ativo)
-            df = _normalize_strings(df, ["Id", "Nome", "Prazo", "Responsavel"])
-            if "Id" not in df.columns:
-                df["Id"] = ""
-            df["Id"] = df["Id"].fillna("").astype(str)
-            empty_ids = df["Id"].str.strip() == ""
-            if empty_ids.any():
-                df.loc[empty_ids, "Id"] = [generate_id() for _ in range(empty_ids.sum())]
-    except Exception as e:
-        logger.warning(f"load_metas: {e}")
-        df = pd.DataFrame(columns=expected)
-    return df
+    """Carrega metas financeiras."""
+    return _get_repo().load_metas()
+
 
 @st.cache_data(ttl=CFG.CACHE_TTL)
 def load_passivos() -> pd.DataFrame:
-    """Carrega passivos (dívidas/financiamentos) do Google Sheets (I5)."""
-    conn = get_conn()
-    expected = list(CFG.COLS_PASSIVOS)
-    try:
-        df = conn.read(worksheet="Passivos")
-        df = df.dropna(how="all")
-        missing = set(expected) - set(df.columns)
-        for col in missing:
-            df[col] = None
-        if not df.empty:
-            df["Valor"] = pd.to_numeric(df["Valor"], errors="coerce").fillna(0.0)
-            df = _normalize_strings(df, ["Item", "Responsavel"])
-    except Exception as e:
-        logger.warning(f"load_passivos: {e}")
-        df = pd.DataFrame(columns=expected)
-    return df
+    """Carrega passivos (dívidas/financiamentos)."""
+    return _get_repo().load_passivos()
 
 
 @st.cache_data(ttl=CFG.CACHE_TTL)
 def load_lixeira() -> pd.DataFrame:
-    """Carrega transações da lixeira (S3)."""
-    conn = get_conn()
-    expected = list(CFG.COLS_LIXEIRA)
-    try:
-        df = conn.read(worksheet="Lixeira")
-        df = df.dropna(how="all")
-        missing = set(expected) - set(df.columns)
-        for col in missing:
-            df[col] = None
-        if not df.empty:
-            df["Data"] = pd.to_datetime(df["Data"], errors="coerce")
-            df["Valor"] = pd.to_numeric(df["Valor"], errors="coerce").fillna(0.0)
-            df = _normalize_strings(df, ["Tipo", "Categoria", "Responsavel", "Descricao"])
-    except Exception as e:
-        logger.warning(f"load_lixeira: {e}")
-        df = pd.DataFrame(columns=expected)
-    return df
+    """Carrega transações da lixeira."""
+    return _get_repo().load_lixeira()
 
 
 @st.cache_data(ttl=CFG.CACHE_TTL)
 def load_favoritos() -> pd.DataFrame:
-    """Carrega favoritos de lançamento do Google Sheets (X6)."""
-    conn = get_conn()
-    expected = list(CFG.COLS_FAVORITOS)
-    try:
-        df = conn.read(worksheet="Favoritos")
-        df = df.dropna(how="all")
-        missing = set(expected) - set(df.columns)
-        for col in missing:
-            df[col] = None
-        if not df.empty:
-            df["Valor"] = pd.to_numeric(df["Valor"], errors="coerce").fillna(0.0)
-            df = _normalize_strings(df, ["Id", "Nome", "Descricao", "Categoria", "Tipo", "Responsavel", "Tag"])
-            if "Id" not in df.columns:
-                df["Id"] = ""
-            df["Id"] = df["Id"].fillna("").astype(str)
-            empty_ids = df["Id"].str.strip() == ""
-            if empty_ids.any():
-                df.loc[empty_ids, "Id"] = [generate_id() for _ in range(empty_ids.sum())]
-    except Exception as e:
-        logger.warning(f"load_favoritos: {e}")
-        df = pd.DataFrame(columns=expected)
-    return df
+    """Carrega favoritos de lançamento."""
+    return _get_repo().load_favoritos()
 
 
 def _move_to_lixeira(rows: pd.DataFrame) -> bool:
-    """Move transações para a lixeira (soft delete — S3)."""
-    if rows.empty:
-        return True
-    conn = get_conn()
-    try:
-        try:
-            df_lixeira = conn.read(worksheet="Lixeira")
-            df_lixeira = df_lixeira.dropna(how="all")
-        except Exception:
-            df_lixeira = pd.DataFrame(columns=list(CFG.COLS_LIXEIRA))
-
-        df_to_trash = rows.copy()
-        df_to_trash["DeletadoEm"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-        for col in CFG.COLS_LIXEIRA:
-            if col not in df_to_trash.columns:
-                df_to_trash[col] = ""
-
-        df_updated = pd.concat([df_lixeira, df_to_trash[list(CFG.COLS_LIXEIRA)]], ignore_index=True)
-
-        if len(df_updated) > 200:
-            df_updated = df_updated.sort_values("DeletadoEm", ascending=False).head(200).reset_index(drop=True)
-
-        df_updated = _serialize_for_sheet(df_updated)
-        conn.update(worksheet="Lixeira", data=df_updated)
-        logger.info(f"_move_to_lixeira: {len(rows)} registros movidos")
-        _log_audit("SOFT_DELETE", "Lixeira", f"{len(rows)} transações")
-        return True
-    except Exception as e:
-        logger.warning(f"_move_to_lixeira failed: {e}")
-        return False
+    """Move transações para a lixeira (soft delete)."""
+    result = _get_repo().move_to_lixeira(rows)
+    if result:
+        st.cache_data.clear()
+    return result
 
 
 def _restore_from_lixeira(rows: pd.DataFrame) -> bool:
-    """Restaura transações da lixeira para Transacoes (S3)."""
-    if rows.empty:
-        return True
-    conn = get_conn()
-    try:
-        try:
-            df_trans = conn.read(worksheet="Transacoes")
-            df_trans = df_trans.dropna(how="all")
-        except Exception:
-            df_trans = pd.DataFrame(columns=list(CFG.COLS_TRANSACAO))
-
-        df_restore = rows.copy()
-        if "DeletadoEm" in df_restore.columns:
-            df_restore = df_restore.drop(columns=["DeletadoEm"])
-
-        for col in CFG.COLS_TRANSACAO:
-            if col not in df_restore.columns:
-                df_restore[col] = ""
-
-        df_updated = pd.concat([df_trans, df_restore[list(CFG.COLS_TRANSACAO)]], ignore_index=True)
-        df_updated = _serialize_for_sheet(df_updated)
-        conn.update(worksheet="Transacoes", data=df_updated)
-
-        try:
-            df_lixeira = conn.read(worksheet="Lixeira")
-            df_lixeira = df_lixeira.dropna(how="all")
-            restored_ids = set(rows["Id"].astype(str).str.strip())
-            df_lixeira = df_lixeira[~df_lixeira["Id"].astype(str).str.strip().isin(restored_ids)]
-            df_lixeira = _serialize_for_sheet(df_lixeira)
-            conn.update(worksheet="Lixeira", data=df_lixeira)
-        except Exception:
-            pass
-
+    """Restaura transações da lixeira."""
+    result = _get_repo().restore_from_lixeira(rows)
+    if result:
         st.cache_data.clear()
-        logger.info(f"_restore_from_lixeira: {len(rows)} restauradas")
-        _log_audit("RESTORE", "Transacoes", f"{len(rows)} da lixeira")
-        return True
-    except Exception as e:
-        logger.error(f"_restore_from_lixeira failed: {e}")
-        return False
+    return result
 
 
 def save_config(user_config: UserConfig, responsavel: str) -> bool:
-    """Salva configurações do usuário na planilha."""
-    entries = [
-        {"Chave": "meta_necessidades", "Valor": str(user_config.meta_necessidades), "Responsavel": responsavel},
-        {"Chave": "meta_desejos", "Valor": str(user_config.meta_desejos), "Responsavel": responsavel},
-        {"Chave": "meta_investimento", "Valor": str(user_config.meta_investimento), "Responsavel": responsavel},
-        {"Chave": "autonomia_alvo", "Valor": str(user_config.autonomia_alvo), "Responsavel": responsavel},
-        {"Chave": "auto_gerar_recorrentes", "Valor": str(user_config.auto_gerar_recorrentes).lower(), "Responsavel": responsavel},
-    ]
-    conn = get_conn()
-    try:
-        try:
-            df_curr = conn.read(worksheet="Configuracoes")
-            df_curr = df_curr.dropna(how="all")
-        except Exception:
-            df_curr = pd.DataFrame(columns=list(CFG.COLS_CONFIG))
-
-        # Remove config existente deste responsável
-        if not df_curr.empty and "Responsavel" in df_curr.columns:
-            df_curr = df_curr[df_curr["Responsavel"].str.strip() != responsavel].copy()
-
-        df_new = pd.DataFrame(entries)
-        df_updated = pd.concat([df_curr, df_new], ignore_index=True)
-        conn.update(worksheet="Configuracoes", data=df_updated)
+    """Salva configurações do usuário."""
+    result = _get_repo().save_config(user_config, responsavel)
+    if result:
         st.cache_data.clear()
-        logger.info(f"save_config OK [{responsavel}]")
         _log_audit("CONFIG", "Configuracoes", f"Perfil: {responsavel}")
-        return True
-    except Exception as e:
-        logger.error(f"save_config failed: {e}")
-        st.error(f"Erro ao salvar configurações: {e}")
-        return False
+    else:
+        st.error("Erro ao salvar configurações")
+    return result
 
-def _serialize_for_sheet(df: pd.DataFrame) -> pd.DataFrame:
-    """Serializa DataFrame para gravação na planilha."""
-    df_out = df.copy()
-    if "Data" in df_out.columns:
-        df_out["Data"] = pd.to_datetime(
-            df_out["Data"], errors="coerce"
-        ).dt.strftime("%Y-%m-%d")
-    if "Ativo" in df_out.columns:
-        df_out["Ativo"] = df_out["Ativo"].apply(
-            lambda x: "TRUE" if _parse_ativo(x) else "FALSE"
-        )
-    return df_out
 
 def _log_audit(action: str, worksheet: str, details: str = "") -> None:
     """Registra ação no audit log (fire-and-forget)."""
     try:
-        conn = get_conn()
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        usuario = st.session_state.get("auth_user", "anônimo")
-
-        try:
-            df_log = conn.read(worksheet="AuditLog")
-            df_log = df_log.dropna(how="all")
-        except Exception:
-            df_log = pd.DataFrame(columns=list(CFG.COLS_AUDIT))
-
-        new_row = pd.DataFrame([{
-            "Timestamp": timestamp,
-            "Usuario": usuario,
-            "Acao": action,
-            "Planilha": worksheet,
-            "Detalhes": str(details)[:200],
-        }])
-
-        df_updated = pd.concat([df_log, new_row], ignore_index=True)
-        # Manter apenas últimos 500 registros para não sobrecarregar
-        if len(df_updated) > 500:
-            df_updated = df_updated.tail(500).reset_index(drop=True)
-        conn.update(worksheet="AuditLog", data=df_updated)
+        _get_repo().log_audit(action, worksheet, details)
     except Exception as e:
         logger.warning(f"Audit log failed (non-blocking): {e}")
+
 
 def _check_rate_limit(action: str = "save", cooldown: float = 2.0) -> bool:
     """Verifica rate limit por ação. Retorna True se permitido."""
@@ -661,101 +419,46 @@ def _check_rate_limit(action: str = "save", cooldown: float = 2.0) -> bool:
 
 
 def save_entry(data: dict, worksheet: str, *, skip_audit: bool = False, skip_rate_limit: bool = False) -> bool:
-    """Salva uma nova entrada na planilha com retry e rate limit."""
+    """Salva uma nova entrada com retry e rate limit."""
     if not skip_rate_limit and not _check_rate_limit(f"save_{worksheet}"):
         st.toast("⚠ Aguarde antes de salvar novamente")
         return False
     if worksheet == "Transacoes" and "Id" not in data:
         data["Id"] = generate_id()
-    conn = get_conn()
-    for attempt in range(CFG.SAVE_RETRIES):
-        try:
-            try:
-                df_curr = conn.read(worksheet=worksheet)
-                df_curr = df_curr.dropna(how="all")
-            except Exception:
-                df_curr = pd.DataFrame()
-            df_new = pd.DataFrame([data])
-            df_updated = pd.concat([df_curr, df_new], ignore_index=True)
-            df_updated = _serialize_for_sheet(df_updated)
-            conn.update(worksheet=worksheet, data=df_updated)
-            st.cache_data.clear()
-            logger.info(f"save_entry OK [{worksheet}]")
-            if not skip_audit:
-                _log_audit("CREATE", worksheet, f"{data.get('Descricao', data.get('Item', data.get('Chave', '')))}")
-            return True
-        except Exception as e:
-            if attempt == CFG.SAVE_RETRIES - 1:
-                logger.error(f"save_entry failed [{worksheet}]: {e}")
-                st.error(f"Falha ao salvar após {CFG.SAVE_RETRIES} tentativas: {e}")
-                st.cache_data.clear()
-                return False
-            time.sleep(0.5 * (attempt + 1))
-    return False
+    result = _get_repo().save_entry(data, worksheet)
+    if result:
+        st.cache_data.clear()
+        if not skip_audit:
+            _log_audit("CREATE", worksheet, f"{data.get('Descricao', data.get('Item', data.get('Chave', '')))}")
+    else:
+        st.error(f"Falha ao salvar em {worksheet}")
+    return result
 
 
 def update_sheet(df_edited: pd.DataFrame, worksheet: str) -> bool:
-    """Atualiza planilha inteira com DataFrame editado (com retry e rate limit)."""
+    """Atualiza planilha/tabela inteira com DataFrame editado."""
     if not _check_rate_limit(f"update_{worksheet}"):
         st.toast("⚠ Aguarde antes de salvar novamente")
         return False
-    conn = get_conn()
-    for attempt in range(CFG.SAVE_RETRIES):
-        try:
-            df_to_save = _serialize_for_sheet(df_edited)
-            conn.update(worksheet=worksheet, data=df_to_save)
-            st.cache_data.clear()
-            logger.info(f"update_sheet OK [{worksheet}]: {len(df_edited)} rows")
-            _log_audit("UPDATE", worksheet, f"{len(df_edited)} registros")
-            return True
-        except Exception as e:
-            if attempt == CFG.SAVE_RETRIES - 1:
-                logger.error(f"update_sheet failed [{worksheet}]: {e}")
-                st.error(f"Erro ao atualizar após {CFG.SAVE_RETRIES} tentativas: {e}")
-                st.cache_data.clear()
-                return False
-            time.sleep(0.5 * (attempt + 1))
-    return False
+    result = _get_repo().update_table(df_edited, worksheet)
+    if result:
+        st.cache_data.clear()
+        _log_audit("UPDATE", worksheet, f"{len(df_edited)} registros")
+    else:
+        st.error(f"Erro ao atualizar {worksheet}")
+    return result
+
 
 def validate_worksheets() -> None:
-    """Valida integridade das worksheets no boot (S4 + T5).
-
-    Verifica se todas as worksheets existem e têm as colunas esperadas.
-    Executa apenas uma vez por sessão.
-    """
+    """Valida integridade das tabelas no boot (S4 + T5)."""
     if st.session_state.get("_ws_validated", False):
         return
-    conn = get_conn()
-    worksheets = {
-        "Transacoes": list(CFG.COLS_TRANSACAO),
-        "Patrimonio": list(CFG.COLS_PATRIMONIO),
-        "Recorrentes": list(CFG.COLS_RECORRENTE),
-        "Orcamentos": list(CFG.COLS_ORCAMENTO),
-        "Configuracoes": list(CFG.COLS_CONFIG),
-        "AuditLog": list(CFG.COLS_AUDIT),
-        "Metas": list(CFG.COLS_METAS),
-        "Passivos": list(CFG.COLS_PASSIVOS),
-        "Lixeira": list(CFG.COLS_LIXEIRA),
-        "Favoritos": list(CFG.COLS_FAVORITOS),
-    }
-    issues: list[str] = []
-    for ws_name, expected_cols in worksheets.items():
-        try:
-            df = conn.read(worksheet=ws_name)
-            if df is not None and not df.empty:
-                missing = set(expected_cols) - set(df.columns)
-                if missing:
-                    issues.append(
-                        f"{ws_name}: colunas faltando — {', '.join(sorted(missing))}"
-                    )
-        except Exception as e:
-            issues.append(f"{ws_name}: não encontrada ou inacessível")
-            logger.warning(f"[Integridade] {ws_name}: {e}")
+    issues = _get_repo().validate_tables()
     if issues:
         for issue in issues:
             logger.warning(f"[Integridade] {issue}")
     else:
-        logger.info("Integridade OK — todas as worksheets validadas")
+        logger.info("Integridade OK — todas as tabelas validadas")
     st.session_state["_ws_validated"] = True
 
 
