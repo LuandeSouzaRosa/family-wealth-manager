@@ -1,0 +1,6 @@
+﻿Usage: testsprite-mcp generateCodeAndExecute [options]
+
+Run test functionality
+
+Options:
+  -h, --help  display help for command

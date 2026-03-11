@@ -1,0 +1,20 @@
+{
+  "status": "commited",
+  "type": "frontend",
+  "scope": "codebase",
+  "localEndpoint": "http://localhost:8501",
+  "loginUser": "luan",
+  "loginPassword": "luan",
+  "executionArgs": {
+    "projectName": "family_wealth_manager",
+    "projectPath": "c:\\Users\\luan.rosa\\.gemini\\antigravity\\scratch\\family_wealth_manager",
+    "testIds": [],
+    "additionalInstruction": "",
+    "serverMode": "development",
+    "envs": {
+      "API_KEY": "sk-user-yDFOvAjq3Ed7rfgrxfhEU7Nr5i288l9tz-dM-zZWePVBzIxoc_yb91D4olxTKck7WlMdRcPFOyl8dcjJwxZ3QoJKho9N-HbAV4WCSI29QUtghQHPmwxhXu8GcP2Qfy-3frc"
+    }
+  },
+  "serverPort": 62369,
+  "proxy": "http://9726459a-8f40-41f7-aea3-9cf225a84663:VRypG5EW8DeGvlTkIeAaAoOYiOHvky3z@tun.testsprite.com:8080"
+}

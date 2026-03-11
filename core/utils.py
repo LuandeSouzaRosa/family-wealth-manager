@@ -8,9 +8,15 @@ from __future__ import annotations
 import html as html_lib
 import uuid
 import calendar
+import logging
+from io import BytesIO
 from datetime import datetime, timedelta, date
+import pandas as pd
 
 from core.config import CFG, MESES_PT, MESES_FULL
+from core.models import MonthMetrics
+
+logger = logging.getLogger(__name__)
 
 
 # ==============================================================================
@@ -240,3 +246,120 @@ def check_duplicate(df_month, desc: str, valor: float, data_ref) -> bool:
         return bool(mask.any())
     except Exception:
         return False
+
+
+# ==============================================================================
+# EXPORTAÇÃO E RELATÓRIOS
+# ==============================================================================
+
+def generate_monthly_report(
+    mx: MonthMetrics,
+    budget_data: list[dict],
+    score_data: dict,
+    sel_mo: int,
+    sel_yr: int,
+    user: str,
+) -> BytesIO | None:
+    """Gera relatório mensal completo em Excel (múltiplas abas)."""
+    try:
+        buffer = BytesIO()
+
+        with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+            # --- Aba Resumo ---
+            resumo = pd.DataFrame({
+                "Métrica": [
+                    "Renda", "Gastos Lifestyle", "Investido no Mês", "Saldo Disponível",
+                    "Taxa de Aporte (%)", "Autonomia (meses)",
+                    "Score Financeiro", "Classificação",
+                    "Necessidades (%)", "Desejos (%)", "Investimento (%)",
+                    "Ticket Médio", "Nº Transações",
+                ],
+                "Valor": [
+                    mx.renda, mx.lifestyle, mx.investido_mes, mx.disponivel,
+                    round(mx.taxa_aporte, 1), round(mx.autonomia, 1),
+                    round(score_data["score"]), score_data["grade"],
+                    round(mx.nec_pct, 1), round(mx.des_pct, 1), round(mx.inv_pct, 1),
+                    round(mx.ticket_medio, 2), mx.month_tx_count,
+                ],
+            })
+            resumo.to_excel(writer, sheet_name="Resumo", index=False)
+
+            # --- Aba Transações ---
+            if not mx.df_month.empty:
+                df_tx = mx.df_month.copy()
+                if "Data" in df_tx.columns:
+                    df_tx["Data"] = pd.to_datetime(
+                        df_tx["Data"], errors="coerce"
+                    ).dt.strftime("%d/%m/%Y")
+                cols_export = [c for c in df_tx.columns if c != "Id"]
+                df_tx[cols_export].to_excel(
+                    writer, sheet_name="Transações", index=False
+                )
+
+            # --- Aba Categorias ---
+            if mx.cat_breakdown:
+                cat_df = pd.DataFrame({
+                    "Categoria": list(mx.cat_breakdown.keys()),
+                    "Valor (R$)": list(mx.cat_breakdown.values()),
+                    "% do Total": [
+                        round((v / mx.lifestyle * 100), 1) if mx.lifestyle > 0 else 0
+                        for v in mx.cat_breakdown.values()
+                    ],
+                })
+                cat_df.to_excel(writer, sheet_name="Categorias", index=False)
+
+            # --- Aba Orçamento ---
+            if budget_data:
+                orc_df = pd.DataFrame({
+                    "Categoria": [b["categoria"] for b in budget_data],
+                    "Limite (R$)": [b["limite"] for b in budget_data],
+                    "Gasto (R$)": [b["gasto"] for b in budget_data],
+                    "% Consumido": [round(b["pct"], 1) for b in budget_data],
+                    "Restante (R$)": [b["restante"] for b in budget_data],
+                    "Status": [b["status"].upper() for b in budget_data],
+                })
+                orc_df.to_excel(writer, sheet_name="Orçamento", index=False)
+
+            # --- Aba Top 5 ---
+            if mx.top5_gastos:
+                top_df = pd.DataFrame(mx.top5_gastos)
+                top_df.columns = ["Descrição", "Valor (R$)", "Categoria"]
+                top_df.to_excel(writer, sheet_name="Top Gastos", index=False)
+
+        buffer.seek(0)
+        return buffer
+    except Exception as e:
+        logger.error(f"generate_monthly_report failed: {e}")
+        return None
+
+
+def generate_full_backup(conn) -> BytesIO | None:
+    """Gera backup completo de todas as planilhas em Excel (S1).
+    
+    Recebe listagem/repositorio como argumento (conn).
+    """
+    try:
+        buffer = BytesIO()
+        sheets_to_backup = [
+            "Transacoes", "Patrimonio", "Passivos", "Recorrentes",
+            "Orcamentos", "Metas", "Configuracoes",
+        ]
+        with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+            for ws_name in sheets_to_backup:
+                try:
+                    df = conn.read(worksheet=ws_name)
+                    df = df.dropna(how="all")
+                    if "Data" in df.columns:
+                        df["Data"] = pd.to_datetime(
+                            df["Data"], errors="coerce"
+                        ).dt.strftime("%Y-%m-%d")
+                    df.to_excel(writer, sheet_name=ws_name, index=False)
+                except Exception:
+                    pd.DataFrame().to_excel(
+                        writer, sheet_name=ws_name, index=False
+                    )
+        buffer.seek(0)
+        return buffer
+    except Exception as e:
+        logger.error(f"generate_full_backup failed: {e}")
+        return None

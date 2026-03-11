@@ -14,8 +14,12 @@ import plotly.graph_objects as go
 
 from core.config import Config, CFG, UserConfig, MESES_PT, MESES_FULL
 from core.models import MonthMetrics
-from core.utils import sanitize, fmt_brl, fmt_month_year
-from core.engine import filter_by_user, filter_by_month, _sparkline_html
+from core.utils import sanitize, fmt_brl, fmt_month_year, generate_monthly_report, validate_transaction
+from core.engine import filter_by_user, filter_by_month, _sparkline_html, compute_score
+from io import BytesIO
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def _chart_colors() -> dict:
@@ -1705,3 +1709,255 @@ def render_challenges(challenges: list[dict]) -> None:
         )
     html += '</div>'
     st.markdown(html, unsafe_allow_html=True)
+
+
+def _df_equals_safe(df1: pd.DataFrame, df2: pd.DataFrame) -> bool:
+    """Comparação segura de DataFrames normalizando tipos."""
+    try:
+        d1 = df1.reset_index(drop=True).copy()
+        d2 = df2.reset_index(drop=True).copy()
+        if d1.shape != d2.shape:
+            return False
+        if list(d1.columns) != list(d2.columns):
+            return False
+        for col in d1.columns:
+            d1[col] = d1[col].astype(str)
+            d2[col] = d2[col].astype(str)
+        return d1.equals(d2)
+    except Exception:
+        return False
+
+
+def _render_historico(
+    mx: MonthMetrics,
+    user: str,
+    sel_mo: int,
+    sel_yr: int,
+    on_save_historico=None,
+) -> None:
+    """Renderiza aba de histórico com busca, export e edição."""
+    df_hist = mx.df_month.copy()
+    month_label = fmt_month_year(sel_mo, sel_yr)
+
+    if df_hist.empty:
+        render_intel(
+            f"Histórico — {sanitize(month_label)}",
+            "Nenhuma transação registrada neste mês."
+        )
+        return
+
+    df_hist["Data"] = pd.to_datetime(df_hist["Data"], errors="coerce")
+    df_hist = df_hist.sort_values("Data", ascending=False).reset_index(drop=True)
+
+    render_intel(
+        f"Histórico — {sanitize(month_label)}",
+        f"<strong>{len(df_hist)}</strong> transações neste mês"
+    )
+    render_hist_summary(mx)
+
+    # --- Relatório Completo ---
+    try:
+        score_data = compute_score(mx)
+        report_buf = generate_monthly_report(
+            mx, mx.budget_data,
+            score_data,
+            sel_mo, sel_yr, user,
+        )
+        if report_buf:
+            st.download_button(
+                "📊 RELATÓRIO COMPLETO (Excel)",
+                report_buf.getvalue(),
+                f"relatorio_{sel_mo:02d}_{sel_yr}_{user}.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+                key=f"report_{user}_{sel_mo}_{sel_yr}",
+            )
+    except Exception as e:
+        logger.warning(f"Report generation failed: {e}")
+
+    search = st.text_input(
+        "🔍 Buscar",
+        placeholder="Filtrar visualização por descrição, categoria...",
+        label_visibility="collapsed",
+        key=f"hist_search_{user}_{sel_mo}_{sel_yr}",
+    )
+
+    df_display = df_hist.copy()
+    if search and search.strip():
+        search_lower = search.strip().lower()
+        tag_mask = df_display["Tag"].str.lower().str.contains(search_lower, na=False) if "Tag" in df_display.columns else False
+        mask = (
+            df_display["Descricao"].str.lower().str.contains(search_lower, na=False) |
+            df_display["Categoria"].str.lower().str.contains(search_lower, na=False) |
+            df_display["Tipo"].str.lower().str.contains(search_lower, na=False) |
+            df_display["Responsavel"].str.lower().str.contains(search_lower, na=False) |
+            tag_mask
+        )
+        df_display = df_display[mask].reset_index(drop=True)
+        if df_display.empty:
+            render_intel("", f"Nenhum resultado para '<em>{sanitize(search)}</em>'")
+            return
+
+    col_csv, col_excel, _ = st.columns([1, 1, 4])
+    with col_csv:
+        csv_data = df_display.to_csv(index=False).encode("utf-8-sig")
+        st.download_button(
+            "⬇ CSV", csv_data,
+            f"financas_{sel_mo:02d}_{sel_yr}_{user}.csv",
+            "text/csv", use_container_width=True,
+        )
+    with col_excel:
+        try:
+            buffer = BytesIO()
+            df_export = df_display.copy()
+            if "Data" in df_export.columns:
+                df_export["Data"] = df_export["Data"].dt.strftime("%d/%m/%Y")
+            df_export.to_excel(buffer, index=False, engine="openpyxl")
+            st.download_button(
+                "⬇ EXCEL", buffer.getvalue(),
+                f"financas_{sel_mo:02d}_{sel_yr}_{user}.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+            )
+        except ImportError:
+            st.caption("Excel indisponível (instale openpyxl)")
+
+    if search and search.strip():
+        st.caption("⚠ A busca filtra apenas a visualização/export. A edição abaixo mostra todos os registros do mês.")
+
+    # --- Toggle Tabela/Cards (V6) ---
+    _hist_vc1, _hist_vc2 = st.columns([1, 3])
+    with _hist_vc1:
+        _hist_view = st.radio(
+            "Vista", ["Tabela", "Cards"],
+            horizontal=True, label_visibility="collapsed",
+            key=f"hist_view_{user}_{sel_mo}_{sel_yr}",
+        )
+
+    if _hist_view == "Cards":
+        _show_all_cards = len(df_display) > 25 and st.checkbox(
+            f"Mostrar todas ({len(df_display)})",
+            key=f"cards_all_{user}_{sel_mo}_{sel_yr}",
+        )
+        # Assuming render_transaction_cards is defined elsewhere in this module
+        # If not, you will need to import it. It's actually in views.py line 1500+
+        render_transaction_cards(
+            df_display,
+            max_items=len(df_display) if _show_all_cards else 25,
+        )
+        st.caption("💡 Para editar/excluir, mude para visualização Tabela.")
+        return
+
+    st.caption("💡 Para excluir transações, selecione a linha e pressione Delete.")
+
+    edited = st.data_editor(
+        df_hist,
+        use_container_width=True,
+        num_rows="dynamic",
+        column_config={
+            "Data": st.column_config.DateColumn(
+                "Data", format="DD/MM/YYYY", required=True
+            ),
+            "Valor": st.column_config.NumberColumn(
+                "Valor", format="R$ %.2f", required=True, min_value=0.0
+            ),
+            "Tipo": st.column_config.SelectboxColumn(
+                "Tipo", options=list(CFG.TIPOS), required=True
+            ),
+            "Categoria": st.column_config.SelectboxColumn(
+                "Categoria", options=list(CFG.CATEGORIAS_TODAS), required=True,
+            ),
+            "Descricao": st.column_config.TextColumn("Descrição", required=True),
+            "Responsavel": st.column_config.SelectboxColumn(
+                "Responsável", options=list(CFG.RESPONSAVEIS)
+            ),
+            "Origem": st.column_config.TextColumn("Origem", disabled=True),
+            "Tag": st.column_config.TextColumn("Tag", max_chars=50),
+            "Id": None,  # Oculta coluna Id do editor
+        },
+        hide_index=True,
+        key=f"editor_historico_{user}_{sel_mo}_{sel_yr}",
+    )
+
+    if not _df_equals_safe(df_hist, edited):
+        rows_removed = len(df_hist) - len(edited)
+        if rows_removed > 0:
+            if rows_removed >= 3:
+                st.error(f"⚠ ATENÇÃO: {rows_removed} transações serão excluídas em {month_label}")
+            else:
+                st.warning(f"⚠ {rows_removed} transação(ões) será(ão) excluída(s) em {month_label}")
+        else:
+            st.warning(f"⚠ Alterações pendentes em {month_label}")
+
+        c_save, c_discard = st.columns(2)
+        with c_save:
+            if st.button("✓ SALVAR ALTERAÇÕES", key=f"save_hist_{user}_{sel_mo}_{sel_yr}", use_container_width=True):
+                if edited.empty and len(df_hist) > 0:
+                    st.error("⚠ Não é possível excluir todas as transações de uma vez.")
+                else:
+                    # Garantir coluna Origem em linhas novas
+                    if "Origem" in edited.columns:
+                        edited["Origem"] = edited["Origem"].fillna(CFG.ORIGEM_MANUAL)
+                    else:
+                        edited["Origem"] = CFG.ORIGEM_MANUAL
+
+                    # Validar cada linha editada
+                    validation_errors = []
+                    for idx, row in edited.iterrows():
+                        entry = {
+                            "Data": row.get("Data"),
+                            "Descricao": row.get("Descricao", ""),
+                            "Valor": row.get("Valor", 0),
+                            "Categoria": row.get("Categoria", ""),
+                            "Tipo": row.get("Tipo", ""),
+                            "Responsavel": row.get("Responsavel", ""),
+                        }
+                        ok, err = validate_transaction(entry)
+                        if not ok:
+                            validation_errors.append(f"Linha {idx + 1}: {err}")
+                    if validation_errors:
+                        for ve in validation_errors[:5]:
+                            st.error(f"⚠ {ve}")
+                        if len(validation_errors) > 5:
+                            st.error(f"... e mais {len(validation_errors) - 5} erro(s)")
+                    elif on_save_historico:
+                        on_save_historico(edited, user, sel_mo, sel_yr)
+        with c_discard:
+            if st.button("✗ DESCARTAR", key=f"discard_hist_{user}_{sel_mo}_{sel_yr}", use_container_width=True):
+                st.rerun()
+
+
+def _render_login() -> tuple[str, str, bool]:
+    """Renderiza tela de login no tema do terminal. Retorna (username, password, submitted)."""
+    st.markdown('''
+    <div style="text-align:center; padding:80px 20px 20px 20px;">
+        <div style="font-family:'JetBrains Mono',monospace; font-size:0.6rem;
+             color:#00FFCC; text-transform:uppercase; letter-spacing:0.6em;
+             margin-bottom:12px; opacity:0.5;">▮ L&L Finance Terminal</div>
+        <div style="font-family:'JetBrains Mono',monospace; font-size:2.5rem;
+             color:#F0F0F0; margin-bottom:8px; letter-spacing:-0.02em;">Autenticação</div>
+        <div style="font-family:'JetBrains Mono',monospace; font-size:0.65rem;
+             color:#333; letter-spacing:0.05em;">Acesso restrito</div>
+    </div>
+    ''', unsafe_allow_html=True)
+
+    username, password, submitted = "", "", False
+    _, col_center, _ = st.columns([1, 1, 1])
+    with col_center:
+        with st.form("login_form"):
+            username = st.text_input(
+                "Usuário", placeholder="seu nome",
+                label_visibility="collapsed",
+            )
+            password = st.text_input(
+                "Senha", type="password", placeholder="senha",
+                label_visibility="collapsed",
+            )
+            submitted = st.form_submit_button("ENTRAR", use_container_width=True)
+
+        st.markdown(
+            f'<div style="font-family:JetBrains Mono,monospace;font-size:0.5rem;'
+            f'color:#1a1a1a;text-align:center;margin-top:24px;">v{CFG.VERSION}</div>',
+            unsafe_allow_html=True,
+        )
+    return username, password, submitted

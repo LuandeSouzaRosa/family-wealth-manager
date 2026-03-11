@@ -1,0 +1,1195 @@
+[
+  {
+    "id": "TC001",
+    "title": "Dashboard shows core metric cards for a selected month/year",
+    "description": "Verifies that selecting a month/year displays Total Income, Total Expense, and Balance values on the dashboard.",
+    "category": "Dashboard & Core Metrics",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Wait for 5 seconds for Streamlit to load the page interface"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify page title contains \"Family Wealth Manager\""
+      },
+      {
+        "type": "action",
+        "description": "Select a month from the month dropdown"
+      },
+      {
+        "type": "action",
+        "description": "Select a year from the year dropdown"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Total Income\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Total Expense\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Balance\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC002",
+    "title": "Dashboard shows 50/30/20 breakdown after selecting a month/year",
+    "description": "Verifies that the 50/30/20 budget breakdown section appears for the selected period.",
+    "category": "Dashboard & Core Metrics",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Wait for 5 seconds for Streamlit to load the page interface"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /"
+      },
+      {
+        "type": "action",
+        "description": "Select a month from the month dropdown"
+      },
+      {
+        "type": "action",
+        "description": "Select a year from the year dropdown"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"50/30/20\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Needs\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Wants\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Savings\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC003",
+    "title": "Dashboard shows financial score and qualitative health label for selected month/year",
+    "description": "Verifies that the financial score and its qualitative label are visible after choosing a period.",
+    "category": "Dashboard & Core Metrics",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Wait for 5 seconds for Streamlit to load the page interface"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /"
+      },
+      {
+        "type": "action",
+        "description": "Select a month from the month dropdown"
+      },
+      {
+        "type": "action",
+        "description": "Select a year from the year dropdown"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Financial Score\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify element \"financial score value\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify element \"financial health label\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC004",
+    "title": "Dashboard shows autonomy months metric for selected month/year",
+    "description": "Verifies that the autonomy metric (months) is visible for the selected period.",
+    "category": "Dashboard & Core Metrics",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Wait for 5 seconds for Streamlit to load the page interface"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /"
+      },
+      {
+        "type": "action",
+        "description": "Select a month from the month dropdown"
+      },
+      {
+        "type": "action",
+        "description": "Select a year from the year dropdown"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Autonomy\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"months\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify element \"autonomy value\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC005",
+    "title": "Changing the selected month updates the visible dashboard period context",
+    "description": "Verifies that switching months changes the displayed context/period indicators on the dashboard.",
+    "category": "Dashboard & Core Metrics",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Wait for 5 seconds for Streamlit to load the page interface"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /"
+      },
+      {
+        "type": "action",
+        "description": "Select a year from the year dropdown"
+      },
+      {
+        "type": "action",
+        "description": "Select a month from the month dropdown (first month)"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify element \"selected period indicator\" is visible"
+      },
+      {
+        "type": "action",
+        "description": "Select a different month from the month dropdown (second month)"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify element \"selected period indicator\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC006",
+    "title": "Dashboard core sections are visible on initial load",
+    "description": "Verifies that the dashboard renders its main sections (summary metrics, 50/30/20, score) without requiring scrolling errors or missing sections.",
+    "category": "Dashboard & Core Metrics",
+    "priority": "Low",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Wait for 5 seconds for Streamlit to load the page interface"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Total Income\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Total Expense\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Balance\" is visible"
+      },
+      {
+        "type": "action",
+        "description": "Scroll to the financial score section"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Financial Score\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC007",
+    "title": "Add an expense transaction with Essential category and verify it appears in the list",
+    "description": "Verifies a user can create a new expense transaction and see it listed for the current period.",
+    "category": "Transactions Management (Lançamentos e Recorrentes)",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Wait for 5 seconds for Streamlit to load the page interface"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"luan\" into the username/email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"luan\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Login\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/\""
+      },
+      {
+        "type": "action",
+        "description": "Click on the sidebar control to open the sidebar navigation"
+      },
+      {
+        "type": "action",
+        "description": "Click \"Add Transaction\" in the sidebar"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Add Transaction\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC008",
+    "title": "Create an income transaction categorized as Investment and verify it appears in the list",
+    "description": "Verifies a user can record income and classify it as Investment, then see it listed.",
+    "category": "Transactions Management (Lançamentos e Recorrentes)",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Wait for 5 seconds for Streamlit to load the page interface"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"luan\" into the username/email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"luan\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Login\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/\""
+      },
+      {
+        "type": "action",
+        "description": "Click on the sidebar control to open the sidebar navigation"
+      },
+      {
+        "type": "action",
+        "description": "Click \"Add Transaction\" in the sidebar"
+      },
+      {
+        "type": "action",
+        "description": "Fill \"2026-03-02\" into the date field"
+      },
+      {
+        "type": "action",
+        "description": "Fill \"2500\" into the amount field"
+      },
+      {
+        "type": "action",
+        "description": "Select \"Income\" from the transaction type (Income/Expense) control"
+      },
+      {
+        "type": "action",
+        "description": "Select \"Investment\" from the category (Essential/Want/Investment) control"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Save\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"2500\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC009",
+    "title": "Validation: attempt to save without date shows 'Date required' and remains on form",
+    "description": "Verifies the date field is required and saving without it shows an error while keeping the user on the transaction form.",
+    "category": "Transactions Management (Lançamentos e Recorrentes)",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Wait for 5 seconds for Streamlit to load the page interface"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"luan\" into the username/email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"luan\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Login\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/\""
+      },
+      {
+        "type": "action",
+        "description": "Click on the sidebar control to open the sidebar navigation"
+      },
+      {
+        "type": "action",
+        "description": "Click \"Add Transaction\" in the sidebar"
+      },
+      {
+        "type": "action",
+        "description": "Fill \"99.90\" into the amount field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Save\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Date required\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Add Transaction\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC010",
+    "title": "Validation: attempt to save without amount shows an amount-required error",
+    "description": "Verifies the amount field is required and saving without it displays an error message.",
+    "category": "Transactions Management (Lançamentos e Recorrentes)",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Wait for 5 seconds for Streamlit to load the page interface"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"luan\" into the username/email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"luan\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Login\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/\""
+      },
+      {
+        "type": "action",
+        "description": "Click on the sidebar control to open the sidebar navigation"
+      },
+      {
+        "type": "action",
+        "description": "Click \"Add Transaction\" in the sidebar"
+      },
+      {
+        "type": "action",
+        "description": "Fill \"2026-03-03\" into the date field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Save\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Amount\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"required\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC011",
+    "title": "Cancel/close behavior: exit Add Transaction without saving and confirm no new entry appears",
+    "description": "Verifies leaving the transaction form without saving does not create a new visible transaction entry.",
+    "category": "Transactions Management (Lançamentos e Recorrentes)",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Wait for 5 seconds for Streamlit to load the page interface"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"luan\" into the username/email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"luan\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Login\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/\""
+      },
+      {
+        "type": "action",
+        "description": "Click on the sidebar control to open the sidebar navigation"
+      },
+      {
+        "type": "action",
+        "description": "Click \"Add Transaction\" in the sidebar"
+      },
+      {
+        "type": "action",
+        "description": "Fill \"2026-03-04\" into the date field"
+      },
+      {
+        "type": "action",
+        "description": "Fill \"777\" into the amount field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Back\" or \"Close\" control to leave the form"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"777\" is not visible"
+      }
+    ]
+  },
+  {
+    "id": "TC012",
+    "title": "Categorization: create Want category expense and verify category label is shown in the list",
+    "description": "Verifies the selected category (Want/Estilo de Vida) is reflected in the listed transaction.",
+    "category": "Transactions Management (Lançamentos e Recorrentes)",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Wait for 5 seconds for Streamlit to load the page interface"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"luan\" into the username/email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"luan\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Login\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/\""
+      },
+      {
+        "type": "action",
+        "description": "Click on the sidebar control to open the sidebar navigation"
+      },
+      {
+        "type": "action",
+        "description": "Click \"Add Transaction\" in the sidebar"
+      },
+      {
+        "type": "action",
+        "description": "Fill \"2026-03-05\" into the date field"
+      },
+      {
+        "type": "action",
+        "description": "Fill \"45\" into the amount field"
+      },
+      {
+        "type": "action",
+        "description": "Select \"Expense\" from the transaction type (Income/Expense) control"
+      },
+      {
+        "type": "action",
+        "description": "Select \"Want\" from the category (Essential/Want/Investment) control"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Save\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Want\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC013",
+    "title": "Add a durable asset with a positive value updates list and total patrimony",
+    "description": "Verifies a user can add an asset with a positive value and sees it in the patrimony list with an updated total.",
+    "category": "Patrimony Management (Saldos e Bens Duráveis)",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Wait for 5 seconds for Streamlit to load the page interface"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"luan\" into the username/email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"luan\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Log in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/\""
+      },
+      {
+        "type": "action",
+        "description": "Click \"Patrimony\" in the sidebar navigation"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Add Asset\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Add Asset\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC014",
+    "title": "Save a new asset and confirm it appears in the patrimony list",
+    "description": "Verifies that after saving a valid asset, it appears in the patrimony list view.",
+    "category": "Patrimony Management (Saldos e Bens Duráveis)",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Wait for 5 seconds for Streamlit to load the page interface"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"luan\" into the username/email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"luan\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Log in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/\""
+      },
+      {
+        "type": "action",
+        "description": "Click \"Patrimony\" in the sidebar navigation"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Add Asset\" button"
+      },
+      {
+        "type": "action",
+        "description": "Type \"Family Test Asset\" into the asset name field"
+      }
+    ]
+  },
+  {
+    "id": "TC015",
+    "title": "Adding a valid asset updates total patrimony value shown on the page",
+    "description": "Verifies that after adding an asset with a positive value, the displayed total patrimony reflects the update.",
+    "category": "Patrimony Management (Saldos e Bens Duráveis)",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Wait for 5 seconds for Streamlit to load the page interface"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"luan\" into the username/email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"luan\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Log in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/\""
+      },
+      {
+        "type": "action",
+        "description": "Click \"Patrimony\" in the sidebar navigation"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Total Patrimony\" is visible"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Add Asset\" button"
+      }
+    ]
+  },
+  {
+    "id": "TC016",
+    "title": "Adding a valid asset updates autonomy months indicator",
+    "description": "Verifies that autonomy months shown on the patrimony page changes after adding a positive-value asset.",
+    "category": "Patrimony Management (Saldos e Bens Duráveis)",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Wait for 5 seconds for Streamlit to load the page interface"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"luan\" into the username/email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"luan\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Log in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/\""
+      },
+      {
+        "type": "action",
+        "description": "Click \"Patrimony\" in the sidebar navigation"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Autonomy\" is visible"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Add Asset\" button"
+      }
+    ]
+  },
+  {
+    "id": "TC017",
+    "title": "Negative asset value shows validation error and does not save",
+    "description": "Verifies entering a negative value triggers the 'Value must be positive' validation and stays on the form.",
+    "category": "Patrimony Management (Saldos e Bens Duráveis)",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Wait for 5 seconds for Streamlit to load the page interface"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"luan\" into the username/email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"luan\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Log in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/\""
+      },
+      {
+        "type": "action",
+        "description": "Click \"Patrimony\" in the sidebar navigation"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Add Asset\" button"
+      },
+      {
+        "type": "action",
+        "description": "Type \"Invalid Negative Asset\" into the asset name field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"-10\" into the current value field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Save\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Value must be positive\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC018",
+    "title": "After negative value validation error, user remains on the Add Asset form",
+    "description": "Verifies the UI remains on the asset creation form after a negative value submission.",
+    "category": "Patrimony Management (Saldos e Bens Duráveis)",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Wait for 5 seconds for Streamlit to load the page interface"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"luan\" into the username/email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"luan\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Log in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/\""
+      },
+      {
+        "type": "action",
+        "description": "Click \"Patrimony\" in the sidebar navigation"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Add Asset\" button"
+      },
+      {
+        "type": "action",
+        "description": "Type \"Invalid Negative Asset\" into the asset name field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"-10\" into the current value field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Save\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Add Asset\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC019",
+    "title": "Negative end-of-month projection shows 'At risk' alert and mitigation suggestions",
+    "description": "Verifies that when the projected end-of-month balance is negative, the UI shows an 'At risk' alert with mitigation suggestions after selecting a month/year.",
+    "category": "Alerts, Projections & Insights",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Wait for 5 seconds for Streamlit to load the page interface"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"luan\" into the username/email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"luan\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/\""
+      },
+      {
+        "type": "action",
+        "description": "Select a month/year that is known to produce a negative projection from the month/year controls"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"At risk\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify element \"Mitigation suggestions\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC020",
+    "title": "Positive or non-negative projection does not show 'At risk' alert",
+    "description": "Verifies that for a month/year that does not produce a negative projection, the projection is shown without an 'At risk' alert.",
+    "category": "Alerts, Projections & Insights",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Wait for 5 seconds for Streamlit to load the page interface"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"luan\" into the username/email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"luan\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/\""
+      },
+      {
+        "type": "action",
+        "description": "Select a month/year that is known to produce a non-negative projection from the month/year controls"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Projected end-of-month balance\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"At risk\" is not visible"
+      }
+    ]
+  },
+  {
+    "id": "TC021",
+    "title": "Category exceeds 80% threshold shows a budget alert for that category",
+    "description": "Verifies that when a category crosses the 80% budget threshold, a visible budget alert appears for that category after selecting a month/year.",
+    "category": "Alerts, Projections & Insights",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Wait for 5 seconds for Streamlit to load the page interface"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"luan\" into the username/email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"luan\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/\""
+      },
+      {
+        "type": "action",
+        "description": "Select a month/year that is known to have at least one category above 80% from the month/year controls"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Budget alert\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"80%\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC022",
+    "title": "Category reaches or exceeds 100% shows a critical budget alert",
+    "description": "Verifies that when a category reaches or exceeds 100% of budget, the UI shows a more severe budget alert indicator for that category.",
+    "category": "Alerts, Projections & Insights",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Wait for 5 seconds for Streamlit to load the page interface"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"luan\" into the username/email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"luan\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/\""
+      },
+      {
+        "type": "action",
+        "description": "Select a month/year that is known to have at least one category at or above 100% from the month/year controls"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Budget alert\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"100%\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC023",
+    "title": "Clicking a budget alert shows contributing transactions for the alerted category",
+    "description": "Verifies that selecting a visible category budget alert reveals a list/table of contributing transactions tied to that category.",
+    "category": "Alerts, Projections & Insights",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Wait for 5 seconds for Streamlit to load the page interface"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"luan\" into the username/email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"luan\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/\""
+      },
+      {
+        "type": "action",
+        "description": "Select a month/year that is known to have at least one category above 80% from the month/year controls"
+      },
+      {
+        "type": "action",
+        "description": "Click the visible budget alert for the exceeded category"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Contributing transactions\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC024",
+    "title": "Budget alert detail view shows only transactions aligned with the alerted category context",
+    "description": "Verifies that when a specific category alert is opened, the transactions shown are presented under that same category context (category name visible in the detail area).",
+    "category": "Alerts, Projections & Insights",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Wait for 5 seconds for Streamlit to load the page interface"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"luan\" into the username/email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"luan\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/\""
+      },
+      {
+        "type": "action",
+        "description": "Select a month/year that is known to have at least one category above 80% from the month/year controls"
+      },
+      {
+        "type": "action",
+        "description": "Click the visible budget alert for the exceeded category"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify element \"Alerted category name\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify element \"Transactions list\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC025",
+    "title": "Projection and insights content refresh when switching month/year",
+    "description": "Verifies that changing month/year updates the displayed projection/alert/insight content on the page.",
+    "category": "Alerts, Projections & Insights",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Wait for 5 seconds for Streamlit to load the page interface"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"luan\" into the username/email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"luan\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/\""
+      },
+      {
+        "type": "action",
+        "description": "Select an initial month/year from the month/year controls"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Projected end-of-month balance\" is visible"
+      },
+      {
+        "type": "action",
+        "description": "Select a different month/year from the month/year controls"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Projected end-of-month balance\" is visible"
+      }
+    ]
+  }
+]

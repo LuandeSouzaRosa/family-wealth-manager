@@ -27,7 +27,13 @@ from core.utils import (
     end_of_month, default_form_date, calc_delta, _is_future_month,
     validate_transaction, validate_asset, validate_recorrente,
     validate_orcamento, validate_passivo, check_duplicate,
+    generate_monthly_report, generate_full_backup,
 )
+from core.forms import (
+    transaction_form, wealth_form, patrimonio_form,
+    recorrente_form, orcamento_form, passivo_form, meta_form,
+)
+from core.views import _df_equals_safe, _render_historico, _render_login
 
 
 # ==============================================================================
@@ -606,589 +612,9 @@ def render_pending_banner(
 # 9. FORMULÁRIOS
 # ==============================================================================
 
-def generate_monthly_report(
-    mx: MonthMetrics,
-    budget_data: list[dict],
-    score_data: dict,
-    sel_mo: int,
-    sel_yr: int,
-    user: str,
-) -> BytesIO | None:
-    """Gera relatório mensal completo em Excel (múltiplas abas)."""
-    try:
-        buffer = BytesIO()
-
-        with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
-            # --- Aba Resumo ---
-            resumo = pd.DataFrame({
-                "Métrica": [
-                    "Renda", "Gastos Lifestyle", "Investido no Mês", "Saldo Disponível",
-                    "Taxa de Aporte (%)", "Autonomia (meses)",
-                    "Score Financeiro", "Classificação",
-                    "Necessidades (%)", "Desejos (%)", "Investimento (%)",
-                    "Ticket Médio", "Nº Transações",
-                ],
-                "Valor": [
-                    mx.renda, mx.lifestyle, mx.investido_mes, mx.disponivel,
-                    round(mx.taxa_aporte, 1), round(mx.autonomia, 1),
-                    round(score_data["score"]), score_data["grade"],
-                    round(mx.nec_pct, 1), round(mx.des_pct, 1), round(mx.inv_pct, 1),
-                    round(mx.ticket_medio, 2), mx.month_tx_count,
-                ],
-            })
-            resumo.to_excel(writer, sheet_name="Resumo", index=False)
-
-            # --- Aba Transações ---
-            if not mx.df_month.empty:
-                df_tx = mx.df_month.copy()
-                if "Data" in df_tx.columns:
-                    df_tx["Data"] = pd.to_datetime(
-                        df_tx["Data"], errors="coerce"
-                    ).dt.strftime("%d/%m/%Y")
-                cols_export = [c for c in df_tx.columns if c != "Id"]
-                df_tx[cols_export].to_excel(
-                    writer, sheet_name="Transações", index=False
-                )
-
-            # --- Aba Categorias ---
-            if mx.cat_breakdown:
-                cat_df = pd.DataFrame({
-                    "Categoria": list(mx.cat_breakdown.keys()),
-                    "Valor (R$)": list(mx.cat_breakdown.values()),
-                    "% do Total": [
-                        round((v / mx.lifestyle * 100), 1) if mx.lifestyle > 0 else 0
-                        for v in mx.cat_breakdown.values()
-                    ],
-                })
-                cat_df.to_excel(writer, sheet_name="Categorias", index=False)
-
-            # --- Aba Orçamento ---
-            if budget_data:
-                orc_df = pd.DataFrame({
-                    "Categoria": [b["categoria"] for b in budget_data],
-                    "Limite (R$)": [b["limite"] for b in budget_data],
-                    "Gasto (R$)": [b["gasto"] for b in budget_data],
-                    "% Consumido": [round(b["pct"], 1) for b in budget_data],
-                    "Restante (R$)": [b["restante"] for b in budget_data],
-                    "Status": [b["status"].upper() for b in budget_data],
-                })
-                orc_df.to_excel(writer, sheet_name="Orçamento", index=False)
-
-            # --- Aba Top 5 ---
-            if mx.top5_gastos:
-                top_df = pd.DataFrame(mx.top5_gastos)
-                top_df.columns = ["Descrição", "Valor (R$)", "Categoria"]
-                top_df.to_excel(writer, sheet_name="Top Gastos", index=False)
-
-        buffer.seek(0)
-        return buffer
-    except Exception as e:
-        logger.error(f"generate_monthly_report failed: {e}")
-        return None
-
-def transaction_form(
-    form_key: str, tipo: str, categorias: list[str],
-    submit_label: str = "REGISTRAR",
-    desc_placeholder: str = "Descrição",
-    default_step: float = 10.0,
-    sel_mo: int | None = None, sel_yr: int | None = None,
-    default_resp: str = "Casal",
-    df_month: pd.DataFrame | None = None,
-) -> None:
-    """Formulário genérico de transação."""
-    form_date = default_form_date(sel_mo, sel_yr) if sel_mo and sel_yr else datetime.now().date()
-    if sel_mo and sel_yr:
-        d_min = date(sel_yr, sel_mo, 1)
-        d_max = date(sel_yr, sel_mo, calendar.monthrange(sel_yr, sel_mo)[1])
-    else:
-        d_min, d_max = None, None
-    with st.form(form_key, clear_on_submit=True):
-        d = st.date_input("Data", form_date, min_value=d_min, max_value=d_max, format="DD/MM/YYYY")
-        desc = st.text_input(
-            "Descrição", placeholder=desc_placeholder,
-            max_chars=CFG.MAX_DESC_LENGTH,
-        )
-        val = st.number_input("Valor (R$)", min_value=0.01, step=default_step)
-        cat = st.selectbox("Categoria", categorias)
-        resp_options = list(CFG.RESPONSAVEIS)
-        resp_index = resp_options.index(default_resp) if default_resp in resp_options else 0
-        resp = st.selectbox("Responsável", resp_options, index=resp_index)
-        tag = st.text_input("Tag (opcional)", placeholder="Ex: viagem, reforma, natal", max_chars=50)
-        if st.form_submit_button(submit_label):
-            entry = {
-                "Data": d, "Descricao": desc.strip(), "Valor": val,
-                "Categoria": cat, "Tipo": tipo, "Responsavel": resp,
-                "Origem": CFG.ORIGEM_MANUAL,
-                "Tag": tag.strip() if tag else "",
-            }
-            ok, err = validate_transaction(entry)
-            if not ok:
-                st.toast(f"⚠ {err}")
-            else:
-                is_dup = df_month is not None and check_duplicate(df_month, desc.strip(), val, d)
-                if save_entry(entry, "Transacoes"):
-                    if is_dup:
-                        st.toast(f"⚠ Possível duplicata: {desc.strip()} — {fmt_brl(val)}")
-                    else:
-                        st.toast(f"✓ {desc.strip()} — {fmt_brl(val)}")
-                    st.rerun()
-
-def wealth_form(
-    sel_mo: int | None = None,
-    sel_yr: int | None = None,
-    default_resp: str = "Casal",
-    df_month: pd.DataFrame | None = None,
-) -> None:
-    """Formulário de aporte / investimento."""
-    form_date = default_form_date(sel_mo, sel_yr) if sel_mo and sel_yr else datetime.now().date()
-    if sel_mo and sel_yr:
-        d_min = date(sel_yr, sel_mo, 1)
-        d_max = date(sel_yr, sel_mo, calendar.monthrange(sel_yr, sel_mo)[1])
-    else:
-        d_min, d_max = None, None
-    with st.form("f_wealth", clear_on_submit=True):
-        d = st.date_input("Data", form_date, min_value=d_min, max_value=d_max, format="DD/MM/YYYY")
-        desc = st.text_input(
-            "Ativo / Corretora", placeholder="Ex: IVVB11, Bitcoin, CDB",
-            max_chars=CFG.MAX_DESC_LENGTH,
-        )
-        val = st.number_input("Valor (R$)", min_value=0.01, step=100.0)
-        # [FIX B1] Usar default_resp
-        resp_options = list(CFG.RESPONSAVEIS)
-        resp_index = resp_options.index(default_resp) if default_resp in resp_options else 0
-        resp = st.selectbox("Titular", resp_options, index=resp_index)
-        w_tag = st.text_input("Tag (opcional)", placeholder="Ex: renda fixa, cripto", max_chars=50, key="w_tag")
-        if st.form_submit_button("CONFIRMAR APORTE"):
-            entry = {
-                "Data": d, "Descricao": desc.strip(), "Valor": val,
-                "Categoria": CFG.CAT_INVESTIMENTO, "Tipo": CFG.TIPO_SAIDA, "Responsavel": resp,
-                "Origem": CFG.ORIGEM_MANUAL,
-                "Tag": w_tag.strip() if w_tag else "",
-            }
-            ok, err = validate_transaction(entry)
-            if not ok:
-                st.toast(f"⚠ {err}")
-            else:
-                is_dup = df_month is not None and check_duplicate(df_month, desc.strip(), val, d)
-                if save_entry(entry, "Transacoes"):
-                    if is_dup:
-                        st.toast(f"⚠ Possível duplicata: {desc.strip()} — {fmt_brl(val)}")
-                    else:
-                        st.toast(f"✓ Aporte: {desc.strip()} — {fmt_brl(val)}")
-                    st.rerun()
-
-def patrimonio_form(
-    default_resp: str = "Casal",  # [FIX M3] Adicionado parâmetro
-) -> None:
-    """Formulário de ativo patrimonial."""
-    with st.form("f_patrimonio", clear_on_submit=True):
-        item = st.text_input(
-            "Ativo / Conta", placeholder="Ex: Poupança Nubank, Apartamento",
-            max_chars=CFG.MAX_DESC_LENGTH,
-        )
-        val = st.number_input("Valor (R$)", min_value=0.01, step=100.0)
-        # [FIX M3] Usar default_resp
-        resp_options = list(CFG.RESPONSAVEIS)
-        resp_index = resp_options.index(default_resp) if default_resp in resp_options else 0
-        resp = st.selectbox("Titular", resp_options, index=resp_index)
-        if st.form_submit_button("ADICIONAR ATIVO"):
-            entry = {"Item": item.strip(), "Valor": val, "Responsavel": resp}
-            ok, err = validate_asset(entry)
-            if not ok:
-                st.toast(f"⚠ {err}")
-            elif save_entry(entry, "Patrimonio"):
-                st.toast(f"✓ Ativo: {item.strip()} — {fmt_brl(val)}")
-                st.rerun()
-
-
-def recorrente_form(default_resp: str = "Casal", df_existing: pd.DataFrame | None = None) -> None:
-    """Formulário para cadastrar transação recorrente."""
-    with st.form("f_recorrente", clear_on_submit=True):
-        tipo = st.selectbox("Tipo", list(reversed(CFG.TIPOS)))
-        desc = st.text_input(
-            "Descrição", placeholder="Ex: Aluguel, Netflix, Salário",
-            max_chars=CFG.MAX_DESC_LENGTH,
-        )
-        val = st.number_input("Valor (R$)", min_value=0.01, step=50.0)
-        if tipo == CFG.TIPO_SAIDA:
-            cat_options = list(CFG.CATEGORIAS_SAIDA) + [CFG.CAT_INVESTIMENTO]
-        else:
-            cat_options = list(CFG.CATEGORIAS_ENTRADA)
-        cat = st.selectbox("Categoria", cat_options, key=f"rec_cat_{tipo}")
-        dia = st.number_input(
-            "Dia do vencimento", min_value=1, max_value=28, value=1, step=1
-        )
-        resp_options = list(CFG.RESPONSAVEIS)
-        resp_index = resp_options.index(default_resp) if default_resp in resp_options else 0
-        resp = st.selectbox("Responsável", resp_options, index=resp_index)
-        if st.form_submit_button("CADASTRAR RECORRENTE"):
-            entry = {
-                "Descricao": desc.strip(),
-                "Valor": val,
-                "Categoria": cat,
-                "Tipo": tipo,
-                "Responsavel": resp,
-                "DiaVencimento": int(dia),
-                "Ativo": True,
-            }
-            ok, err = validate_recorrente(entry)
-            if not ok:
-                st.toast(f"⚠ {err}")
-            elif df_existing is not None and not df_existing.empty and (
-                (df_existing["Descricao"].str.strip().str.lower() == desc.strip().lower()) &
-                (df_existing["Categoria"].str.strip() == cat) &
-                (df_existing["Tipo"].str.strip() == tipo) &
-                (df_existing["Responsavel"].str.strip() == resp)
-            ).any():
-                st.toast(f"⚠ Recorrente já cadastrada: {desc.strip()}")
-            elif save_entry(entry, "Recorrentes"):
-                st.toast(f"✓ Recorrente: {desc.strip()} — {fmt_brl(val)}/mês")
-                st.rerun()
-
-
-def orcamento_form(default_resp: str = "Casal", df_existing: pd.DataFrame | None = None) -> None:
-    """Formulário para definir limite de orçamento por categoria."""
-    with st.form("f_orcamento", clear_on_submit=True):
-        cat = st.selectbox("Categoria", list(CFG.CATEGORIAS_SAIDA))
-        limite = st.number_input("Limite mensal (R$)", min_value=0.01, step=50.0)
-        resp_options = list(CFG.RESPONSAVEIS)
-        resp_index = resp_options.index(default_resp) if default_resp in resp_options else 0
-        resp = st.selectbox("Responsável", resp_options, index=resp_index)
-        if st.form_submit_button("DEFINIR LIMITE"):
-            entry = {
-                "Categoria": cat,
-                "Limite": limite,
-                "Responsavel": resp,
-            }
-            ok, err = validate_orcamento(entry)
-            if not ok:
-                st.toast(f"⚠ {err}")
-            elif df_existing is not None and not df_existing.empty and (
-                (df_existing["Categoria"].str.strip() == cat) &
-                (df_existing["Responsavel"].str.strip() == resp)
-            ).any():
-                st.toast(f"⚠ {cat}/{resp} já tem limite — edite na tabela abaixo")
-            elif save_entry(entry, "Orcamentos"):
-                st.toast(f"✓ Limite de {fmt_brl(limite)} definido para {cat}")
-                st.rerun()
-
-
-def passivo_form(default_resp: str = "Casal") -> None:
-    """Formulário de passivo/dívida (I5)."""
-    with st.form("f_passivo", clear_on_submit=True):
-        item = st.text_input(
-            "Dívida / Financiamento",
-            placeholder="Ex: Financiamento Apto, Empréstimo, Cartão",
-            max_chars=CFG.MAX_DESC_LENGTH,
-        )
-        val = st.number_input("Saldo Devedor (R$)", min_value=0.01, step=100.0)
-        resp_options = list(CFG.RESPONSAVEIS)
-        resp_index = resp_options.index(default_resp) if default_resp in resp_options else 0
-        resp = st.selectbox("Responsável", resp_options, index=resp_index)
-        if st.form_submit_button("ADICIONAR PASSIVO"):
-            entry = {"Item": item.strip(), "Valor": val, "Responsavel": resp}
-            ok, err = validate_passivo(entry)
-            if not ok:
-                st.toast(f"⚠ {err}")
-            elif save_entry(entry, "Passivos"):
-                st.toast(f"✓ Passivo: {item.strip()} — {fmt_brl(val)}")
-                st.rerun()
-
-
-def generate_full_backup() -> BytesIO | None:
-    """Gera backup completo de todas as planilhas em Excel (S1)."""
-    try:
-        conn = get_conn()
-        buffer = BytesIO()
-        sheets_to_backup = [
-            "Transacoes", "Patrimonio", "Passivos", "Recorrentes",
-            "Orcamentos", "Metas", "Configuracoes",
-        ]
-        with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
-            for ws_name in sheets_to_backup:
-                try:
-                    df = conn.read(worksheet=ws_name)
-                    df = df.dropna(how="all")
-                    if "Data" in df.columns:
-                        df["Data"] = pd.to_datetime(
-                            df["Data"], errors="coerce"
-                        ).dt.strftime("%Y-%m-%d")
-                    df.to_excel(writer, sheet_name=ws_name, index=False)
-                except Exception:
-                    pd.DataFrame().to_excel(
-                        writer, sheet_name=ws_name, index=False
-                    )
-        buffer.seek(0)
-        _log_audit("BACKUP", "ALL", f"{len(sheets_to_backup)} planilhas")
-        return buffer
-    except Exception as e:
-        logger.error(f"generate_full_backup failed: {e}")
-        return None
-
-
-def meta_form(default_resp: str = "Casal") -> None:
-    """Formulário para criar meta financeira (G1)."""
-    with st.form("f_meta", clear_on_submit=True):
-        nome = st.text_input(
-            "Nome da Meta",
-            placeholder="Ex: Reserva de Emergência, Viagem Europa",
-            max_chars=100,
-        )
-        m1, m2 = st.columns(2)
-        with m1:
-            valor_alvo = st.number_input("Valor Alvo (R$)", min_value=0.01, step=500.0)
-        with m2:
-            valor_atual = st.number_input(
-                "Valor Atual (R$)", min_value=0.0, step=100.0, value=0.0,
-            )
-        m3, m4 = st.columns(2)
-        with m3:
-            prazo = st.text_input(
-                "Prazo (YYYY-MM)", placeholder="Ex: 2025-12", max_chars=7,
-            )
-        with m4:
-            resp_opts = list(CFG.RESPONSAVEIS)
-            resp_idx = resp_opts.index(default_resp) if default_resp in resp_opts else 0
-            resp = st.selectbox("Responsável", resp_opts, index=resp_idx)
-        if st.form_submit_button("CRIAR META", use_container_width=True):
-            if not nome or not nome.strip():
-                st.toast("⚠ Nome da meta obrigatório")
-            elif valor_alvo <= 0:
-                st.toast("⚠ Valor alvo deve ser maior que zero")
-            elif valor_atual < 0:
-                st.toast("⚠ Valor atual não pode ser negativo")
-            elif prazo and not (len(prazo.strip()) == 7 and prazo.strip()[4] == "-"):
-                st.toast("⚠ Prazo deve estar no formato YYYY-MM (ex: 2025-12)")
-            else:
-                entry = {
-                    "Id": generate_id(),
-                    "Nome": nome.strip(),
-                    "ValorAlvo": valor_alvo,
-                    "ValorAtual": valor_atual,
-                    "Prazo": prazo.strip() if prazo else "",
-                    "Responsavel": resp,
-                    "Ativo": True,
-                }
-                if save_entry(entry, "Metas"):
-                    st.toast(f"✓ Meta criada: {nome.strip()}")
-                    st.rerun()
-
-
 # ==============================================================================
 # 10. HISTÓRICO
 # ==============================================================================
-
-def _df_equals_safe(df1: pd.DataFrame, df2: pd.DataFrame) -> bool:
-    """Comparação segura de DataFrames normalizando tipos."""
-    try:
-        d1 = df1.reset_index(drop=True).copy()
-        d2 = df2.reset_index(drop=True).copy()
-        if d1.shape != d2.shape:
-            return False
-        if list(d1.columns) != list(d2.columns):
-            return False
-        for col in d1.columns:
-            d1[col] = d1[col].astype(str)
-            d2[col] = d2[col].astype(str)
-        return d1.equals(d2)
-    except Exception:
-        return False
-
-
-def _render_historico(
-    mx: MonthMetrics,
-    user: str,  # [FIX B2] Removido df_trans_full (não era usado)
-    sel_mo: int,
-    sel_yr: int,
-) -> None:
-    """Renderiza aba de histórico com busca, export e edição."""
-    df_hist = mx.df_month.copy()
-    month_label = fmt_month_year(sel_mo, sel_yr)
-
-    if df_hist.empty:
-        render_intel(
-            f"Histórico — {sanitize(month_label)}",
-            "Nenhuma transação registrada neste mês."
-        )
-        return
-
-    df_hist["Data"] = pd.to_datetime(df_hist["Data"], errors="coerce")
-    df_hist = df_hist.sort_values("Data", ascending=False).reset_index(drop=True)
-
-    render_intel(
-        f"Histórico — {sanitize(month_label)}",
-        f"<strong>{len(df_hist)}</strong> transações neste mês"
-    )
-    render_hist_summary(mx)
-
-    # --- Relatório Completo ---
-    try:
-        report_buf = generate_monthly_report(
-            mx, mx.budget_data,
-            compute_score(mx),
-            sel_mo, sel_yr, user,
-        )
-        if report_buf:
-            st.download_button(
-                "📊 RELATÓRIO COMPLETO (Excel)",
-                report_buf.getvalue(),
-                f"relatorio_{sel_mo:02d}_{sel_yr}_{user}.xlsx",
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True,
-                key=f"report_{user}_{sel_mo}_{sel_yr}",
-            )
-    except Exception as e:
-        logger.warning(f"Report generation failed: {e}")
-
-    search = st.text_input(
-        "🔍 Buscar",
-        placeholder="Filtrar visualização por descrição, categoria...",
-        label_visibility="collapsed",
-        key=f"hist_search_{user}_{sel_mo}_{sel_yr}",
-    )
-
-    df_display = df_hist.copy()
-    if search and search.strip():
-        search_lower = search.strip().lower()
-        tag_mask = df_display["Tag"].str.lower().str.contains(search_lower, na=False) if "Tag" in df_display.columns else False
-        mask = (
-            df_display["Descricao"].str.lower().str.contains(search_lower, na=False) |
-            df_display["Categoria"].str.lower().str.contains(search_lower, na=False) |
-            df_display["Tipo"].str.lower().str.contains(search_lower, na=False) |
-            df_display["Responsavel"].str.lower().str.contains(search_lower, na=False) |
-            tag_mask
-        )
-        df_display = df_display[mask].reset_index(drop=True)
-        if df_display.empty:
-            render_intel("", f"Nenhum resultado para '<em>{sanitize(search)}</em>'")
-            return
-
-    col_csv, col_excel, _ = st.columns([1, 1, 4])
-    with col_csv:
-        csv_data = df_display.to_csv(index=False).encode("utf-8-sig")
-        st.download_button(
-            "⬇ CSV", csv_data,
-            f"financas_{sel_mo:02d}_{sel_yr}_{user}.csv",
-            "text/csv", use_container_width=True,
-        )
-    with col_excel:
-        try:
-            buffer = BytesIO()
-            df_export = df_display.copy()
-            if "Data" in df_export.columns:
-                df_export["Data"] = df_export["Data"].dt.strftime("%d/%m/%Y")
-            df_export.to_excel(buffer, index=False, engine="openpyxl")
-            st.download_button(
-                "⬇ EXCEL", buffer.getvalue(),
-                f"financas_{sel_mo:02d}_{sel_yr}_{user}.xlsx",
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True,
-            )
-        except ImportError:
-            st.caption("Excel indisponível (instale openpyxl)")
-
-    if search and search.strip():
-        st.caption("⚠ A busca filtra apenas a visualização/export. A edição abaixo mostra todos os registros do mês.")
-
-    # --- Toggle Tabela/Cards (V6) ---
-    _hist_vc1, _hist_vc2 = st.columns([1, 3])
-    with _hist_vc1:
-        _hist_view = st.radio(
-            "Vista", ["Tabela", "Cards"],
-            horizontal=True, label_visibility="collapsed",
-            key=f"hist_view_{user}_{sel_mo}_{sel_yr}",
-        )
-
-    if _hist_view == "Cards":
-        _show_all_cards = len(df_display) > 25 and st.checkbox(
-            f"Mostrar todas ({len(df_display)})",
-            key=f"cards_all_{user}_{sel_mo}_{sel_yr}",
-        )
-        render_transaction_cards(
-            df_display,
-            max_items=len(df_display) if _show_all_cards else 25,
-        )
-        st.caption("💡 Para editar/excluir, mude para visualização Tabela.")
-        return
-
-    st.caption("💡 Para excluir transações, selecione a linha e pressione Delete.")
-
-    edited = st.data_editor(
-        df_hist,
-        use_container_width=True,
-        num_rows="dynamic",
-        column_config={
-            "Data": st.column_config.DateColumn(
-                "Data", format="DD/MM/YYYY", required=True
-            ),
-            "Valor": st.column_config.NumberColumn(
-                "Valor", format="R$ %.2f", required=True, min_value=0.0
-            ),
-            "Tipo": st.column_config.SelectboxColumn(
-                "Tipo", options=list(CFG.TIPOS), required=True
-            ),
-            "Categoria": st.column_config.SelectboxColumn(
-                "Categoria", options=list(CFG.CATEGORIAS_TODAS), required=True,
-            ),
-            "Descricao": st.column_config.TextColumn("Descrição", required=True),
-            "Responsavel": st.column_config.SelectboxColumn(
-                "Responsável", options=list(CFG.RESPONSAVEIS)
-            ),
-            "Origem": st.column_config.TextColumn("Origem", disabled=True),
-            "Tag": st.column_config.TextColumn("Tag", max_chars=50),
-            "Id": None,  # Oculta coluna Id do editor
-        },
-        hide_index=True,
-        key=f"editor_historico_{user}_{sel_mo}_{sel_yr}",
-    )
-
-    if not _df_equals_safe(df_hist, edited):
-        rows_removed = len(df_hist) - len(edited)
-        if rows_removed > 0:
-            if rows_removed >= 3:
-                st.error(f"⚠ ATENÇÃO: {rows_removed} transações serão excluídas em {month_label}")
-            else:
-                st.warning(f"⚠ {rows_removed} transação(ões) será(ão) excluída(s) em {month_label}")
-        else:
-            st.warning(f"⚠ Alterações pendentes em {month_label}")
-
-        c_save, c_discard = st.columns(2)
-        with c_save:
-            if st.button("✓ SALVAR ALTERAÇÕES", key=f"save_hist_{user}_{sel_mo}_{sel_yr}", use_container_width=True):
-                if edited.empty and len(df_hist) > 0:
-                    st.error("⚠ Não é possível excluir todas as transações de uma vez.")
-                else:
-                    # Garantir coluna Origem em linhas novas
-                    if "Origem" in edited.columns:
-                        edited["Origem"] = edited["Origem"].fillna(CFG.ORIGEM_MANUAL)
-                    else:
-                        edited["Origem"] = CFG.ORIGEM_MANUAL
-
-                    # Validar cada linha editada
-                    validation_errors = []
-                    for idx, row in edited.iterrows():
-                        entry = {
-                            "Data": row.get("Data"),
-                            "Descricao": row.get("Descricao", ""),
-                            "Valor": row.get("Valor", 0),
-                            "Categoria": row.get("Categoria", ""),
-                            "Tipo": row.get("Tipo", ""),
-                            "Responsavel": row.get("Responsavel", ""),
-                        }
-                        ok, err = validate_transaction(entry)
-                        if not ok:
-                            validation_errors.append(f"Linha {idx + 1}: {err}")
-                    if validation_errors:
-                        for ve in validation_errors[:5]:
-                            st.error(f"⚠ {ve}")
-                        if len(validation_errors) > 5:
-                            st.error(f"... e mais {len(validation_errors) - 5} erro(s)")
-                    else:
-                        _save_historico_mensal(edited, user, sel_mo, sel_yr)
-        with c_discard:
-            if st.button("✗ DESCARTAR", key=f"discard_hist_{user}_{sel_mo}_{sel_yr}", use_container_width=True):
-                st.rerun()
-
 
 def _save_historico_mensal(
     edited_month: pd.DataFrame,
@@ -1341,91 +767,6 @@ def _check_auth() -> bool:
     return True
 
 
-def _render_login() -> None:
-    """Renderiza tela de login no tema do terminal."""
-    st.markdown("""
-    <div style="text-align:center; padding:80px 20px 20px 20px;">
-        <div style="font-family:'JetBrains Mono',monospace; font-size:0.6rem;
-             color:#00FFCC; text-transform:uppercase; letter-spacing:0.6em;
-             margin-bottom:12px; opacity:0.5;">▮ L&L Finance Terminal</div>
-        <div style="font-family:'JetBrains Mono',monospace; font-size:2.5rem;
-             color:#F0F0F0; margin-bottom:8px; letter-spacing:-0.02em;">Autenticação</div>
-        <div style="font-family:'JetBrains Mono',monospace; font-size:0.65rem;
-             color:#333; letter-spacing:0.05em;">Acesso restrito</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # Mostrar rate limit se ativo
-    allowed, remaining = _check_login_rate_limit()
-    if not allowed:
-        st.error(f"⚠ Muitas tentativas. Aguarde {remaining}s antes de tentar novamente.")
-        return
-
-    _, col_center, _ = st.columns([1, 1, 1])
-    with col_center:
-        with st.form("login_form"):
-            username = st.text_input(
-                "Usuário", placeholder="seu nome",
-                label_visibility="collapsed",
-            )
-            password = st.text_input(
-                "Senha", type="password", placeholder="senha",
-                label_visibility="collapsed",
-            )
-            if st.form_submit_button("ENTRAR", use_container_width=True):
-                try:
-                    users = st.secrets.get("auth", {}).get("users", {})
-                    user_key = username.strip().lower()
-                    user_data = users.get(user_key, None)
-
-                    if user_data and _verify_password(
-                        str(user_data.get("password", "")), password
-                    ):
-                        st.session_state.authenticated = True
-                        st.session_state.auth_user = str(
-                            user_data.get("name", username.strip())
-                        )
-                        st.session_state["_session_created"] = time.time()
-                        st.session_state["_login_attempts"] = 0
-                        logger.info(f"Login OK: {user_key}")
-                        _log_audit("LOGIN", "Auth", f"user={user_key}")
-                        st.rerun()
-                    else:
-                        # Incrementar tentativas
-                        attempts = st.session_state.get("_login_attempts", 0) + 1
-                        st.session_state["_login_attempts"] = attempts
-                        st.session_state["_login_last_attempt"] = time.time()
-                        remaining_attempts = max(
-                            0, CFG.LOGIN_MAX_ATTEMPTS - attempts
-                        )
-                        if remaining_attempts > 0:
-                            st.error(
-                                f"Usuário ou senha incorretos "
-                                f"({remaining_attempts} tentativa"
-                                f"{'s' if remaining_attempts != 1 else ''} restante"
-                                f"{'s' if remaining_attempts != 1 else ''})"  
-                            )
-                        else:
-                            st.error("⚠ Conta temporariamente bloqueada")
-                        logger.warning(
-                            f"Login falhou: {user_key} "
-                            f"(tentativa {attempts})"
-                        )
-                        _log_audit(
-                            "LOGIN_FAILED", "Auth",
-                            f"user={user_key} attempt={attempts}",
-                        )
-                except Exception as e:
-                    st.error("Erro na autenticação")
-                    logger.error(f"Auth error: {e}")
-
-        st.markdown(
-            f'<div style="font-family:JetBrains Mono,monospace;font-size:0.5rem;'
-            f'color:#1a1a1a;text-align:center;margin-top:24px;">v{CFG.VERSION}</div>',
-            unsafe_allow_html=True,
-        )
-
-
 def _logout() -> None:
     """Limpa sessão de autenticação."""
     auth_user = st.session_state.get("auth_user", "")
@@ -1437,6 +778,62 @@ def _logout() -> None:
     st.rerun()
 
 
+def _handle_login() -> None:
+    # Mostrar rate limit se ativo
+    allowed, remaining = _check_login_rate_limit()
+    if not allowed:
+        st.error(f"⚠ Muitas tentativas. Aguarde {remaining}s antes de tentar novamente.")
+        return
+
+    username, password, submitted = _render_login()
+    
+    if submitted:
+        try:
+            users = st.secrets.get("auth", {}).get("users", {})
+            user_key = username.strip().lower()
+            user_data = users.get(user_key, None)
+
+            if user_data and _verify_password(
+                str(user_data.get("password", "")), password
+            ):
+                st.session_state.authenticated = True
+                st.session_state.auth_user = str(
+                    user_data.get("name", username.strip())
+                )
+                st.session_state["_session_created"] = time.time()
+                st.session_state["_login_attempts"] = 0
+                logger.info(f"Login OK: {user_key}")
+                _log_audit("LOGIN", "Auth", f"user={user_key}")
+                st.rerun()
+            else:
+                # Incrementar tentativas
+                attempts = st.session_state.get("_login_attempts", 0) + 1
+                st.session_state["_login_attempts"] = attempts
+                st.session_state["_login_last_attempt"] = time.time()
+                remaining_attempts = max(
+                    0, CFG.LOGIN_MAX_ATTEMPTS - attempts
+                )
+                if remaining_attempts > 0:
+                    st.error(
+                        f"Usuário ou senha incorretos "
+                        f"({remaining_attempts} tentativa"
+                        f"{'s' if remaining_attempts != 1 else ''} restante"
+                        f"{'s' if remaining_attempts != 1 else ''})"  
+                    )
+                else:
+                    st.error("⚠ Conta temporariamente bloqueada")
+                logger.warning(
+                    f"Login falhou: {user_key} "
+                    f"(tentativa {attempts})"
+                )
+                _log_audit(
+                    "LOGIN_FAILED", "Auth",
+                    f"user={user_key} attempt={attempts}",
+                )
+        except Exception as e:
+            st.error("Erro na autenticação")
+            logger.error(f"Auth error: {e}")
+
 # ==============================================================================
 # 13. APLICAÇÃO PRINCIPAL
 # ==============================================================================
@@ -1447,7 +844,7 @@ def main() -> None:
 
     # --- Autenticação ---
     if not _check_auth():
-        _render_login()
+        _handle_login()
         return
 
     validate_worksheets()
@@ -1918,7 +1315,7 @@ def main() -> None:
             if mx.cat_breakdown:
                 _sparklines = compute_category_sparklines(df_trans, user, sel_mo, sel_yr)
                 render_cat_breakdown(mx.cat_breakdown, sparklines=_sparklines)
-            transaction_form(
+            _entry_ls = transaction_form(
                 form_key="f_lifestyle",
                 tipo=CFG.TIPO_SAIDA,
                 categorias=list(CFG.CATEGORIAS_SAIDA),
@@ -1927,8 +1324,19 @@ def main() -> None:
                 default_step=10.0,
                 sel_mo=sel_mo, sel_yr=sel_yr,
                 default_resp=user,
-                df_month=mx.df_month,
             )
+            if _entry_ls:
+                _ok, _err = validate_transaction(_entry_ls)
+                if not _ok:
+                    st.toast(f"⚠ {_err}")
+                else:
+                    _is_dup = check_duplicate(mx.df_month, _entry_ls["Descricao"], _entry_ls["Valor"], _entry_ls["Data"])
+                    if save_entry(_entry_ls, "Transacoes"):
+                        if _is_dup:
+                            st.toast(f"⚠ Possível duplicata: {_entry_ls['Descricao']} — {fmt_brl(_entry_ls['Valor'])}")
+                        else:
+                            st.toast(f"✓ {_entry_ls['Descricao']} — {fmt_brl(_entry_ls['Valor'])}")
+                        st.rerun()
             render_recent_context(mx.df_month, CFG.TIPO_SAIDA)
         with col_intel:
             render_intel("Intel — Gastos", mx.insight_ls)
@@ -1969,7 +1377,19 @@ def main() -> None:
                 "Definir Orçamento",
                 "Defina limites mensais por categoria de gasto"
             )
-            orcamento_form(default_resp=user, df_existing=df_orcamentos)
+            _entry_orc = orcamento_form(default_resp=user)
+            if _entry_orc:
+                _ok, _err = validate_orcamento(_entry_orc)
+                if not _ok:
+                    st.toast(f"⚠ {_err}")
+                elif not df_orcamentos.empty and (
+                    (df_orcamentos["Categoria"].str.strip() == _entry_orc["Categoria"]) &
+                    (df_orcamentos["Responsavel"].str.strip() == _entry_orc["Responsavel"])
+                ).any():
+                    st.toast(f"⚠ {_entry_orc['Categoria']}/{_entry_orc['Responsavel']} já tem limite — edite na tabela abaixo")
+                elif save_entry(_entry_orc, "Orcamentos"):
+                    st.toast(f"✓ Limite de {fmt_brl(_entry_orc['Limite'])} definido para {_entry_orc['Categoria']}")
+                    st.rerun()
 
             df_orc_view = filter_by_user(df_orcamentos, user, include_shared=True)
             if not df_orc_view.empty:
@@ -2034,7 +1454,7 @@ def main() -> None:
             )
             if mx.renda_breakdown:
                 render_cat_breakdown(mx.renda_breakdown)
-            transaction_form(
+            _entry_renda = transaction_form(
                 form_key="f_renda",
                 tipo=CFG.TIPO_ENTRADA,
                 categorias=list(CFG.CATEGORIAS_ENTRADA),
@@ -2043,8 +1463,19 @@ def main() -> None:
                 default_step=100.0,
                 sel_mo=sel_mo, sel_yr=sel_yr,
                 default_resp=user,
-                df_month=mx.df_month,
             )
+            if _entry_renda:
+                _ok, _err = validate_transaction(_entry_renda)
+                if not _ok:
+                    st.toast(f"⚠ {_err}")
+                else:
+                    _is_dup = check_duplicate(mx.df_month, _entry_renda["Descricao"], _entry_renda["Valor"], _entry_renda["Data"])
+                    if save_entry(_entry_renda, "Transacoes"):
+                        if _is_dup:
+                            st.toast(f"⚠ Possível duplicata: {_entry_renda['Descricao']} — {fmt_brl(_entry_renda['Valor'])}")
+                        else:
+                            st.toast(f"✓ {_entry_renda['Descricao']} — {fmt_brl(_entry_renda['Valor'])}")
+                        st.rerun()
             render_recent_context(mx.df_month, CFG.TIPO_ENTRADA)
         with col_intel:
             render_intel("Intel — Renda", mx.insight_renda)
@@ -2087,7 +1518,19 @@ def main() -> None:
                 "📥 Registrar Aporte",
                 "Investimentos, aportes mensais, compras de ativos"
             )
-            wealth_form(sel_mo=sel_mo, sel_yr=sel_yr, default_resp=user, df_month=mx.df_month)
+            _entry_w = wealth_form(sel_mo=sel_mo, sel_yr=sel_yr, default_resp=user)
+            if _entry_w:
+                _ok, _err = validate_transaction(_entry_w)
+                if not _ok:
+                    st.toast(f"⚠ {_err}")
+                else:
+                    _is_dup = check_duplicate(mx.df_month, _entry_w["Descricao"], _entry_w["Valor"], _entry_w["Data"])
+                    if save_entry(_entry_w, "Transacoes"):
+                        if _is_dup:
+                            st.toast(f"⚠ Possível duplicata: {_entry_w['Descricao']} — {fmt_brl(_entry_w['Valor'])}")
+                        else:
+                            st.toast(f"✓ Aporte: {_entry_w['Descricao']} — {fmt_brl(_entry_w['Valor'])}")
+                        st.rerun()
 
             # Contexto: últimos aportes do mês
             df_inv_ctx = mx.df_month[
@@ -2122,7 +1565,14 @@ def main() -> None:
                 "🏦 Base Patrimonial",
                 f"Saldos e ativos estáticos<br>{partes}"
             )
-            patrimonio_form(default_resp=user)
+            _entry_pat = patrimonio_form(default_resp=user)
+            if _entry_pat:
+                _ok, _err = validate_asset(_entry_pat)
+                if not _ok:
+                    st.toast(f"⚠ {_err}")
+                elif save_entry(_entry_pat, "Patrimonio"):
+                    st.toast(f"✓ Ativo: {_entry_pat['Item']} — {fmt_brl(_entry_pat['Valor'])}")
+                    st.rerun()
 
             # --- Passivos (I5) ---
             st.markdown("---")
@@ -2133,7 +1583,14 @@ def main() -> None:
                 else "Nenhum passivo registrado"
             )
             render_intel("📉 Passivos (Dívidas)", _passivos_total_text)
-            passivo_form(default_resp=user)
+            _entry_passivo = passivo_form(default_resp=user)
+            if _entry_passivo:
+                _ok, _err = validate_passivo(_entry_passivo)
+                if not _ok:
+                    st.toast(f"⚠ {_err}")
+                elif save_entry(_entry_passivo, "Passivos"):
+                    st.toast(f"✓ Passivo: {_entry_passivo['Item']} — {fmt_brl(_entry_passivo['Valor'])}")
+                    st.rerun()
 
             if not df_passivos_view.empty:
                 edited_passivos = st.data_editor(
@@ -2297,7 +1754,21 @@ def main() -> None:
 
             st.markdown("---")
             render_intel("Nova Despesa/Receita Fixa", "Cadastre aqui os gastos e receitas que se repetem todo mês")
-            recorrente_form(default_resp=user, df_existing=df_rec_view)
+            _entry_rec = recorrente_form(default_resp=user)
+            if _entry_rec:
+                _ok, _err = validate_recorrente(_entry_rec)
+                if not _ok:
+                    st.toast(f"⚠ {_err}")
+                elif not df_rec_view.empty and (
+                    (df_rec_view["Descricao"].str.strip().str.lower() == _entry_rec["Descricao"].lower()) &
+                    (df_rec_view["Categoria"].str.strip() == _entry_rec["Categoria"]) &
+                    (df_rec_view["Tipo"].str.strip() == _entry_rec["Tipo"]) &
+                    (df_rec_view["Responsavel"].str.strip() == _entry_rec["Responsavel"])
+                ).any():
+                    st.toast(f"⚠ Recorrente já cadastrada: {_entry_rec['Descricao']}")
+                elif save_entry(_entry_rec, "Recorrentes"):
+                    st.toast(f"✓ Recorrente: {_entry_rec['Descricao']} — {fmt_brl(_entry_rec['Valor'])}/mês")
+                    st.rerun()
 
         with col_list:
             n_ativas = 0
@@ -2413,7 +1884,19 @@ def main() -> None:
             render_metas(metas_progress)
         with col_metas_r:
             render_intel("Nova Meta", "Defina um objetivo financeiro com prazo")
-            meta_form(default_resp=user)
+            _entry_meta = meta_form(default_resp=user)
+            if _entry_meta:
+                _nome = _entry_meta["Nome"]
+                if not _nome or not _nome.strip(): st.toast("⚠ Nome da meta obrigatório")
+                elif _entry_meta["ValorAlvo"] <= 0: st.toast("⚠ Valor alvo deve ser maior que zero")
+                elif _entry_meta["ValorAtual"] < 0: st.toast("⚠ Valor atual não pode ser negativo")
+                elif _entry_meta["Prazo"] and not (len(_entry_meta["Prazo"].strip()) == 7 and _entry_meta["Prazo"].strip()[4] == "-"):
+                    st.toast("⚠ Prazo deve estar no formato YYYY-MM (ex: 2025-12)")
+                else:
+                    _entry_meta["Id"] = generate_id()
+                    if save_entry(_entry_meta, "Metas"):
+                        st.toast(f"✓ Meta criada: {_nome.strip()}")
+                        st.rerun()
             df_metas_view = filter_by_user(df_metas, user, include_shared=True)
             if not df_metas_view.empty:
                 st.markdown("---")
@@ -2565,7 +2048,7 @@ def main() -> None:
                         )
 
         # [FIX B2] Removido df_trans da chamada
-        _render_historico(mx, user, sel_mo, sel_yr)
+        _render_historico(mx, user, sel_mo, sel_yr, on_save_historico=_save_historico_mensal)
 
         # --- Lixeira (S3) ---
         if not df_lixeira.empty:

@@ -1,0 +1,42 @@
+version: "2"
+type: frontend
+tech_stack:
+  - Python
+  - Streamlit
+  - Supabase
+  - Altair
+  - Pandas
+routes:
+  - path: /
+    file: app_homolog.py
+    auth_required: true
+    description: Streamlit single-page application with sidebar navigation
+features:
+  - name: User Login
+    description: User authentication using Supabase email/password
+    files:
+      - core/auth.py
+      - app_homolog.py
+    entry_route: /
+    user_interactions:
+      - Enter email
+      - Enter password
+      - Click Login
+    api_calls:
+      - method: POST
+        endpoint: Supabase Auth
+    auth_required: false
+  - name: Dashboard
+    description: View financial summary and charts
+    files:
+      - app_homolog.py
+      - core/views.py
+    entry_route: /
+    user_interactions:
+      - Select month/year
+      - View total income, expense, balance
+    api_calls:
+      - method: GET
+        endpoint: Supabase transactions table
+    auth_required: true
+known_limitations: []

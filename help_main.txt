@@ -1,0 +1,13 @@
+﻿Usage: testsprite-mcp [options] [command]
+
+TestSprite MCP Server for automated testing workflows
+
+Options:
+  -V, --version           output the version number
+  -h, --help              display help for command
+
+Commands:
+  generateCodeAndExecute  Run test functionality
+  reRunTests              Rerun tests
+  server
+  help [command]          display help for command
