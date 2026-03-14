@@ -84,25 +84,45 @@ export default async function RootLayout({
                     <div className="md:hidden">
                         <Sheet>
                             <SheetTrigger render={
-                                <Button variant="ghost" size="icon">
+                                <Button variant="ghost" size="icon" className="md:hidden">
                                     <Menu className="h-6 w-6" />
                                 </Button>
                             } />
-                            <SheetContent side="right" className="w-[300px] sm:w-[400px]">
-                                <SheetHeader>
-                                    <SheetTitle>L&L Wealth</SheetTitle>
+                            <SheetContent side="right" className="w-[85vw] max-w-[350px] border-l border-border/40 bg-background/95 backdrop-blur-xl">
+                                <SheetHeader className="text-left border-b border-border/40 pb-4 mb-4">
+                                    <SheetTitle className="flex items-center gap-2">
+                                        <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center">
+                                            <div className="h-3 w-3 rounded-full bg-primary-foreground"></div>
+                                        </div>
+                                        L&L Wealth
+                                    </SheetTitle>
                                 </SheetHeader>
-                                <nav className="flex flex-col gap-4 mt-8">
-                                    <Link href="/" className="text-lg font-medium hover:text-primary">Dashboard</Link>
-                                    <Link href="/transacoes" className="text-lg font-medium hover:text-primary">Extrato</Link>
-                                    <Link href="/conciliacao" className="text-lg font-medium hover:text-primary">Conciliação</Link>
-                                    <Link href="/recorrentes" className="text-lg font-medium hover:text-primary">Recorrentes</Link>
-                                    <Link href="/orcamentos" className="text-lg font-medium hover:text-primary">Orçamentos</Link>
-                                    <Link href="/patrimonio" className="text-lg font-medium hover:text-primary">Patrimônio</Link>
-                                    <Link href="/configuracoes" className="text-lg font-medium hover:text-primary">Família</Link>
-                                    <div className="mt-4 pt-4 border-t">
+                                <nav className="flex flex-col gap-2">
+                                    <Link href="/" className="flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-md hover:bg-accent hover:text-accent-foreground transition-colors">
+                                        Dashboard
+                                    </Link>
+                                    <Link href="/transacoes" className="flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-md hover:bg-accent hover:text-accent-foreground transition-colors">
+                                        Extrato
+                                    </Link>
+                                    <Link href="/conciliacao" className="flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-md hover:bg-accent hover:text-accent-foreground transition-colors">
+                                        Conciliação
+                                    </Link>
+                                    <Link href="/recorrentes" className="flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-md hover:bg-accent hover:text-accent-foreground transition-colors">
+                                        Recorrentes
+                                    </Link>
+                                    <Link href="/orcamentos" className="flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-md hover:bg-accent hover:text-accent-foreground transition-colors">
+                                        Orçamentos
+                                    </Link>
+                                    <Link href="/patrimonio" className="flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-md hover:bg-accent hover:text-accent-foreground transition-colors">
+                                        Patrimônio
+                                    </Link>
+                                    <Link href="/configuracoes" className="flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-md hover:bg-accent hover:text-accent-foreground transition-colors">
+                                        Família
+                                    </Link>
+                                    
+                                    <div className="mt-auto pt-8">
                                         <form action={signout} className="w-full">
-                                            <Button variant="ghost" className="w-full justify-start text-red-500 hover:text-red-600 hover:bg-red-100/10">
+                                            <Button variant="outline" className="w-full justify-center text-red-500 hover:text-red-600 hover:bg-red-500/10 border-red-500/20">
                                                 Sair da Conta
                                             </Button>
                                         </form>
