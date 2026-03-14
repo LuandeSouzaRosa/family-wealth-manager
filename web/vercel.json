@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/processar-recorrencias",
+      "schedule": "0 10 * * *"
+    }
+  ]
+}

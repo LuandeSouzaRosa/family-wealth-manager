@@ -1,0 +1,24 @@
+{
+  "status": "commited",
+  "type": "frontend",
+  "scope": "codebase",
+  "localEndpoint": "http://localhost:3000",
+  "loginUser": "luan.teste@test.com",
+  "loginPassword": "123456",
+  "executionArgs": {
+    "projectName": "family_wealth_manager",
+    "projectPath": "c:\\projetos\\family_wealth_manager\\web",
+    "testIds": [
+      "TC020",
+      "TC021",
+      "TC001"
+    ],
+    "additionalInstruction": "The app has been updated with a new Frequency field in Recurring Expenses (default: Mensal).\nPlease run tests TC020, TC021, TC001 to verify stability.\nAlso, note that Dashboard now has a Skeleton Loader, so waiting for data-testid=\"dashboard-content\" is mandatory.",
+    "serverMode": "development",
+    "envs": {
+      "API_KEY": "sk-user-z6Fwr2H5OWulZdQiyF07B0VTHtyk_PubgbeTLlLX5PFUnQpAyCjLDF4YS1WbEsnAdo_0P5hu2CoUNnWFaoGt_XWhVzKgKwdiluJOwkQxxHS9AkpAFUaJCqtfTmqA8cB38-Y"
+    }
+  },
+  "serverPort": 65406,
+  "proxy": "http://34a6d0da-f5d5-4f53-965d-13a8017e6963:y9YKGAIcEzkYu63KJExT9Lo71J5d99pM@tun.testsprite.com:8080"
+}

@@ -1,42 +1,122 @@
 version: "2"
 type: frontend
 tech_stack:
-  - Python
-  - Streamlit
+  - Next.js
+  - React
+  - Tailwind CSS
+  - Shadcn UI
   - Supabase
-  - Altair
-  - Pandas
+  - Framer Motion
+  - Zod
+  - React Hook Form
 routes:
-  - path: /
-    file: app_homolog.py
-    auth_required: true
-    description: Streamlit single-page application with sidebar navigation
-features:
-  - name: User Login
-    description: User authentication using Supabase email/password
-    files:
-      - core/auth.py
-      - app_homolog.py
-    entry_route: /
-    user_interactions:
-      - Enter email
-      - Enter password
-      - Click Login
-    api_calls:
-      - method: POST
-        endpoint: Supabase Auth
+  - path: /login
+    file: web/src/app/login/page.tsx
     auth_required: false
-  - name: Dashboard
-    description: View financial summary and charts
+    description: User login and registration page
+  - path: /
+    file: web/src/app/page.tsx
+    auth_required: true
+    description: Main dashboard with financial overview and KPIs
+  - path: /transacoes
+    file: web/src/app/transacoes/page.tsx
+    auth_required: true
+    description: Transaction history with filtering and deletion
+  - path: /orcamentos
+    file: web/src/app/orcamentos/page.tsx
+    auth_required: true
+    description: Budget management and spending limits
+  - path: /recorrentes
+    file: web/src/app/recorrentes/page.tsx
+    auth_required: true
+    description: Recurring expenses management
+  - path: /patrimonio
+    file: web/src/app/patrimonio/page.tsx
+    auth_required: true
+    description: Net worth tracking (Assets vs Liabilities)
+  - path: /conciliacao
+    file: web/src/app/conciliacao/page.tsx
+    auth_required: true
+    description: Bank reconciliation via CSV import
+features:
+  - name: User Authentication
+    description: Secure login using Supabase Auth
     files:
-      - app_homolog.py
-      - core/views.py
+      - web/src/app/login/page.tsx
+      - web/src/app/login/actions.ts
+    entry_route: /login
+    user_interactions:
+      - Fill email input
+      - Fill password input
+      - Click Login or Signup button
+    auth_required: false
+  - name: Dashboard Overview
+    description: View financial KPIs and recent activity
+    files:
+      - web/src/app/page.tsx
+      - web/src/app/dashboard-client.tsx
     entry_route: /
     user_interactions:
-      - Select month/year
-      - View total income, expense, balance
-    api_calls:
-      - method: GET
-        endpoint: Supabase transactions table
+      - View total balance
+      - View income/expense breakdown
+      - View recent transactions list
+    auth_required: true
+  - name: Transaction Management
+    description: Add, view, and delete financial transactions
+    files:
+      - web/src/app/transacoes/page.tsx
+      - web/src/components/add-transaction-dialog.tsx
+    entry_route: /transacoes
+    user_interactions:
+      - Open "Nova Transação" dialog
+      - Fill transaction details (description, value, category, date)
+      - Select transaction type (Income/Expense)
+      - Submit form
+      - Delete transaction from list
+    auth_required: true
+  - name: Recurring Expenses
+    description: Manage monthly recurring bills
+    files:
+      - web/src/app/recorrentes/page.tsx
+      - web/src/components/add-recorrente-dialog.tsx
+    entry_route: /recorrentes
+    user_interactions:
+      - Add new recurring expense
+      - Toggle active status
+      - Delete recurring expense
+    auth_required: true
+  - name: Budget Tracking
+    description: Set and monitor monthly budgets per category
+    files:
+      - web/src/app/orcamentos/page.tsx
+      - web/src/components/add-orcamento-dialog.tsx
+    entry_route: /orcamentos
+    user_interactions:
+      - Add new budget limit
+      - View progress bars for spending vs limit
+      - Delete budget
+    auth_required: true
+  - name: Net Worth Tracking
+    description: Track assets and liabilities
+    files:
+      - web/src/app/patrimonio/page.tsx
+      - web/src/components/add-patrimonio-dialog.tsx
+    entry_route: /patrimonio
+    user_interactions:
+      - Add new asset or liability
+      - View total net worth calculation
+      - Delete item
+    auth_required: true
+  - name: Bank Reconciliation
+    description: Import transactions from CSV files
+    files:
+      - web/src/app/conciliacao/page.tsx
+      - web/src/components/csv-importer.tsx
+    entry_route: /conciliacao
+    user_interactions:
+      - Upload CSV file
+      - Map columns (Date, Description, Value)
+      - Review parsed data
+      - Confirm import
     auth_required: true
 known_limitations: []

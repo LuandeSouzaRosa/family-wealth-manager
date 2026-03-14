@@ -2,19 +2,19 @@
   "status": "commited",
   "type": "frontend",
   "scope": "codebase",
-  "localEndpoint": "http://localhost:8501",
-  "loginUser": "luan",
-  "loginPassword": "luan",
+  "localEndpoint": "http://localhost:3001",
+  "loginUser": "luan.teste@test.com",
+  "loginPassword": "123456",
   "executionArgs": {
     "projectName": "family_wealth_manager",
-    "projectPath": "c:\\Users\\luan.rosa\\.gemini\\antigravity\\scratch\\family_wealth_manager",
+    "projectPath": "c:\\projetos\\family_wealth_manager",
     "testIds": [],
-    "additionalInstruction": "",
+    "additionalInstruction": "Ensure coverage for the new Bank Reconciliation (CSV Import) and Recurring Expenses features. Also verify the Dashboard and Transaction flows.",
     "serverMode": "development",
     "envs": {
-      "API_KEY": "sk-user-yDFOvAjq3Ed7rfgrxfhEU7Nr5i288l9tz-dM-zZWePVBzIxoc_yb91D4olxTKck7WlMdRcPFOyl8dcjJwxZ3QoJKho9N-HbAV4WCSI29QUtghQHPmwxhXu8GcP2Qfy-3frc"
+      "API_KEY": "sk-user-z6Fwr2H5OWulZdQiyF07B0VTHtyk_PubgbeTLlLX5PFUnQpAyCjLDF4YS1WbEsnAdo_0P5hu2CoUNnWFaoGt_XWhVzKgKwdiluJOwkQxxHS9AkpAFUaJCqtfTmqA8cB38-Y"
     }
   },
-  "serverPort": 62369,
-  "proxy": "http://9726459a-8f40-41f7-aea3-9cf225a84663:VRypG5EW8DeGvlTkIeAaAoOYiOHvky3z@tun.testsprite.com:8080"
+  "serverPort": 64993,
+  "proxy": "http://71b5e848-cbfc-4335-b071-0d3c563c701d:cwNPLbf8DkXFijmdYONezsGCh0UJCdLT@tun.testsprite.com:8080"
 }

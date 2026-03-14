@@ -1,57 +1,58 @@
-# PRD - Family Wealth Manager (v4.0)
+# PRD - Family Wealth Manager (v6.0 - Web/Next.js)
 
 ## 1. Visão Geral
-O **Family Wealth Manager** é um ecossistema de gestão financeira pessoal e familiar desenvolvido em Python com Streamlit. Seu objetivo principal é fornecer uma visão clara, analítica e acionável da saúde financeira, baseando-se em metodologias consagradas como a regra 50/30/20 e o cálculo de autonomia financeira.
+O **Family Wealth Manager** é um ecossistema completo de gestão financeira pessoal e familiar. Nesta versão (v6.0 - pós Fases 12 e 13), a aplicação concluiu sua migração de Python/Streamlit para uma arquitetura web moderna utilizando **Next.js** e **Supabase**. O objetivo permanece o mesmo: fornecer uma visão clara, analítica e acionável da saúde financeira, baseada em metodologias como a regra 50/30/20, mas agora com uma experiência de usuário imersiva, rápida e escalável baseada em web.
 
 ## 2. Objetivos Principais
-- **Centralização**: Consolidar gastos, rendas e patrimônio em um único local.
-- **Análise Inteligente**: Ir além de simples planilhas, oferecendo scores financeiros, alertas de orçamento e projeções de fechamento de mês.
-- **Flexibilidade Familiar**: Permitir visões individuais ('Luan', 'Luana') e a visão consolidada ('Casal').
+- **Centralização Escalável**: Armazenamento baseado em banco de dados relacional (PostgreSQL via Supabase), garantindo integridade e velocidade.
+- **Segurança e Autenticação**: Autenticação baseada em sessão (Supabase Auth) permitindo controles de acesso granulares (RLS - Row Level Security) para segurança e isolamento.
+- **Experiência de Usuário Moderna**: Interface reativa e elegante desenvolvida com React, Tailwind CSS 4, Shadcn UI e Framer Motion.
+- **Motor Analítico no Banco de Dados**: Cálculos complexos transferidos para Views e Functions no PostgreSQL, otimizando o carregamento dos dashboards.
 
 ## 3. Personas e Público-Alvo
-- **Usuário Individual**: Focado em controlar seus gastos pessoais e investimentos.
-- **Família (Casal)**: Focada em entender o impacto dos gastos conjuntos na renda total e planejar o patrimônio compartilhado.
+- **Usuário Individual**: Focado em controlar rigorosamente seus gastos com uma ferramenta que carrega instantaneamente no celular ou computador.
+- **Família (Casais)**: Usuários que compartilham finanças e desejam visões de gastos unificadas de forma transparente, com perfis autenticados.
 
-## 4. Requisitos Funcionais
+## 4. Requisitos Funcionais (Fases Concluídas)
 
-### 4.1 Dashboard e Métricas Core
-- **Escore Financeiro (0-100)**: Avaliação da saúde financeira baseada em 4 pilares: Aderência à Regra 50/30/20, Taxa de Aporte, Autonomia e Saldo Mensal.
-- **Regra 50/30/20**: Monitoramento automático de despesas em Necessidades (Meta: 50%), Desejos (Meta: 30%) e Investimentos (Meta: 20%).
-- **Autonomia Financeira**: Cálculo de quantos meses de vida o patrimônio atual cobre, baseado na média de gastos dos últimos 3 meses.
-- **Saúde Financeira**: Classificação qualitativa (Excelente, Saudável, Atenção, Crítico).
+### 4.1 Autenticação e Perfis
+- **Login e Registro Seguro**: Integração completa com Supabase Auth (Magic Links ou Email/Senha).
+- **Isolamento de Dados**: Utilização de Row Level Security (RLS) para assegurar que os usuários acessem somente os próprios dados.
 
-### 4.2 Gestão de Movimentações
-- **Lançamentos Manuais**: Registro de entradas (renda) e saídas (lifestyle/investimentos).
-- **Transações Recorrentes (Fixos)**: Sistema para detectar e gerar automaticamente contas fixas mensais.
-- **Categorização Inteligente**: Separação entre Gastos Essenciais, Estilo de Vida e Investimentos.
+### 4.2 Dashboard Interativo e Métricas Core
+- **Indicadores de Desempenho (KPIs)**: Cards em tempo real exibindo Saldo Restante, Total de Receitas, Despesas de Lifestyle e Total Investido.
+- **Gráficos Dinâmicos**: Integração do Recharts para representar o fluxo de despesas (Pie Chart) e evolução.
+- **Transações Recentes**: Feed de transações diretamente na tela inicial com design limpo.
 
-### 4.3 Gestão de Patrimônio
-- **Saldos Iniciais**: Registro de saldos em contas e corretoras.
-- **Bens Duráveis**: Controle de ativos fixos que compõem o patrimônio total.
+### 4.3 Gestão de Movimentações (Dashboard e Histórico)
+- **Painel de Inserção**: Modal centralizado e dinâmico (`AddTransactionDialog`) para entrada rápida de receitas, despesas e investimentos.
+- **Histórico Completo (Fase 12+)**: Aba `/transacoes` com filtros de mês/ano, resumo do período e função de deleção de lançamentos.
+- **Custos Fixos / Recorrentes**: Gerenciamento de despesas fixas mensais na rota `/recorrentes`, com ativação/desativação (toggle) e deleção.
+- **Categorização Intuitiva**: Suporte a tags e separação rígida de natureza (`Entrada` versus `Saída`), Lifestyle vs Investimentos.
 
-### 4.4 Inteligência e Alertas
-- **Projeção de Fim de Mês**: Cálculo linear baseado no consumo atual para prever se o mês fechará no positivo.
-- **Alertas de Budget**: Notificações automáticas quando categorias de orçamento ultrapassam 80% ou 100% do limite.
-- **Insights Contextuais**: Destaque para o maior impacto de gasto no mês e variação percentual em relação ao mês anterior (Deltas).
+### 4.4 Orçamentos e Monitoramento
+- **Gerenciamento de Budgets**: Limites fixos customizáveis (`orcamentos`) por categoria na rota `/orcamentos`.
+- **Status em Tempo Real**: Barras de progresso animadas combinando consumo atual vs orçado.
 
-## 5. Requisitos Técnicos
+### 4.5 Gestão Patrimonial
+- **Bens e Valores Acumulados**: Gestão de patrimônio via rota `/patrimonio` para consolidação do net-worth (Ativos e Passivos).
 
-### 5.1 Tech Stack
-- **Linguagem**: Python 3.x
-- **Frontend/UI**: Streamlit
-- **Processamento de Dados**: Pandas (Motor Analítico)
-- **Armazenamento**:
-    - Suporte a **Google Sheets** (via API) para facilidade de edição externa.
-    - Suporte a **Supabase** para persistência escalável e relacional.
+## 5. Requisitos Técnicos e Arquitetura
 
-### 5.2 Arquitetura (Modularizada)
-- `core/engine.py`: Funções puras para cálculos financeiros e métricas.
-- `core/models.py`: Dataclasses que definem as estruturas de dados (ex: `MonthMetrics`).
-- `core/views.py`: Lógica de renderização de componentes visuais do Streamlit.
-- `core/repository.py`: Interface para abstração da camada de dados.
+### 5.1 Tech Stack (Fases 10 a 13 - Web Migration Completa)
+- **Frontend/Framework**: Next.js 15 (App Router, React Server Components via SSR).
+- **Estilização/UI**: Tailwind CSS 4, Shadcn UI, Framer Motion para animações e ícones Lucide.
+- **Backend/BaaS**: Supabase (PostgreSQL 15+, Auth, RLS).
+- **Linguagem**: TypeScript rigoroso incluindo Zod para esquemas de validação.
 
-## 6. Futuros Desenvolvimentos (Roadmap)
-- [ ] Integração com Open Banking (via Pluggy ou similar).
-- [ ] Dashboard de Investimentos detalhado com rentabilidade de ativos.
-- [ ] Aplicativo Mobile nativo ou PWA avançado.
-- [ ] IA para sugestão de economia baseada no histórico de consumo.
+### 5.2 Arquitetura de Software
+- **`web/src/app`**: Estrutura orientada a rotas (`/login`, `/`, `/transacoes`, `/orcamentos`, `/recorrentes`, `/patrimonio`).
+- **`web/src/components`**: Componentes reutilizáveis (gráficos, diálogos, métricas).
+- **`web/src/actions`**: Server Actions do Next.js lidando com mutações e interações com Supabase no servidor.
+- **`web/supabase`**: Armazena as views SQL otimizadas (`vw_mes_atual_metricas`, etc.).
+
+## 6. Futuros Desenvolvimentos (Roadmap Atualizado)
+- [ ] Construir a aba de gerenciamento detalhado das Visões 50/30/20 e Autonomia Financeira.
+- [ ] Refinar as políticas de compartilhamento para o módulo 'Casal' com cross-reading seguro.
+- [ ] Otimização para Transformação em PWA (Progressive Web App) garantindo cache offline básico.
+- [ ] Implementação total da Suíte de Testes (Em andamento: TestSprite / E2E).

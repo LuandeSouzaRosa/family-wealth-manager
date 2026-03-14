@@ -1,0 +1,13 @@
+
+⢰⡾⢶⣤⡀⠀⠀⣀⣴⠾⢶⡂⠀⠀⢠⣤⣤⣤⣤⣤⠄⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⡀⠀⢀⣠⣤⣤⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢠⣤⠀⢀⡀⠀⠀⠀⠀⠀⠀
+⢽⡃⠀⢈⣛⡷⣾⣙⠁⠀⢼⡏⠀⠀⠈⠈⢸⡿⠁⢡⣵⢴⣤⡄⢀⡴⠴⣤⡄⣦⣿⣷⡄⢾⣏⣀⡈⠛⠣⣦⣄⣴⣴⣤⡀⣴⣄⣤⡦⣰⡵⢰⣽⣿⡄⢀⣴⡴⣤⡄
+⢹⣇⣶⠟⠋⠁⠈⠛⠷⢆⣘⠃⠀⠀⠀⠀⢽⡇⢠⣿⢦⢦⠾⡗⠹⢿⣶⣬⡁⢨⣿⠀⠀⡈⠙⠛⠻⣿⡄⣺⡏⠀⠀⢽⡇⢸⣿⠀⠀⣻⡇⠀⣿⠅⢠⣿⢧⠦⡾⠿
+⠀⠉⠲⢶⣤⣀⣄⣴⠾⠛⠁⠀⠀⠀⠀⠠⢿⠃⠈⠿⡦⡦⠶⠂⠷⡦⡦⠿⠁⠼⢷⢴⠘⠿⡶⡴⡴⠟⠀⣾⡿⢦⠾⠟⠁⢸⠟⠀⠀⡿⠃⠐⡿⢵⠈⠿⡦⡦⠶⠃
+⠀⠀⠀⠀⠈⠉⠉⠈⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢐⣿⠀⠀⠀⠀⠀⠀⠀⠀
+
+Starting test execution...
+[31mTest execution failed:[0m Error: Tests are running. Please wait for it to complete or remove the lock file:  c:\Users\luan.rosa\.gemini\antigravity\scratch\family_wealth_manager\web\testsprite_tests\tmp\execution.lock
+    at file:///C:/Users/luan.rosa/AppData/Local/npm-cache/_npx/8ddf6bea01b2519d/node_modules/@testsprite/testsprite-mcp/dist/index.js:135765:23
+    at Command.<anonymous> (file:///C:/Users/luan.rosa/AppData/Local/npm-cache/_npx/8ddf6bea01b2519d/node_modules/@testsprite/testsprite-mcp/dist/index.js:141075:15)
+    at async Command.parseAsync (file:///C:/Users/luan.rosa/AppData/Local/npm-cache/_npx/8ddf6bea01b2519d/node_modules/@testsprite/testsprite-mcp/dist/index.js:139335:6)
+    at async main (file:///C:/Users/luan.rosa/AppData/Local/npm-cache/_npx/8ddf6bea01b2519d/node_modules/@testsprite/testsprite-mcp/dist/index.js:141279:9)

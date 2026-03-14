@@ -1,0 +1,158 @@
+version: "2"
+type: frontend
+tech_stack:
+  - language: TypeScript
+  - framework: Next.js (App Router)
+  - ui_library: Shadcn/UI (Tailwind CSS)
+  - other: Supabase, Zod, React Hook Form, Recharts, Framer Motion
+routes:
+  - path: /login
+    file: src/app/login/page.tsx
+    auth_required: false
+    description: User login and signup page
+  - path: /
+    file: src/app/page.tsx
+    auth_required: true
+    description: Dashboard with KPIs, recent transactions, and expense analysis
+  - path: /transacoes
+    file: src/app/transacoes/page.tsx
+    auth_required: true
+    description: List and management of all financial transactions
+  - path: /recorrentes
+    file: src/app/recorrentes/page.tsx
+    auth_required: true
+    description: Management of recurring expenses and subscriptions
+  - path: /orcamentos
+    file: src/app/orcamentos/page.tsx
+    auth_required: true
+    description: Budget planning and monitoring per category
+  - path: /patrimonio
+    file: src/app/patrimonio/page.tsx
+    auth_required: true
+    description: Net worth tracking (Assets vs Liabilities)
+features:
+  - name: Authentication
+    description: User authentication using Supabase Auth
+    files:
+      - src/app/login/page.tsx
+      - src/app/login/actions.ts
+    entry_route: /login
+    user_interactions:
+      - Fill email and password
+      - Click "Entrar na Conta" to login
+      - Click "Criar Conta" to register
+      - View error messages for invalid credentials
+    api_calls:
+      - method: POST
+        endpoint: Supabase Auth (signInWithPassword / signUp)
+    auth_required: false
+  - name: Dashboard Overview
+    description: Comprehensive view of financial health including balance, income, expenses, and recent activity
+    files:
+      - src/app/page.tsx
+      - src/app/dashboard-client.tsx
+      - src/actions/finance.ts
+    entry_route: /
+    user_interactions:
+      - View "Capital Disponível" (Balance)
+      - View "Entradas Totais" (Income)
+      - View "Saídas & Consumo" (Expenses)
+      - View Expense Pie Chart by category
+      - View Recent Transactions list
+      - Click "Nova Transação" to open add dialog
+    api_calls:
+      - method: SERVER_ACTION
+        endpoint: getDashboardMetrics
+      - method: SERVER_ACTION
+        endpoint: getRecentTransactions
+      - method: SERVER_ACTION
+        endpoint: getOrcamentoStatus
+    auth_required: true
+  - name: Transaction Management
+    description: Create, read, update, and delete financial transactions
+    files:
+      - src/app/transacoes/page.tsx
+      - src/actions/finance.ts
+      - src/components/add-transaction-dialog.tsx
+    entry_route: /transacoes
+    user_interactions:
+      - List transactions with filtering (month/year - implied)
+      - Add new transaction (Description, Value, Category, Type, Date, Responsible)
+      - Delete transaction
+      - Update transaction details
+    api_calls:
+      - method: SERVER_ACTION
+        endpoint: createTransaction
+      - method: SERVER_ACTION
+        endpoint: deleteTransaction
+      - method: SERVER_ACTION
+        endpoint: updateTransaction
+      - method: SERVER_ACTION
+        endpoint: getTransactions
+    auth_required: true
+  - name: Recurring Expenses
+    description: Manage recurring bills and subscriptions
+    files:
+      - src/app/recorrentes/page.tsx
+      - src/actions/finance.ts
+    entry_route: /recorrentes
+    user_interactions:
+      - List recurring items
+      - Add new recurring expense
+      - Toggle active status
+      - Delete recurring expense
+    api_calls:
+      - method: SERVER_ACTION
+        endpoint: createRecorrente
+      - method: SERVER_ACTION
+        endpoint: toggleRecorrente
+      - method: SERVER_ACTION
+        endpoint: deleteRecorrente
+      - method: SERVER_ACTION
+        endpoint: getRecorrentes
+    auth_required: true
+  - name: Budgeting
+    description: Set and monitor monthly spending limits per category
+    files:
+      - src/app/orcamentos/page.tsx
+      - src/actions/finance.ts
+    entry_route: /orcamentos
+    user_interactions:
+      - View budget status vs actual spending
+      - Create new budget limit
+      - Delete budget limit
+    api_calls:
+      - method: SERVER_ACTION
+        endpoint: createOrcamento
+      - method: SERVER_ACTION
+        endpoint: deleteOrcamento
+      - method: SERVER_ACTION
+        endpoint: getOrcamentos
+      - method: SERVER_ACTION
+        endpoint: getOrcamentoStatus
+    auth_required: true
+  - name: Net Worth Tracking
+    description: Track assets and liabilities to calculate net worth
+    files:
+      - src/app/patrimonio/page.tsx
+      - src/actions/finance.ts
+    entry_route: /patrimonio
+    user_interactions:
+      - View list of assets and liabilities
+      - Add new item (Item, Value, Type: Asset/Passive, Category)
+      - Delete item
+    api_calls:
+      - method: SERVER_ACTION
+        endpoint: createPatrimonio
+      - method: SERVER_ACTION
+        endpoint: deletePatrimonio
+      - method: SERVER_ACTION
+        endpoint: getPatrimonio
+    auth_required: true
+known_limitations:
+  - issue: Edit functionality missing for Budgets and Net Worth items
+    location: src/actions/finance.ts
+    impact: Users must delete and recreate items to correct mistakes
+  - issue: Dashboard relies on database views
+    location: src/actions/finance.ts
+    impact: Requires specific SQL views (vw_mes_atual_metricas, vw_orcamento_status) to exist in Supabase
