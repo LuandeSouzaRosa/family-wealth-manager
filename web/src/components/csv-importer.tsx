@@ -57,7 +57,7 @@ export function CsvImporter() {
           valor: parseMoney(row['valor'] || row['Valor'] || row['value'] || "0"),
           categoria: "Outros",
           responsavel: "Casal",
-          tipo: parseMoney(row['valor'] || row['Valor'] || "0") < 0 ? "Saída" : "Entrada"
+          tipo: parseMoney(row['valor'] || row['Valor'] || row['value'] || "0") < 0 ? "Saída" : "Entrada"
         }))
         
         const cleanData = normalized.map(item => {
