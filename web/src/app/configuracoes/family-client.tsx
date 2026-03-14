@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Users, Copy, LogOut, ShieldCheck, UserPlus } from "lucide-react"
 import { joinFamily, createNewFamily } from "@/actions/family"
-import { toast } from "sonner" // Assumindo que temos sonner ou similar, se não, usar alert simples
+import { toast } from "sonner"
 
 interface FamilyClientProps {
   familyData: {
