@@ -14,8 +14,13 @@ const nextConfig: NextConfig = {
   experimental: {
     // Força o build a continuar mesmo com erros de worker/memória
     workerThreads: false,
-    cpus: 1
-  }
+    cpus: 1,
+    turbo: {
+       // Silencia o erro de Turbopack vs Webpack
+    }
+  },
+  // Força o uso explícito de Webpack se necessário, ou Turbopack vazio
+  turbopack: {} 
 };
 
 export default nextConfig;
