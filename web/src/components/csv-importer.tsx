@@ -18,6 +18,21 @@ const CATEGORIAS = [
 
 const RESPONSAVEIS = ["Casal", "Luan", "Luana"]
 
+const parseMoney = (val: string) => {
+  if (typeof val === 'number') return val;
+  return parseFloat(String(val).replace('.', '').replace(',', '.'));
+}
+
+const parseDate = (val: string) => {
+  if (!val) return new Date().toISOString();
+  // Formato Nubank DD/MM/YYYY
+  const parts = val.split('/');
+  if (parts.length === 3) {
+    return new Date(`${parts[2]}-${parts[1]}-${parts[0]}`).toISOString();
+  }
+  return new Date(val).toISOString();
+}
+
 export function CsvImporter() {
   const [data, setData] = useState<any[]>([])
   const [fileName, setFileName] = useState<string>("")
@@ -37,12 +52,12 @@ export function CsvImporter() {
       complete: (results) => {
         const normalized = results.data.map((row: any, index) => ({
           id: index,
-          data: row['data'] || row['Data'] || row['date'] || new Date().toISOString(),
+          data: parseDate(row['data'] || row['Data'] || row['date']),
           descricao: row['descricao'] || row['Descrição'] || row['description'] || "Sem descrição",
-          valor: parseFloat((row['valor'] || row['Valor'] || row['value'] || "0").replace(',', '.')),
+          valor: parseMoney(row['valor'] || row['Valor'] || row['value'] || "0"),
           categoria: "Outros",
           responsavel: "Casal",
-          tipo: parseFloat((row['valor'] || row['Valor'] || "0").replace(',', '.')) < 0 ? "Saída" : "Entrada"
+          tipo: parseMoney(row['valor'] || row['Valor'] || "0") < 0 ? "Saída" : "Entrada"
         }))
         
         const cleanData = normalized.map(item => {
