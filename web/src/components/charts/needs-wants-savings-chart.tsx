@@ -1,7 +1,6 @@
 "use client"
 
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts"
-import { Progress } from "@/components/ui/progress"
 import { cn } from "@/lib/utils"
 
 interface Metric503020 {
