@@ -57,7 +57,7 @@ export async function joinFamily(formData: FormData) {
   
   const parsed = JoinFamilySchema.safeParse({ familyId });
   if (!parsed.success) {
-    return { error: parsed.error.errors[0].message };
+    return { error: parsed.error.issues[0].message };
   }
 
   // Verificar se a família existe
