@@ -104,6 +104,39 @@ export function CsvImporter() {
   const handleImport = async () => {
     setIsUploading(true)
     const payload = data.map(({ id, ...rest }) => rest)
+    
+    // Adicionar transação de Saldo Inicial se o usuário informou um valor
+    const saldoInicial = (document.getElementById('saldo-inicial') as HTMLInputElement)?.value
+    if (saldoInicial) {
+        const saldoAtual = parseFloat(saldoInicial.replace(/\./g, '').replace(',', '.'))
+        
+        // Calcular quanto foi o movimento do CSV
+        const totalEntradas = payload.filter(t => t.tipo === 'Entrada').reduce((acc, t) => acc + t.valor, 0)
+        const totalSaidas = payload.filter(t => t.tipo === 'Saída').reduce((acc, t) => acc + t.valor, 0)
+        const resultadoCSV = totalEntradas - totalSaidas
+        
+        // Saldo Inicial Real = Saldo Hoje (informado) - Resultado do CSV
+        // Ex: Hoje tenho 210. CSV deu +189. Então comecei com 21.
+        const saldoAnterior = saldoAtual - resultadoCSV
+        
+        // Adicionar transação de ajuste no dia anterior ao início do CSV
+        if (saldoAnterior !== 0) {
+            // Pegar a data mais antiga do CSV e subtrair 1 dia
+            const datas = payload.map(t => new Date(t.data).getTime())
+            const primeiraData = new Date(Math.min(...datas))
+            primeiraData.setDate(primeiraData.getDate() - 1)
+            
+            payload.push({
+                data: primeiraData.toISOString(),
+                descricao: "Saldo Inicial (Ajuste Automático)",
+                valor: Math.abs(saldoAnterior),
+                categoria: "Outros", // Ou criar uma categoria "Saldo Inicial"
+                responsavel: "Casal",
+                tipo: saldoAnterior > 0 ? "Entrada" : "Saída"
+            })
+        }
+    }
+
     const result = await createTransactionsBatch(payload)
     setIsUploading(false)
 
@@ -151,6 +184,25 @@ export function CsvImporter() {
             <Button variant="ghost" size="sm" onClick={() => setData([])} className="text-destructive hover:text-destructive hover:bg-destructive/10">
               Cancelar
             </Button>
+          </div>
+
+          <div className="flex items-center justify-between gap-4 bg-muted/30 p-4 rounded-lg border border-border/50">
+            <div className="flex flex-col gap-1">
+                <label htmlFor="saldo-inicial" className="text-sm font-medium text-muted-foreground">
+                    Saldo Atual no Banco (Opcional)
+                </label>
+                <span className="text-xs text-muted-foreground/70">
+                    Informe quanto tem na conta HOJE para o sistema calcular o saldo inicial automaticamente.
+                </span>
+            </div>
+            <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">R$</span>
+                <Input 
+                    id="saldo-inicial" 
+                    placeholder="0,00" 
+                    className="pl-9 w-[150px] bg-background border-primary/20 focus:border-primary" 
+                />
+            </div>
           </div>
 
           <div className="rounded-md border bg-card overflow-hidden">
