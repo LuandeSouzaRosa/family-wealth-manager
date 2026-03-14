@@ -1,6 +1,5 @@
-import type { NextConfig } from "next";
-
-const nextConfig: NextConfig = {
+/** @type {import('next').NextConfig} */
+const nextConfig = {
   /* config options here */
   reactStrictMode: false, // Desabilita o modo estrito para evitar double-render e alguns erros
   productionBrowserSourceMaps: false,
