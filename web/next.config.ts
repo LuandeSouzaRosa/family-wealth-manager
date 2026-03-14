@@ -11,16 +11,11 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  // Desabilitar turbopack options que podem estar conflitando
   experimental: {
-    // Força o build a continuar mesmo com erros de worker/memória
-    workerThreads: false,
-    cpus: 1,
-    turbo: {
-       // Silencia o erro de Turbopack vs Webpack
-    }
-  },
-  // Força o uso explícito de Webpack se necessário, ou Turbopack vazio
-  turbopack: {} 
+     workerThreads: false,
+     cpus: 1
+  }
 };
 
 export default nextConfig;
