@@ -8,6 +8,15 @@ import { createClient } from '@/utils/supabase/server'
 import { Button } from '@/components/ui/button'
 import { AmbientBackground } from '@/components/ambient-background'
 import Link from 'next/link'
+import { Menu } from 'lucide-react'
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet"
+import { signout } from '@/app/login/actions'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -58,7 +67,7 @@ export default async function RootLayout({
                     <span className="font-semibold tracking-tight text-lg">L&L Wealth</span>
                   </div>
                   
-                  {/* Central Navigation */}
+                  {/* Central Navigation (Desktop) */}
                   <nav className="hidden md:flex items-center gap-6 text-sm font-medium">
                     <Link href="/" className="transition-colors hover:text-foreground/80 text-foreground/60">Dashboard</Link>
                     <Link href="/transacoes" className="transition-colors hover:text-foreground/80 text-foreground/60">Extrato</Link>
@@ -71,7 +80,40 @@ export default async function RootLayout({
 
                   <div className="ml-auto flex items-center space-x-4">
                     <ModeToggle />
-                    <form action={signout}>
+                    
+                    {/* Mobile Menu */}
+                    <div className="md:hidden">
+                        <Sheet>
+                            <SheetTrigger asChild>
+                                <Button variant="ghost" size="icon">
+                                    <Menu className="h-6 w-6" />
+                                </Button>
+                            </SheetTrigger>
+                            <SheetContent side="right" className="w-[300px] sm:w-[400px]">
+                                <SheetHeader>
+                                    <SheetTitle>L&L Wealth</SheetTitle>
+                                </SheetHeader>
+                                <nav className="flex flex-col gap-4 mt-8">
+                                    <Link href="/" className="text-lg font-medium hover:text-primary">Dashboard</Link>
+                                    <Link href="/transacoes" className="text-lg font-medium hover:text-primary">Extrato</Link>
+                                    <Link href="/conciliacao" className="text-lg font-medium hover:text-primary">Conciliação</Link>
+                                    <Link href="/recorrentes" className="text-lg font-medium hover:text-primary">Recorrentes</Link>
+                                    <Link href="/orcamentos" className="text-lg font-medium hover:text-primary">Orçamentos</Link>
+                                    <Link href="/patrimonio" className="text-lg font-medium hover:text-primary">Patrimônio</Link>
+                                    <Link href="/configuracoes" className="text-lg font-medium hover:text-primary">Família</Link>
+                                    <div className="mt-4 pt-4 border-t">
+                                        <form action={signout} className="w-full">
+                                            <Button variant="ghost" className="w-full justify-start text-red-500 hover:text-red-600 hover:bg-red-100/10">
+                                                Sair da Conta
+                                            </Button>
+                                        </form>
+                                    </div>
+                                </nav>
+                            </SheetContent>
+                        </Sheet>
+                    </div>
+
+                    <form action={signout} className="hidden md:block">
                       <Button variant="ghost" className="rounded-full text-sm font-medium px-6 hover:bg-secondary">
                         Sair da Conta
                       </Button>
