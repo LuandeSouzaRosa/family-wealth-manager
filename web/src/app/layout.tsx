@@ -99,41 +99,13 @@ export default async function RootLayout({
                                     </SheetTitle>
                                 </SheetHeader>
                                 <nav className="flex flex-col gap-2">
-                                    <SheetClose asChild>
-                                        <Link href="/" className="flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-md hover:bg-accent hover:text-accent-foreground transition-colors">
-                                            Dashboard
-                                        </Link>
-                                    </SheetClose>
-                                    <SheetClose asChild>
-                                        <Link href="/transacoes" className="flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-md hover:bg-accent hover:text-accent-foreground transition-colors">
-                                            Extrato
-                                        </Link>
-                                    </SheetClose>
-                                    <SheetClose asChild>
-                                        <Link href="/conciliacao" className="flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-md hover:bg-accent hover:text-accent-foreground transition-colors">
-                                            Conciliação
-                                        </Link>
-                                    </SheetClose>
-                                    <SheetClose asChild>
-                                        <Link href="/recorrentes" className="flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-md hover:bg-accent hover:text-accent-foreground transition-colors">
-                                            Recorrentes
-                                        </Link>
-                                    </SheetClose>
-                                    <SheetClose asChild>
-                                        <Link href="/orcamentos" className="flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-md hover:bg-accent hover:text-accent-foreground transition-colors">
-                                            Orçamentos
-                                        </Link>
-                                    </SheetClose>
-                                    <SheetClose asChild>
-                                        <Link href="/patrimonio" className="flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-md hover:bg-accent hover:text-accent-foreground transition-colors">
-                                            Patrimônio
-                                        </Link>
-                                    </SheetClose>
-                                    <SheetClose asChild>
-                                        <Link href="/configuracoes" className="flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-md hover:bg-accent hover:text-accent-foreground transition-colors">
-                                            Família
-                                        </Link>
-                                    </SheetClose>
+                                    <SheetClose render={<Link href="/" className="flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-md hover:bg-accent hover:text-accent-foreground transition-colors">Dashboard</Link>} />
+                                    <SheetClose render={<Link href="/transacoes" className="flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-md hover:bg-accent hover:text-accent-foreground transition-colors">Extrato</Link>} />
+                                    <SheetClose render={<Link href="/conciliacao" className="flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-md hover:bg-accent hover:text-accent-foreground transition-colors">Conciliação</Link>} />
+                                    <SheetClose render={<Link href="/recorrentes" className="flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-md hover:bg-accent hover:text-accent-foreground transition-colors">Recorrentes</Link>} />
+                                    <SheetClose render={<Link href="/orcamentos" className="flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-md hover:bg-accent hover:text-accent-foreground transition-colors">Orçamentos</Link>} />
+                                    <SheetClose render={<Link href="/patrimonio" className="flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-md hover:bg-accent hover:text-accent-foreground transition-colors">Patrimônio</Link>} />
+                                    <SheetClose render={<Link href="/configuracoes" className="flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-md hover:bg-accent hover:text-accent-foreground transition-colors">Família</Link>} />
                                     
                                     <div className="mt-auto pt-8">
                                         <form action={signout} className="w-full">
