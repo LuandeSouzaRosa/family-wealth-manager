@@ -83,11 +83,11 @@ export default async function RootLayout({
                     {/* Mobile Menu */}
                     <div className="md:hidden">
                         <Sheet>
-                            <SheetTrigger asChild>
+                            <SheetTrigger render={
                                 <Button variant="ghost" size="icon">
                                     <Menu className="h-6 w-6" />
                                 </Button>
-                            </SheetTrigger>
+                            } />
                             <SheetContent side="right" className="w-[300px] sm:w-[400px]">
                                 <SheetHeader>
                                     <SheetTitle>L&L Wealth</SheetTitle>
