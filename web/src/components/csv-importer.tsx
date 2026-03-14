@@ -20,7 +20,23 @@ const RESPONSAVEIS = ["Casal", "Luan", "Luana"]
 
 const parseMoney = (val: string) => {
   if (typeof val === 'number') return val;
-  return parseFloat(String(val).replace('.', '').replace(',', '.'));
+  // Exemplo Nubank: "16.99" ou "-16.99"
+  // Remove qualquer caractere que não seja número, ponto ou sinal de menos
+  let cleanStr = String(val).replace(/[^0-9.,-]/g, '');
+  
+  // Se não tem vírgula, mas tem ponto (ex: 16.99 do Nubank), é um número float válido no formato US
+  if (cleanStr.includes('.') && !cleanStr.includes(',')) {
+      return parseFloat(cleanStr);
+  }
+  
+  // Se tem vírgula, assumimos padrão brasileiro (ex: 1.200,50 ou 16,99)
+  // Removemos todos os pontos e trocamos a última vírgula por ponto
+  if (cleanStr.includes(',')) {
+      cleanStr = cleanStr.replace(/\./g, '').replace(',', '.');
+      return parseFloat(cleanStr);
+  }
+
+  return parseFloat(cleanStr) || 0;
 }
 
 const parseDate = (val: string) => {
