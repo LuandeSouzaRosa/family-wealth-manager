@@ -150,9 +150,17 @@ export async function getDashboardMetrics() {
 
   const metrics = metricsMonth || { renda: 0, despesas: 0, investido: 0 };
 
+  // 3. Calcular Saldo Comprometido em Metas
+  const { data: metas } = await supabase.from("metas").select("valor_atual");
+  const saldoComprometido = metas ? metas.reduce((acc, m) => acc + m.valor_atual, 0) : 0;
+  
+  const saldoLivre = saldoTotal - saldoComprometido;
+
   return {
     ...metrics,
-    saldoTotal // Override ou adiciona ao objeto retornado
+    saldoTotal,
+    saldoComprometido,
+    saldoLivre
   };
 }
 

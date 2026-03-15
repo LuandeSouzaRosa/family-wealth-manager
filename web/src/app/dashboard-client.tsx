@@ -31,6 +31,8 @@ interface DashboardClientProps {
     despesas: number
     investido: number
     saldoTotal?: number // Novo campo
+    saldoComprometido?: number // Novo campo
+    saldoLivre?: number // Novo campo
   }
   recentTx: any[]
   orcamentoStatus: any[]
@@ -210,12 +212,25 @@ export function DashboardClientShell({
                 <Wallet className="w-24 h-24 text-primary" />
               </div>
               <CardHeader className="pb-2">
-                <CardDescription className="text-sm font-semibold tracking-wider uppercase text-muted-foreground">Capital Disponível (Total)</CardDescription>
+                <CardDescription className="text-sm font-semibold tracking-wider uppercase text-muted-foreground">Capital Disponível</CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-4">
                 <div className="text-4xl md:text-5xl font-light tracking-tight tabular-nums bg-gradient-to-br from-foreground to-foreground/70 bg-clip-text text-transparent">
                   {formatCurrency(saldoAtual)}
                 </div>
+                {/* Breakdown de Saldo Livre vs Comprometido */}
+                {metrics.saldoComprometido !== undefined && metrics.saldoLivre !== undefined && (
+                    <div className="grid grid-cols-2 gap-4 pt-2 border-t border-border/40">
+                        <div className="space-y-1">
+                            <span className="text-xs text-muted-foreground uppercase tracking-wide">Livre para Uso</span>
+                            <p className="text-lg font-medium text-emerald-500">{formatCurrency(metrics.saldoLivre)}</p>
+                        </div>
+                        <div className="space-y-1">
+                            <span className="text-xs text-muted-foreground uppercase tracking-wide">Em Metas</span>
+                            <p className="text-lg font-medium text-blue-500">{formatCurrency(metrics.saldoComprometido)}</p>
+                        </div>
+                    </div>
+                )}
               </CardContent>
             </Card>
           </motion.div>
