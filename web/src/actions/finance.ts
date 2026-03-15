@@ -567,19 +567,37 @@ export async function createTransactionsBatch(transactions: any[]) {
 
   // Validar e formatar cada transação
   const validTransactions = transactions.map(t => {
-    const parsed = TransactionSchema.safeParse(t);
+    // Permite descrições mais longas para o Ajuste Automático
+    const schema = t.descricao.includes("Saldo Inicial") 
+        ? TransactionSchema.extend({ descricao: z.string() }) 
+        : TransactionSchema;
+
+    const parsed = schema.safeParse(t);
     if (!parsed.success) return null;
     return {
       ...parsed.data,
-      origem: "Importação",
+      origem: t.descricao.includes("Saldo Inicial") ? "Sistema" : "Importação",
       user_id: user.id
     };
-  }).filter(Boolean); // Remove inválidos
+  }).filter(Boolean);
 
   if (validTransactions.length === 0) {
     return { error: "Nenhuma transação válida encontrada." };
   }
 
+  // 1. Verificar se há um ajuste de saldo novo no lote
+  const novoAjuste = validTransactions.find(t => t.descricao.includes("Saldo Inicial Acumulado"));
+
+  if (novoAjuste) {
+      // 2. Apagar ajustes anteriores para evitar duplicação
+      await supabase
+          .from("transacoes")
+          .delete()
+          .ilike("descricao", "%Saldo Inicial Acumulado%")
+          .eq("user_id", user.id);
+  }
+
+  // 3. Inserir novas transações
   const { error } = await supabase
     .from("transacoes")
     .insert(validTransactions);
