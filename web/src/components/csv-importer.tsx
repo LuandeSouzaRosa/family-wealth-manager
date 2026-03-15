@@ -1,15 +1,16 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Papa from 'papaparse'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { createTransactionsBatch } from '@/actions/finance'
-import { Upload, Check, AlertCircle, Loader2, FileSpreadsheet } from 'lucide-react'
+import { createTransactionsBatch, getCategorizationRules, createCategorizationRule } from '@/actions/finance'
+import { Upload, Check, AlertCircle, Loader2, FileSpreadsheet, PlusCircle } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { cn } from '@/lib/utils'
+import { Checkbox } from "@/components/ui/checkbox"
 
 const CATEGORIAS = [
   "Alimentação", "Moradia", "Transporte", "Lazer", "Saúde", 
@@ -54,6 +55,19 @@ export function CsvImporter() {
   const [data, setData] = useState<any[]>([])
   const [fileName, setFileName] = useState<string>("")
   const [saldoInicialInfo, setSaldoInicialInfo] = useState<{ calculado: number, diferenca: number } | null>(null)
+  const [regras, setRegras] = useState<any[]>([])
+  const [novasRegras, setNovasRegras] = useState<Set<number>>(new Set()) // Índices das linhas que virarão regra
+
+  useEffect(() => {
+    // Carregar regras ao iniciar
+    getCategorizationRules().then(data => setRegras(data || []))
+  }, [])
+
+  const aplicarRegras = (descricao: string) => {
+    // Busca a primeira regra que bate com a descrição (case insensitive)
+    const regra = regras.find(r => descricao.toLowerCase().includes(r.texto_contem.toLowerCase()))
+    return regra ? regra.categoria_destino : "Outros"
+  }
 
   const calcularPreviaSaldo = (val: string) => {
     const saldoInformado = parseFloat(val.replace(/\./g, '').replace(',', '.'))
@@ -84,15 +98,18 @@ export function CsvImporter() {
       header: true,
       skipEmptyLines: true,
       complete: (results) => {
-        const normalized = results.data.map((row: any, index) => ({
-          id: index,
-          data: parseDate(row['data'] || row['Data'] || row['date']),
-          descricao: row['descricao'] || row['Descrição'] || row['description'] || "Sem descrição",
-          valor: parseMoney(row['valor'] || row['Valor'] || row['value'] || "0"),
-          categoria: "Outros",
-          responsavel: "Casal",
-          tipo: parseMoney(row['valor'] || row['Valor'] || row['value'] || "0") < 0 ? "Saída" : "Entrada"
-        }))
+        const normalized = results.data.map((row: any, index) => {
+          const desc = row['descricao'] || row['Descrição'] || row['description'] || "Sem descrição"
+          return {
+            id: index,
+            data: parseDate(row['data'] || row['Data'] || row['date']),
+            descricao: desc,
+            valor: parseMoney(row['valor'] || row['Valor'] || row['value'] || "0"),
+            categoria: aplicarRegras(desc),
+            responsavel: "Casal",
+            tipo: parseMoney(row['valor'] || row['Valor'] || row['value'] || "0") < 0 ? "Saída" : "Entrada"
+          }
+        })
         
         const cleanData = normalized.map(item => {
            let val = item.valor
@@ -153,6 +170,17 @@ export function CsvImporter() {
                 tipo: saldoAnterior > 0 ? "Entrada" : "Saída"
             })
         }
+    }
+
+    // Salvar novas regras de categorização
+    if (novasRegras.size > 0) {
+      const promises = Array.from(novasRegras).map(index => {
+        const item = data[index]
+        // Regra simples: Palavra chave = Categoria
+        // Melhoria futura: Permitir usuário editar a "palavra chave"
+        return createCategorizationRule(item.descricao, item.categoria)
+      })
+      await Promise.all(promises)
     }
 
     const result = await createTransactionsBatch(payload)
@@ -267,6 +295,7 @@ export function CsvImporter() {
                   <TableHead>Valor</TableHead>
                   <TableHead>Tipo</TableHead>
                   <TableHead>Categoria</TableHead>
+                  <TableHead>Salvar Regra?</TableHead>
                   <TableHead>Responsável</TableHead>
                 </TableRow>
               </TableHeader>
@@ -303,6 +332,17 @@ export function CsvImporter() {
                           ))}
                         </SelectContent>
                       </Select>
+                    </TableCell>
+                    <TableCell className="text-center">
+                        <Checkbox 
+                            checked={novasRegras.has(index)}
+                            onCheckedChange={(checked) => {
+                                const newSet = new Set(novasRegras)
+                                if (checked) newSet.add(index)
+                                else newSet.delete(index)
+                                setNovasRegras(newSet)
+                            }}
+                        />
                     </TableCell>
                     <TableCell>
                       <Select value={row.responsavel} onValueChange={(val) => updateRow(index, 'responsavel', val)}>
