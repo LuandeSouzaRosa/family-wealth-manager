@@ -138,7 +138,7 @@ export function CsvImporter() {
         const saldoAnterior = saldoAtual - resultadoCSV
         
         // Adicionar transação de ajuste no dia anterior ao início do CSV
-        if (saldoAnterior !== 0) {
+        if (Math.abs(saldoAnterior) > 0.01) { // Evita criar ajuste por erro de centavos de ponto flutuante
             // Pegar a data mais antiga do CSV e subtrair 1 dia
             const datas = payload.map(t => new Date(t.data).getTime())
             const primeiraData = new Date(Math.min(...datas))
@@ -146,7 +146,7 @@ export function CsvImporter() {
             
             payload.push({
                 data: primeiraData.toISOString(),
-                descricao: "Saldo Inicial (Ajuste Automático)",
+                descricao: "Saldo Inicial Acumulado (Ajuste Automático)",
                 valor: Math.abs(saldoAnterior),
                 categoria: "Outros", // Ou criar uma categoria "Saldo Inicial"
                 responsavel: "Casal",
@@ -204,16 +204,17 @@ export function CsvImporter() {
             </Button>
           </div>
 
-          <div className="flex items-center justify-between gap-4 bg-muted/30 p-4 rounded-lg border border-border/50">
+          <div className="flex flex-col gap-4 bg-muted/30 p-4 rounded-lg border border-border/50">
             <div className="flex flex-col gap-1">
-                <label htmlFor="saldo-inicial" className="text-sm font-medium text-muted-foreground">
-                    Saldo Atual no Banco (Opcional)
+                <label htmlFor="saldo-inicial" className="text-sm font-medium text-foreground flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4 text-blue-500" />
+                    Ajuste de Saldo Inicial (Opcional, use apenas na primeira importação)
                 </label>
-                <span className="text-xs text-muted-foreground/70">
-                    Informe quanto tem na conta HOJE para o sistema calcular o saldo inicial automaticamente.
+                <span className="text-xs text-muted-foreground">
+                    Se você já tem um histórico antes deste CSV, digite seu saldo atual do banco. O sistema criará um ajuste automático para que seu Dashboard bata perfeitamente com a realidade de hoje. Se estiver importando meses antigos separadamente, deixe em branco para não duplicar o ajuste.
                 </span>
             </div>
-            <div className="relative">
+            <div className="relative max-w-[200px]">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">R$</span>
                 <Input 
                     id="saldo-inicial" 
@@ -232,7 +233,7 @@ export function CsvImporter() {
                             setSaldoInicialInfo(null)
                         }
                     }}
-                    className="pl-9 w-[150px] bg-background border-primary/20 focus:border-primary" 
+                    className="pl-9 bg-background border-primary/20 focus:border-primary" 
                 />
             </div>
           </div>
