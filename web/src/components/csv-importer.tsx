@@ -50,9 +50,27 @@ const parseDate = (val: string) => {
 }
 
 export function CsvImporter() {
+  const [isUploading, setIsUploading] = useState(false)
   const [data, setData] = useState<any[]>([])
   const [fileName, setFileName] = useState<string>("")
-  const [isUploading, setIsUploading] = useState(false)
+  const [saldoInicialInfo, setSaldoInicialInfo] = useState<{ calculado: number, diferenca: number } | null>(null)
+
+  const calcularPreviaSaldo = (val: string) => {
+    const saldoInformado = parseFloat(val.replace(/\./g, '').replace(',', '.'))
+    if (isNaN(saldoInformado)) {
+        setSaldoInicialInfo(null)
+        return
+    }
+
+    const payload = data.map(({ id, ...rest }) => rest)
+    const totalEntradas = payload.filter(t => t.tipo === 'Entrada').reduce((acc, t) => acc + t.valor, 0)
+    const totalSaidas = payload.filter(t => t.tipo === 'Saída').reduce((acc, t) => acc + t.valor, 0)
+    const resultadoCSV = totalEntradas - totalSaidas
+    
+    // Se eu tenho 210 hoje, e o CSV diz que lucrei 189, então eu comecei com 21.
+    const diferenca = saldoInformado - resultadoCSV
+    setSaldoInicialInfo({ calculado: saldoInformado, diferenca })
+  }
   const [successMsg, setSuccessMsg] = useState("")
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -200,10 +218,44 @@ export function CsvImporter() {
                 <Input 
                     id="saldo-inicial" 
                     placeholder="0,00" 
+                    onChange={(e) => {
+                        const val = e.target.value
+                        const num = parseFloat(val.replace(/\./g, '').replace(',', '.'))
+                        if (!isNaN(num)) {
+                            const payload = data.map(({ id, ...rest }) => rest)
+                            const totalEntradas = payload.filter(t => t.tipo === 'Entrada').reduce((acc, t) => acc + t.valor, 0)
+                            const totalSaidas = payload.filter(t => t.tipo === 'Saída').reduce((acc, t) => acc + t.valor, 0)
+                            const resultadoCSV = totalEntradas - totalSaidas
+                            const diferenca = num - resultadoCSV
+                            setSaldoInicialInfo({ calculado: num, diferenca })
+                        } else {
+                            setSaldoInicialInfo(null)
+                        }
+                    }}
                     className="pl-9 w-[150px] bg-background border-primary/20 focus:border-primary" 
                 />
             </div>
           </div>
+          
+          {saldoInicialInfo && (
+            <motion.div 
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                className="bg-blue-500/10 border border-blue-500/20 p-4 rounded-lg text-sm text-blue-600 dark:text-blue-400 flex flex-col gap-2"
+            >
+                <div className="flex items-center gap-2 font-semibold">
+                    <AlertCircle className="h-4 w-4" />
+                    <span>Resumo da Conciliação:</span>
+                </div>
+                <ul className="list-disc list-inside space-y-1 ml-1 text-muted-foreground">
+                    <li>Movimento deste CSV: <strong>{((data.filter(t => t.tipo === 'Entrada').reduce((acc, t) => acc + t.valor, 0)) - (data.filter(t => t.tipo === 'Saída').reduce((acc, t) => acc + t.valor, 0))).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong></li>
+                    <li>Saldo Final Informado: <strong>{saldoInicialInfo.calculado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong></li>
+                    <li className="text-foreground font-medium">
+                        O sistema criará um ajuste automático de <u>{Math.abs(saldoInicialInfo.diferenca).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</u> ({saldoInicialInfo.diferenca > 0 ? 'Entrada' : 'Saída'}) para equalizar o saldo anterior.
+                    </li>
+                </ul>
+            </motion.div>
+          )}
 
           <div className="rounded-md border bg-card overflow-hidden">
             <Table>
