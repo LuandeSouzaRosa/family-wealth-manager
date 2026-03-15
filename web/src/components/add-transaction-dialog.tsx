@@ -60,7 +60,7 @@ const formSchema = z.object({
   categoria: z.string().min(1, { message: "Por favor selecione uma categoria." }),
 })
 
-export function AddTransactionDialog() {
+export function AddTransactionDialog({ children }: { children?: React.ReactNode }) {
   const [open, setOpen] = React.useState(false)
   const [isPending, startTransition] = React.useTransition()
 
@@ -101,15 +101,15 @@ export function AddTransactionDialog() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger 
-        render={
+      <DialogTrigger asChild>
+        {children || (
           <Button 
             data-testid="btn-nova-transacao"
             className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full text-sm font-medium transition-all shadow-sm hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-12 px-6"
-          />
-        }
-      >
-        <Plus className="mr-2 h-4 w-4" /> Nova Transação
+          >
+            <Plus className="mr-2 h-4 w-4" /> Nova Transação
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
