@@ -17,6 +17,7 @@ import {
   SheetClose,
 } from "@/components/ui/sheet"
 import { signout } from '@/app/login/actions'
+import { ResponsavelSelector } from '@/components/responsavel-selector'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -78,10 +79,6 @@ export default async function RootLayout({
                     <Link href="/patrimonio" className="transition-colors hover:text-foreground/80 text-foreground/60">Patrimônio</Link>
                     <Link href="/configuracoes" className="transition-colors hover:text-foreground/80 text-foreground/60">Família</Link>
                   </nav>
-
-import { ResponsavelSelector } from '@/components/responsavel-selector'
-
-// ...
 
                   <div className="ml-auto flex items-center space-x-4">
                     <ResponsavelSelector />
