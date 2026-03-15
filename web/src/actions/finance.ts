@@ -642,3 +642,95 @@ export async function createCategorizationRule(texto: string, categoria: string)
   if (error) return { error: error.message };
   return { success: true };
 }
+
+// ==========================================
+// METAS FINANCEIRAS (Potes/Buckets)
+// ==========================================
+
+const MetaSchema = z.object({
+  nome: z.string().min(2, "O nome da meta é obrigatório"),
+  valor_alvo: z.number().positive("O valor alvo deve ser maior que zero"),
+  valor_atual: z.number().min(0, "O valor atual não pode ser negativo").default(0),
+  cor: z.string().default("#10b981"),
+});
+
+export async function getMetas() {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("metas")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("Erro ao buscar metas:", error);
+    return [];
+  }
+  return data;
+}
+
+export async function createMeta(formData: FormData) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  
+  if (!user) return { error: "Sessão expirada." };
+
+  const data = {
+    nome: formData.get("nome") as string,
+    valor_alvo: parseFloat(formData.get("valor_alvo") as string),
+    valor_atual: parseFloat(formData.get("valor_atual") as string) || 0,
+    cor: formData.get("cor") as string || "#10b981",
+  };
+
+  const parsed = MetaSchema.safeParse(data);
+  if (!parsed.success) return { error: "Campos inválidos." };
+
+  const { error } = await supabase
+    .from("metas")
+    .insert([{ ...parsed.data, user_id: user.id }]);
+
+  if (error) return { error: error.message };
+
+  revalidatePath("/");
+  revalidatePath("/metas");
+  return { success: true };
+}
+
+export async function updateMeta(id: string, formData: FormData) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Sessão expirada." };
+
+  const data = {
+    nome: formData.get("nome") as string,
+    valor_alvo: parseFloat(formData.get("valor_alvo") as string),
+    valor_atual: parseFloat(formData.get("valor_atual") as string),
+    cor: formData.get("cor") as string,
+  };
+
+  const parsed = MetaSchema.safeParse(data);
+  if (!parsed.success) return { error: "Campos inválidos." };
+
+  const { error } = await supabase
+    .from("metas")
+    .update({ ...parsed.data })
+    .match({ id, user_id: user.id });
+
+  if (error) return { error: error.message };
+  
+  revalidatePath("/");
+  revalidatePath("/metas");
+  return { success: true };
+}
+
+export async function deleteMeta(id: string) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("metas")
+    .delete()
+    .match({ id });
+
+  if (error) return { error: error.message };
+  revalidatePath("/");
+  revalidatePath("/metas");
+  return { success: true };
+}
