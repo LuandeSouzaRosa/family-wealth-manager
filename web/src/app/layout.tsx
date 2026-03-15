@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
-import { ThemeProvider } from '@/components/theme-provider'
+import { Providers } from '@/components/providers'
 import { ModeToggle } from '@/components/theme-toggle'
 import { createClient } from '@/utils/supabase/server'
 import { Button } from '@/components/ui/button'
@@ -47,7 +47,7 @@ export default async function RootLayout({
   return (
     <html lang="pt-BR" suppressHydrationWarning>
       <body className={inter.className}>
-        <ThemeProvider
+        <Providers
           attribute="class"
           defaultTheme="dark"
           enableSystem={false}
@@ -79,7 +79,12 @@ export default async function RootLayout({
                     <Link href="/configuracoes" className="transition-colors hover:text-foreground/80 text-foreground/60">Família</Link>
                   </nav>
 
+import { ResponsavelSelector } from '@/components/responsavel-selector'
+
+// ...
+
                   <div className="ml-auto flex items-center space-x-4">
+                    <ResponsavelSelector />
                     <ModeToggle />
                     
                     {/* Mobile Menu */}
@@ -135,7 +140,7 @@ export default async function RootLayout({
               {children}
             </main>
           </div>
-        </ThemeProvider>
+        </Providers>
       </body>
     </html>
   )

@@ -7,6 +7,7 @@ import { ExpensePieChart } from '@/components/charts/expense-pie-chart'
 import { NeedsWantsSavingsChart } from '@/components/charts/needs-wants-savings-chart'
 import { FinancialEvolutionChart } from '@/components/charts/financial-evolution-chart'
 import { motion, type Variants } from 'framer-motion'
+import { useFilter } from '@/contexts/filter-context'
 import { useMemo, useState, useEffect } from 'react'
 import Link from 'next/link'
 
@@ -30,9 +31,9 @@ interface DashboardClientProps {
     renda: number
     despesas: number
     investido: number
-    saldoTotal?: number // Novo campo
-    saldoComprometido?: number // Novo campo
-    saldoLivre?: number // Novo campo
+    saldoTotal?: number
+    saldoComprometido?: number
+    saldoLivre?: number
   }
   recentTx: any[]
   orcamentoStatus: any[]
@@ -48,9 +49,19 @@ export function DashboardClientShell({
   breakdown503020,
   financialEvolution
 }: DashboardClientProps) {
+  const { responsavel } = useFilter()
+
+  const shouldShow = (itemResponsavel: string) => {
+    if (responsavel === "Todos") return true
+    return itemResponsavel?.toLowerCase() === responsavel.toLowerCase()
+  }
+
+  const filteredRecentTx = recentTx.filter(tx => shouldShow(tx.responsavel))
+
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
   }
+
 
   // Se metrics.saldoTotal vier do backend (cálculo global), usamos ele.
   // Caso contrário, fallback para cálculo mensal (que estava errado).
@@ -97,7 +108,9 @@ export function DashboardClientShell({
                     {hideValues ? "R$ •••••" : formatCurrency(saldoAtual)}
                 </h1>
             </div>
-            <p className="text-xs text-muted-foreground">Capital Disponível Total</p>
+            <p className="text-xs text-muted-foreground">
+                {responsavel === 'Todos' ? 'Capital Disponível Total' : `Capital (Visão Consolidada)`}
+            </p>
         </div>
 
         {/* 2. Quick Actions */}
@@ -139,17 +152,17 @@ export function DashboardClientShell({
         {/* 4. Últimas Transações (Lista Limpa) */}
         <div className="space-y-3">
             <div className="flex items-center justify-between">
-                <h3 className="text-base font-semibold">Últimas Movimentações</h3>
+                <h3 className="text-base font-semibold">Últimas Movimentações {responsavel !== 'Todos' && <span className="text-xs font-normal text-muted-foreground">({responsavel})</span>}</h3>
                 <Link href="/transacoes" className="text-xs text-primary font-medium">Ver todas</Link>
             </div>
             
-            {recentTx.length === 0 ? (
+            {filteredRecentTx.length === 0 ? (
                 <div className="text-center py-8 bg-muted/20 rounded-xl border border-dashed border-muted-foreground/20">
-                    <p className="text-sm text-muted-foreground">Nenhuma movimentação recente.</p>
+                    <p className="text-sm text-muted-foreground">Nenhuma movimentação recente encontrada para este filtro.</p>
                 </div>
             ) : (
                 <div className="flex flex-col gap-3">
-                    {recentTx.slice(0, 5).map((tx) => {
+                    {filteredRecentTx.slice(0, 5).map((tx) => {
                          const isIncome = tx.tipo === 'Entrada';
                          return (
                             <div key={tx.id} className="flex items-center justify-between bg-card p-3 rounded-xl border border-border/40 shadow-sm">
@@ -212,7 +225,9 @@ export function DashboardClientShell({
                 <Wallet className="w-24 h-24 text-primary" />
               </div>
               <CardHeader className="pb-2">
-                <CardDescription className="text-sm font-semibold tracking-wider uppercase text-muted-foreground">Capital Disponível</CardDescription>
+                <CardDescription className="text-sm font-semibold tracking-wider uppercase text-muted-foreground">
+                    Capital Disponível {responsavel !== 'Todos' && '(Consolidado)'}
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="text-4xl md:text-5xl font-light tracking-tight tabular-nums bg-gradient-to-br from-foreground to-foreground/70 bg-clip-text text-transparent">
@@ -241,7 +256,9 @@ export function DashboardClientShell({
                 <ArrowUpRight className="w-24 h-24 text-primary" />
               </div>
               <CardHeader className="pb-2">
-                <CardDescription className="text-sm font-semibold tracking-wider uppercase text-primary">Entradas (Mês)</CardDescription>
+                <CardDescription className="text-sm font-semibold tracking-wider uppercase text-primary">
+                    Entradas (Mês) {responsavel !== 'Todos' && '(Consolidado)'}
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="text-3xl font-light tracking-tight tabular-nums text-foreground/90">
@@ -257,7 +274,9 @@ export function DashboardClientShell({
                 <ArrowDownRight className="w-24 h-24 text-destructive" />
               </div>
               <CardHeader className="pb-2">
-                <CardDescription className="text-sm font-semibold tracking-wider uppercase text-destructive">Saídas (Mês)</CardDescription>
+                <CardDescription className="text-sm font-semibold tracking-wider uppercase text-destructive">
+                    Saídas (Mês) {responsavel !== 'Todos' && '(Consolidado)'}
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="text-3xl font-light tracking-tight tabular-nums text-foreground/90">
@@ -318,20 +337,22 @@ export function DashboardClientShell({
           {/* Elegant Ledger */}
           <Card className="border border-border shadow-sm bg-card">
             <CardHeader>
-              <CardTitle className="text-lg font-medium">Histórico Recente</CardTitle>
-              <CardDescription>Últimas {recentTx.length} movimentações.</CardDescription>
+              <CardTitle className="text-lg font-medium">
+                  Histórico Recente {responsavel !== 'Todos' && <span className="text-sm font-normal text-muted-foreground ml-2">({responsavel})</span>}
+              </CardTitle>
+              <CardDescription>Últimas movimentações.</CardDescription>
             </CardHeader>
             <CardContent>
-              {recentTx.length === 0 ? (
+              {filteredRecentTx.length === 0 ? (
                 <div className="text-center py-12">
-                   <p className="text-sm text-muted-foreground">Nenhuma transação registrada.</p>
+                   <p className="text-sm text-muted-foreground">Nenhuma transação registrada para este filtro.</p>
                 </div>
               ) : (
                 <motion.div 
                   variants={{ visible: { transition: { staggerChildren: 0.05 } } }}
                   className="space-y-6"
                 >
-                  {recentTx.map((tx) => {
+                  {filteredRecentTx.map((tx) => {
                     const isIncome = tx.tipo === 'Entrada';
                     const isInvestment = tx.tipo === 'Transferência';
                     return (

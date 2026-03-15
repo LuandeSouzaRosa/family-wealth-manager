@@ -7,6 +7,7 @@ import { Trash2, Calendar, FileText, ArrowUpRight, ArrowDownRight, Edit3 } from 
 import { deleteTransaction } from '@/actions/finance'
 import { AddTransactionDialog } from '@/components/add-transaction-dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { useFilter } from '@/contexts/filter-context'
 
 interface Transaction {
   id: string
@@ -53,6 +54,7 @@ const MONTHS = [
 const YEARS = ["2026", "2025", "2024"]
 
 export function TransacoesClientShell({ initialData }: TransacoesClientProps) {
+  const { responsavel } = useFilter()
   const [isPending, startTransition] = useTransition()
   const [month, setMonth] = useState<string>("0") // 0 means all for the selected year
   const [year, setYear] = useState<string>(new Date().getFullYear().toString())
@@ -63,14 +65,23 @@ export function TransacoesClientShell({ initialData }: TransacoesClientProps) {
   
   const filteredData = useMemo(() => {
     let result = initialData;
+
+    // 1. Filtrar por Responsável
+    if (responsavel !== "Todos") {
+        result = result.filter(tx => tx.responsavel?.toLowerCase() === responsavel.toLowerCase())
+    }
+
+    // 2. Filtrar por Ano
     if (year !== "0") {
       result = result.filter(tx => new Date(tx.data).getFullYear().toString() === year)
     }
+
+    // 3. Filtrar por Mês
     if (month !== "0") {
       result = result.filter(tx => (new Date(tx.data).getMonth() + 1).toString() === month)
     }
     return result
-  }, [initialData, month, year])
+  }, [initialData, month, year, responsavel])
 
   // Get month label for display
   const currentMonthLabel = MONTHS.find(m => m.value === month)?.label || "Mês"
@@ -162,7 +173,9 @@ export function TransacoesClientShell({ initialData }: TransacoesClientProps) {
                 <div className="absolute -inset-0.5 bg-gradient-to-r from-emerald-500/10 to-primary/10 rounded-2xl blur opacity-50 transition duration-1000" />
                 <CardContent className="p-6 md:p-8 flex flex-col md:flex-row items-center justify-between gap-8 h-full relative z-10">
                   <div className="w-full">
-                     <p className="text-muted-foreground uppercase tracking-widest text-sm font-semibold mb-2">Resultado do Período</p>
+                     <p className="text-muted-foreground uppercase tracking-widest text-sm font-semibold mb-2">
+                        Resultado do Período {responsavel !== 'Todos' && `(${responsavel})`}
+                     </p>
                      <h2 className={`text-4xl md:text-5xl font-bold tracking-tighter ${saldoPeriodo >= 0 ? 'text-foreground' : 'text-red-400'}`}>
                         {formatCurrency(saldoPeriodo)}
                      </h2>
