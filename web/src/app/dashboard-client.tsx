@@ -10,6 +10,9 @@ import { motion, type Variants } from 'framer-motion'
 import { useFilter } from '@/contexts/filter-context'
 import { useMemo, useState, useEffect } from 'react'
 import Link from 'next/link'
+import { KpiSection } from '@/components/dashboard/kpi-section'
+import { RecentTransactions } from '@/components/dashboard/recent-transactions'
+import { MobileDashboard } from '@/components/dashboard/mobile-dashboard'
 
 // Constants for orchestration
 const STAGGER_DELAY = 0.1
@@ -58,26 +61,11 @@ export function DashboardClientShell({
 
   const filteredRecentTx = recentTx.filter(tx => shouldShow(tx.responsavel))
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
-  }
-
-
   // Se metrics.saldoTotal vier do backend (cálculo global), usamos ele.
   // Caso contrário, fallback para cálculo mensal (que estava errado).
   const saldoAtual = metrics.saldoTotal !== undefined 
     ? metrics.saldoTotal 
     : (metrics.renda - metrics.despesas - metrics.investido)
-
-  const [hideValues, setHideValues] = useState(false)
-  const [greeting, setGreeting] = useState("Olá")
-
-  useEffect(() => {
-    const hour = new Date().getHours()
-    if (hour < 12) setGreeting("Bom dia")
-    else if (hour < 18) setGreeting("Boa tarde")
-    else setGreeting("Boa noite")
-  }, [])
 
   return (
     <motion.div 
@@ -93,98 +81,14 @@ export function DashboardClientShell({
       {/* ===================================================================================== */}
       {/* MOBILE DASHBOARD (Visible only on small screens)                                      */}
       {/* ===================================================================================== */}
-      <div className="md:hidden flex flex-col gap-6 px-5 pt-8">
-        
-        {/* 1. Header & Saldo */}
-        <div className="space-y-1">
-            <div className="flex items-center justify-between">
-                <p className="text-muted-foreground text-sm">{greeting}, {userEmail.split('@')[0]}</p>
-                <button onClick={() => setHideValues(!hideValues)} className="p-2 -mr-2 text-muted-foreground hover:text-foreground">
-                    {hideValues ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-            </div>
-            <div className="flex items-baseline gap-2">
-                <h1 className="text-3xl font-bold tracking-tight">
-                    {hideValues ? "R$ •••••" : formatCurrency(saldoAtual)}
-                </h1>
-            </div>
-            <p className="text-xs text-muted-foreground">
-                {responsavel === 'Todos' ? 'Capital Disponível Total' : `Capital (Visão Consolidada)`}
-            </p>
-        </div>
-
-        {/* 2. Quick Actions */}
-        <div className="grid grid-cols-2 gap-3">
-            <div className="col-span-1">
-                <AddTransactionDialog>
-                    <div className="w-full bg-primary text-primary-foreground hover:bg-primary/90 h-12 rounded-xl flex items-center justify-center gap-2 font-medium cursor-pointer shadow-lg shadow-primary/20">
-                        <Plus className="w-5 h-5" /> Novo Gasto
-                    </div>
-                </AddTransactionDialog>
-            </div>
-            <Link href="/transacoes" className="col-span-1">
-                <div className="w-full bg-secondary text-secondary-foreground hover:bg-secondary/80 h-12 rounded-xl flex items-center justify-center gap-2 font-medium cursor-pointer">
-                    <ListFilter className="w-5 h-5" /> Extrato
-                </div>
-            </Link>
-        </div>
-
-        {/* 3. Resumo Mensal (Mini Cards) */}
-        <div className="grid grid-cols-2 gap-3">
-            <div className="bg-card border border-border/50 p-4 rounded-xl flex flex-col gap-1 shadow-sm">
-                <div className="flex items-center gap-2 text-emerald-500 text-xs font-medium uppercase tracking-wider">
-                    <ArrowUpRight className="w-3 h-3" /> Entrou
-                </div>
-                <span className="text-lg font-semibold text-foreground">
-                    {hideValues ? "•••••" : formatCurrency(metrics.renda)}
-                </span>
-            </div>
-            <div className="bg-card border border-border/50 p-4 rounded-xl flex flex-col gap-1 shadow-sm">
-                <div className="flex items-center gap-2 text-red-500 text-xs font-medium uppercase tracking-wider">
-                    <ArrowDownRight className="w-3 h-3" /> Saiu
-                </div>
-                <span className="text-lg font-semibold text-foreground">
-                    {hideValues ? "•••••" : formatCurrency(metrics.despesas)}
-                </span>
-            </div>
-        </div>
-
-        {/* 4. Últimas Transações (Lista Limpa) */}
-        <div className="space-y-3">
-            <div className="flex items-center justify-between">
-                <h3 className="text-base font-semibold">Últimas Movimentações {responsavel !== 'Todos' && <span className="text-xs font-normal text-muted-foreground">({responsavel})</span>}</h3>
-                <Link href="/transacoes" className="text-xs text-primary font-medium">Ver todas</Link>
-            </div>
-            
-            {filteredRecentTx.length === 0 ? (
-                <div className="text-center py-8 bg-muted/20 rounded-xl border border-dashed border-muted-foreground/20">
-                    <p className="text-sm text-muted-foreground">Nenhuma movimentação recente encontrada para este filtro.</p>
-                </div>
-            ) : (
-                <div className="flex flex-col gap-3">
-                    {filteredRecentTx.slice(0, 5).map((tx) => {
-                         const isIncome = tx.tipo === 'Entrada';
-                         return (
-                            <div key={tx.id} className="flex items-center justify-between bg-card p-3 rounded-xl border border-border/40 shadow-sm">
-                                <div className="flex items-center gap-3">
-                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isIncome ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
-                                        {isIncome ? <ArrowUpRight className="w-5 h-5" /> : <ArrowDownRight className="w-5 h-5" />}
-                                    </div>
-                                    <div className="flex flex-col">
-                                        <span className="text-sm font-medium text-foreground line-clamp-1">{tx.descricao}</span>
-                                        <span className="text-xs text-muted-foreground">{tx.categoria} • {new Date(tx.data).toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit'})}</span>
-                                    </div>
-                                </div>
-                                <span className={`text-sm font-semibold ${isIncome ? 'text-emerald-600' : 'text-foreground'}`}>
-                                    {isIncome ? '+' : '-'}{hideValues ? "•••••" : formatCurrency(tx.valor)}
-                                </span>
-                            </div>
-                         )
-                    })}
-                </div>
-            )}
-        </div>
-      </div>
+      <MobileDashboard 
+        userEmail={userEmail}
+        saldoAtual={saldoAtual}
+        renda={metrics.renda}
+        despesas={metrics.despesas}
+        recentTx={filteredRecentTx}
+        responsavel={responsavel}
+      />
 
       {/* ===================================================================================== */}
       {/* DESKTOP DASHBOARD (Hidden on mobile)                                                  */}
@@ -217,75 +121,15 @@ export function DashboardClientShell({
       <div className="px-6 pb-24 max-w-7xl mx-auto space-y-8">
         
         {/* KPIs - Swiss Minimalist Cards with Hover Effects */}
-        <motion.div variants={fadeUpVariant} className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          
-          <motion.div whileHover={{ y: -5 }} transition={{ type: "spring", stiffness: 400 }}>
-            <Card className="h-full border border-border shadow-sm bg-card relative overflow-hidden group transition-all hover:shadow-primary/5 hover:border-primary/20">
-              <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 group-hover:scale-110 transition-all duration-500 ease-out">
-                <Wallet className="w-24 h-24 text-primary" />
-              </div>
-              <CardHeader className="pb-2">
-                <CardDescription className="text-sm font-semibold tracking-wider uppercase text-muted-foreground">
-                    Capital Disponível {responsavel !== 'Todos' && '(Consolidado)'}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="text-4xl md:text-5xl font-light tracking-tight tabular-nums bg-gradient-to-br from-foreground to-foreground/70 bg-clip-text text-transparent">
-                  {formatCurrency(saldoAtual)}
-                </div>
-                {/* Breakdown de Saldo Livre vs Comprometido */}
-                {metrics.saldoComprometido !== undefined && metrics.saldoLivre !== undefined && (
-                    <div className="grid grid-cols-2 gap-4 pt-2 border-t border-border/40">
-                        <div className="space-y-1">
-                            <span className="text-xs text-muted-foreground uppercase tracking-wide">Livre para Uso</span>
-                            <p className="text-lg font-medium text-emerald-500">{formatCurrency(metrics.saldoLivre)}</p>
-                        </div>
-                        <div className="space-y-1">
-                            <span className="text-xs text-muted-foreground uppercase tracking-wide">Em Metas</span>
-                            <p className="text-lg font-medium text-blue-500">{formatCurrency(metrics.saldoComprometido)}</p>
-                        </div>
-                    </div>
-                )}
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          <motion.div whileHover={{ y: -5 }} transition={{ type: "spring", stiffness: 400 }}>
-            <Card className="h-full border border-border shadow-sm bg-card relative overflow-hidden group transition-all hover:shadow-primary/5 hover:border-primary/20">
-              <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 group-hover:scale-110 transition-all duration-500 ease-out">
-                <ArrowUpRight className="w-24 h-24 text-primary" />
-              </div>
-              <CardHeader className="pb-2">
-                <CardDescription className="text-sm font-semibold tracking-wider uppercase text-primary">
-                    Entradas (Mês) {responsavel !== 'Todos' && '(Consolidado)'}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-light tracking-tight tabular-nums text-foreground/90">
-                  {formatCurrency(metrics.renda)}
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          <motion.div whileHover={{ y: -5 }} transition={{ type: "spring", stiffness: 400 }}>
-            <Card className="h-full border border-border shadow-sm bg-card relative overflow-hidden group transition-all hover:shadow-destructive/5 hover:border-destructive/20">
-              <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 group-hover:scale-110 transition-all duration-500 ease-out">
-                <ArrowDownRight className="w-24 h-24 text-destructive" />
-              </div>
-              <CardHeader className="pb-2">
-                <CardDescription className="text-sm font-semibold tracking-wider uppercase text-destructive">
-                    Saídas (Mês) {responsavel !== 'Todos' && '(Consolidado)'}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-light tracking-tight tabular-nums text-foreground/90">
-                  {formatCurrency(metrics.despesas)}
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-
+        <motion.div variants={fadeUpVariant}>
+            <KpiSection 
+                saldoAtual={saldoAtual}
+                renda={metrics.renda}
+                despesas={metrics.despesas}
+                saldoLivre={metrics.saldoLivre}
+                saldoComprometido={metrics.saldoComprometido}
+                responsavel={responsavel}
+            />
         </motion.div>
 
         {/* Financial Evolution Chart (NEW) */}
@@ -335,50 +179,7 @@ export function DashboardClientShell({
           </Card>
 
           {/* Elegant Ledger */}
-          <Card className="border border-border shadow-sm bg-card">
-            <CardHeader>
-              <CardTitle className="text-lg font-medium">
-                  Histórico Recente {responsavel !== 'Todos' && <span className="text-sm font-normal text-muted-foreground ml-2">({responsavel})</span>}
-              </CardTitle>
-              <CardDescription>Últimas movimentações.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {filteredRecentTx.length === 0 ? (
-                <div className="text-center py-12">
-                   <p className="text-sm text-muted-foreground">Nenhuma transação registrada para este filtro.</p>
-                </div>
-              ) : (
-                <motion.div 
-                  variants={{ visible: { transition: { staggerChildren: 0.05 } } }}
-                  className="space-y-6"
-                >
-                  {filteredRecentTx.map((tx) => {
-                    const isIncome = tx.tipo === 'Entrada';
-                    const isInvestment = tx.tipo === 'Transferência';
-                    return (
-                      <motion.div 
-                        key={tx.id} 
-                        variants={fadeUpVariant}
-                        className="flex items-start justify-between group p-2 rounded-lg hover:bg-muted/50 transition-colors -mx-2 cursor-default"
-                      >
-                        <div className="space-y-1">
-                          <p className="text-sm font-medium leading-none group-hover:text-primary transition-colors">
-                            {tx.descricao}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {new Date(tx.data).toLocaleDateString('pt-BR')} • {tx.categoria}
-                          </p>
-                        </div>
-                        <div className={`text-sm font-medium tabular-nums ${isIncome ? 'text-primary' : isInvestment ? 'text-blue-500' : 'text-foreground/80'}`}>
-                          {isIncome ? '+' : '-'}{formatCurrency(tx.valor)}
-                        </div>
-                      </motion.div>
-                    )
-                  })}
-                </motion.div>
-              )}
-            </CardContent>
-          </Card>
+          <RecentTransactions transactions={filteredRecentTx} responsavel={responsavel} />
 
         </motion.div>
       </div>

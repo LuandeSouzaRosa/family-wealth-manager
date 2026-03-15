@@ -49,8 +49,8 @@ export default async function RootLayout({
       <body className={inter.className}>
         <Providers
           attribute="class"
-          defaultTheme="dark"
-          enableSystem={false}
+          defaultTheme="system"
+          enableSystem
           disableTransitionOnChange
         >
           <div className="flex flex-col min-h-screen relative z-0">
