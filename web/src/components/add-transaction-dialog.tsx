@@ -101,15 +101,16 @@ export function AddTransactionDialog({ children }: { children?: React.ReactNode 
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        {children || (
+      <DialogTrigger render={
+        children || (
           <Button 
             data-testid="btn-nova-transacao"
             className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full text-sm font-medium transition-all shadow-sm hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-12 px-6"
           >
             <Plus className="mr-2 h-4 w-4" /> Nova Transação
           </Button>
-        )}
+        )
+      }>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
