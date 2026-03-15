@@ -15,6 +15,7 @@ const TransactionSchema = z.object({
   tipo: z.enum(["Entrada", "Saída", "Transferência"]),
   data: z.string().datetime().optional(),
   responsavel: z.string().default("Casal"),
+  conta_id: z.string().nullable().optional(),
 });
 
 // ==========================================
@@ -37,6 +38,7 @@ export async function createTransaction(formData: FormData) {
     tipo: formData.get("tipo") as "Entrada" | "Saída" | "Transferência",
     data: formData.get("data") as string || new Date().toISOString(),
     responsavel: formData.get("responsavel") as string || "Casal",
+    conta_id: formData.get("conta_id") as string || null,
   };
 
   // 2. Validar
@@ -94,6 +96,7 @@ export async function updateTransaction(id: string, formData: FormData) {
     tipo: formData.get("tipo") as "Entrada" | "Saída" | "Transferência",
     data: formData.get("data") as string || new Date().toISOString(),
     responsavel: formData.get("responsavel") as string || "Casal",
+    conta_id: formData.get("conta_id") as string || null,
   };
 
   const parsed = TransactionSchema.safeParse(data);
@@ -117,7 +120,9 @@ export async function updateTransaction(id: string, formData: FormData) {
 
 export async function getDashboardMetrics() {
   const supabase = await createClient();
-  
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { renda: 0, despesas: 0, investido: 0, saldoTotal: 0, saldoComprometido: 0, saldoLivre: 0, contas: [] };
+
   // 1. Métricas do Mês Atual (Fluxo de Caixa)
   const { data: metricsMonth, error: errorMonth } = await supabase
     .from("vw_mes_atual_metricas")
@@ -128,24 +133,20 @@ export async function getDashboardMetrics() {
     console.error("Erro ao ler métricas do mês:", errorMonth);
   }
 
-  // 2. Saldo Total Acumulado (Capital Disponível Real)
-  // Busca todas as transações para calcular o saldo global
-  const { data: allTransactions, error: errorAll } = await supabase
-    .from("transacoes")
-    .select("valor, tipo");
-
+  // 2. Saldo Total Acumulado (Capital Disponível Real) e Lista de Contas
+  const { data: contas } = await supabase.from("contas_bancarias").select("*");
+  
   let saldoTotal = 0;
-  if (allTransactions) {
-    saldoTotal = allTransactions.reduce((acc, curr) => {
-      if (curr.tipo === 'Entrada') return acc + curr.valor;
-      if (curr.tipo === 'Saída') return acc - curr.valor;
-      // Transferência: vamos considerar neutra no saldo global por enquanto, 
-      // ou saída se entendermos que saiu da conta corrente. 
-      // Para simplificar "Capital Disponível", assumimos que é o que tem em conta.
-      // Se Transferência for para Investimento, tecnicamente saiu da conta corrente.
-      // Vamos manter simples: Entrada - Saída.
-      return acc;
-    }, 0);
+  if (contas && contas.length > 0) {
+     saldoTotal = contas.reduce((acc, conta) => acc + Number(conta.saldo_atual), 0);
+  } else {
+     // Fallback para o cálculo antigo se não houver contas
+     const { data: profile } = await supabase.from("profiles").select("saldo_inicial").single();
+     const saldoInicial = profile?.saldo_inicial || 0;
+     const { data: transacoes } = await supabase.from("transacoes").select("valor, tipo");
+     const totalEntradas = transacoes?.filter(t => t.tipo === "Entrada").reduce((acc, t) => acc + t.valor, 0) || 0;
+     const totalSaidas = transacoes?.filter(t => t.tipo === "Saída").reduce((acc, t) => acc + t.valor, 0) || 0;
+     saldoTotal = saldoInicial + totalEntradas - totalSaidas;
   }
 
   const metrics = metricsMonth || { renda: 0, despesas: 0, investido: 0 };
@@ -160,7 +161,8 @@ export async function getDashboardMetrics() {
     ...metrics,
     saldoTotal,
     saldoComprometido,
-    saldoLivre
+    saldoLivre,
+    contas: contas || []
   };
 }
 
@@ -605,7 +607,69 @@ export async function createTransactionsBatch(transactions: any[]) {
           .eq("user_id", user.id);
   }
 
-  // 3. Inserir novas transações
+  // 3. Verificação de Duplicatas (Importante para re-importações de parciais de mês)
+  // Estratégia: Buscar transações existentes no range de datas do lote e comparar
+  if (validTransactions.length > 0) {
+      // Encontrar range de datas
+      const dates = validTransactions.map(t => new Date(t.data!).getTime());
+      const minDate = new Date(Math.min(...dates)).toISOString();
+      const maxDate = new Date(Math.max(...dates)).toISOString();
+
+      // Buscar existentes neste período
+      const { data: existing } = await supabase
+          .from("transacoes")
+          .select("descricao, valor, data, conta_id")
+          .gte("data", minDate)
+          .lte("data", maxDate);
+
+      if (existing && existing.length > 0) {
+           // Criar Set de assinaturas para comparação rápida O(1)
+           // Assinatura: data(YYYY-MM-DD) + valor + descricao (primeiros 15 chars) + conta_id
+           const signatures = new Set(existing.map(t => {
+               const d = new Date(t.data).toISOString().split('T')[0];
+               const v = t.valor.toFixed(2);
+               const desc = t.descricao.substring(0, 15).toLowerCase(); // Comparação flexível
+               const c = t.conta_id || 'null';
+               return `${d}|${v}|${desc}|${c}`;
+           }));
+
+           // Filtrar o que já existe
+           const originalCount = validTransactions.length;
+           const uniqueTransactions = validTransactions.filter(t => {
+                const d = new Date(t.data!).toISOString().split('T')[0];
+                const v = t.valor.toFixed(2);
+                const desc = t.descricao.substring(0, 15).toLowerCase();
+                const c = t.conta_id || 'null';
+                const key = `${d}|${v}|${desc}|${c}`;
+                
+                if (signatures.has(key)) {
+                    return false; // É duplicata
+                }
+                return true;
+           });
+
+          // Se tudo foi filtrado (tudo duplicado), retorna sucesso mas avisa
+          if (uniqueTransactions.length === 0) {
+              return { success: true, count: 0, skipped: originalCount, message: "Todas as transações já foram importadas anteriormente." };
+          }
+          
+          // Prosseguir apenas com as únicas
+          const { error } = await supabase
+            .from("transacoes")
+            .insert(uniqueTransactions);
+
+          if (error) {
+            console.error("Erro na importação em lote:", error);
+            return { error: error.message };
+          }
+
+          revalidatePath("/");
+          revalidatePath("/transacoes");
+          return { success: true, count: uniqueTransactions.length, skipped: originalCount - uniqueTransactions.length };
+      }
+  }
+
+  // Se não houver existentes ou falhar a busca, segue fluxo normal (inserir todas)
   const { error } = await supabase
     .from("transacoes")
     .insert(validTransactions);
@@ -617,7 +681,7 @@ export async function createTransactionsBatch(transactions: any[]) {
 
   revalidatePath("/");
   revalidatePath("/transacoes");
-  return { success: true, count: validTransactions.length };
+  return { success: true, count: validTransactions.length, skipped: 0 };
 }
 
 export async function getCategorizationRules() {
@@ -648,6 +712,58 @@ export async function createCategorizationRule(texto: string, categoria: string)
     }]);
 
   if (error) return { error: error.message };
+  return { success: true };
+}
+
+// ==========================================
+// CONTAS BANCÁRIAS (Múltiplas Contas)
+// ==========================================
+
+const ContaSchema = z.object({
+  nome: z.string().min(2, "Nome da conta é obrigatório"),
+  instituicao: z.string().optional(),
+  saldo_atual: z.number().default(0),
+  responsavel: z.string().default("Todos"),
+  cor: z.string().default("#10b981"),
+});
+
+export async function getContasBancarias() {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("contas_bancarias")
+    .select("*")
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    console.error("Erro ao buscar contas:", error);
+    return [];
+  }
+  return data;
+}
+
+export async function createContaBancaria(formData: FormData) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Sessão expirada." };
+
+  const data = {
+    nome: formData.get("nome") as string,
+    instituicao: formData.get("instituicao") as string,
+    saldo_atual: parseFloat(formData.get("saldo_atual") as string) || 0,
+    responsavel: formData.get("responsavel") as string || "Todos",
+    cor: formData.get("cor") as string || "#10b981",
+  };
+
+  const parsed = ContaSchema.safeParse(data);
+  if (!parsed.success) return { error: "Campos inválidos." };
+
+  const { error } = await supabase
+    .from("contas_bancarias")
+    .insert([{ ...parsed.data, user_id: user.id }]);
+
+  if (error) return { error: error.message };
+  
+  revalidatePath("/");
   return { success: true };
 }
 

@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { createTransactionsBatch, getCategorizationRules, createCategorizationRule } from '@/actions/finance'
+import { createTransactionsBatch, getCategorizationRules, createCategorizationRule, getContasBancarias } from '@/actions/finance'
 import { Upload, Check, AlertCircle, Loader2, FileSpreadsheet, PlusCircle } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { cn } from '@/lib/utils'
@@ -57,10 +57,13 @@ export function CsvImporter() {
   const [saldoInicialInfo, setSaldoInicialInfo] = useState<{ calculado: number, diferenca: number } | null>(null)
   const [regras, setRegras] = useState<any[]>([])
   const [novasRegras, setNovasRegras] = useState<Set<number>>(new Set()) // Índices das linhas que virarão regra
+  const [contas, setContas] = useState<any[]>([])
+  const [contaSelecionada, setContaSelecionada] = useState<string>("none")
 
   useEffect(() => {
-    // Carregar regras ao iniciar
+    // Carregar regras e contas ao iniciar
     getCategorizationRules().then(data => setRegras(data || []))
+    getContasBancarias().then(data => setContas(data || []))
   }, [])
 
   const aplicarRegras = (descricao: string) => {
@@ -138,7 +141,10 @@ export function CsvImporter() {
 
   const handleImport = async () => {
     setIsUploading(true)
-    const payload = data.map(({ id, ...rest }) => rest)
+    const payload = data.map(({ id, ...rest }) => ({
+        ...rest,
+        conta_id: contaSelecionada !== "none" ? contaSelecionada : null
+    }))
     
     // Adicionar transação de Saldo Inicial se o usuário informou um valor
     const saldoInicial = (document.getElementById('saldo-inicial') as HTMLInputElement)?.value
@@ -187,7 +193,8 @@ export function CsvImporter() {
     setIsUploading(false)
 
     if (result.success) {
-      setSuccessMsg(`${result.count} transações importadas com sucesso!`)
+      const skippedMsg = result.skipped && result.skipped > 0 ? ` (${result.skipped} duplicadas ignoradas)` : ""
+      setSuccessMsg(`${result.count} transações importadas com sucesso!${skippedMsg}`)
       setData([])
       setFileName("")
     } else {
@@ -227,9 +234,25 @@ export function CsvImporter() {
               <span className="font-medium text-foreground">{fileName}</span>
               <span className="text-sm">({data.length} linhas)</span>
             </div>
-            <Button variant="ghost" size="sm" onClick={() => setData([])} className="text-destructive hover:text-destructive hover:bg-destructive/10">
-              Cancelar
-            </Button>
+            <div className="flex items-center gap-4">
+               <Select value={contaSelecionada} onValueChange={setContaSelecionada}>
+                  <SelectTrigger className="w-[250px]">
+                    <SelectValue placeholder="Vincular a uma conta..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Sem conta específica</SelectItem>
+                    {contas.map(conta => (
+                      <SelectItem key={conta.id} value={conta.id}>
+                        {conta.nome} ({conta.responsavel})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Button variant="ghost" size="sm" onClick={() => { setData([]); setSaldoInicialInfo(null); }} className="text-destructive hover:text-destructive hover:bg-destructive/10">
+                  Cancelar
+                </Button>
+            </div>
           </div>
 
           <div className="flex flex-col gap-4 bg-muted/30 p-4 rounded-lg border border-border/50">

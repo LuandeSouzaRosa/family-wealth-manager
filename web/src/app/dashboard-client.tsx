@@ -37,6 +37,7 @@ interface DashboardClientProps {
     saldoTotal?: number
     saldoComprometido?: number
     saldoLivre?: number
+    contas?: any[] // Adicionado para receber as contas
   }
   recentTx: any[]
   orcamentoStatus: any[]
@@ -61,11 +62,29 @@ export function DashboardClientShell({
 
   const filteredRecentTx = recentTx.filter(tx => shouldShow(tx.responsavel))
 
-  // Se metrics.saldoTotal vier do backend (cálculo global), usamos ele.
-  // Caso contrário, fallback para cálculo mensal (que estava errado).
-  const saldoAtual = metrics.saldoTotal !== undefined 
-    ? metrics.saldoTotal 
-    : (metrics.renda - metrics.despesas - metrics.investido)
+  // Calcular o Saldo Atual Baseado no Filtro e nas Contas Reais
+  let saldoAtual = 0;
+  
+  if (metrics.contas && metrics.contas.length > 0) {
+      if (responsavel === "Todos") {
+          saldoAtual = metrics.contas.reduce((acc, c) => acc + Number(c.saldo_atual), 0);
+      } else {
+          saldoAtual = metrics.contas
+            .filter(c => shouldShow(c.responsavel))
+            .reduce((acc, c) => acc + Number(c.saldo_atual), 0);
+      }
+  } else {
+      // Fallback
+      saldoAtual = metrics.saldoTotal !== undefined 
+        ? metrics.saldoTotal 
+        : (metrics.renda - metrics.despesas - metrics.investido)
+  }
+
+  // O saldo livre precisa ser recalculado se o usuário filtrar (Saldo Atual Filtrado - Metas)
+  // Por enquanto, as metas são globais. Num futuro ideal, cada meta teria um responsável também.
+  const saldoLivreAtualizado = metrics.saldoComprometido !== undefined 
+        ? saldoAtual - metrics.saldoComprometido 
+        : undefined;
 
   return (
     <motion.div 
@@ -126,7 +145,7 @@ export function DashboardClientShell({
                 saldoAtual={saldoAtual}
                 renda={metrics.renda}
                 despesas={metrics.despesas}
-                saldoLivre={metrics.saldoLivre}
+                saldoLivre={saldoLivreAtualizado}
                 saldoComprometido={metrics.saldoComprometido}
                 responsavel={responsavel}
             />

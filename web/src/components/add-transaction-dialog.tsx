@@ -42,7 +42,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
-import { createTransaction } from "@/actions/finance"
+import { createTransaction, getContasBancarias } from "@/actions/finance"
 
 // Definir as categorias baseado na antiga cfg.CATEGORIAS_TODAS
 const CATEGORIAS_ENTRADA = ["Salário", "Dividendos", "Bônus", "Extra", "Reembolso"]
@@ -58,11 +58,21 @@ const formSchema = z.object({
   data: z.date(),
   tipo: z.enum(["Entrada", "Saída", "Transferência"]),
   categoria: z.string().min(1, { message: "Por favor selecione uma categoria." }),
+  conta_id: z.string().optional(),
 })
 
 export function AddTransactionDialog({ children }: { children?: React.ReactNode }) {
   const [open, setOpen] = React.useState(false)
   const [isPending, startTransition] = React.useTransition()
+  const [contas, setContas] = React.useState<any[]>([])
+
+  React.useEffect(() => {
+    if (open) {
+      getContasBancarias().then(data => {
+        if (data) setContas(data)
+      })
+    }
+  }, [open])
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -72,6 +82,7 @@ export function AddTransactionDialog({ children }: { children?: React.ReactNode 
       tipo: "Saída",
       categoria: "",
       data: new Date(),
+      conta_id: "none",
     },
   })
 
@@ -87,6 +98,9 @@ export function AddTransactionDialog({ children }: { children?: React.ReactNode 
       formData.append("categoria", values.categoria)
       formData.append("tipo", values.tipo)
       formData.append("data", values.data.toISOString())
+      if (values.conta_id && values.conta_id !== "none") {
+        formData.append("conta_id", values.conta_id)
+      }
 
       const result = await createTransaction(formData)
 
@@ -200,6 +214,32 @@ export function AddTransactionDialog({ children }: { children?: React.ReactNode 
                   <FormControl>
                     <Input placeholder="Ex: Conta de Luz" {...field} data-testid="input-descricao" />
                   </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="conta_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Conta Bancária</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione a conta..." />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="none">Sem conta específica (Geral)</SelectItem>
+                      {contas.map(conta => (
+                        <SelectItem key={conta.id} value={conta.id}>
+                          {conta.nome} ({conta.responsavel})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <FormMessage />
                 </FormItem>
               )}
