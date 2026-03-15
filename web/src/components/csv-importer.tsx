@@ -59,6 +59,8 @@ export function CsvImporter() {
   const [novasRegras, setNovasRegras] = useState<Set<number>>(new Set()) // Índices das linhas que virarão regra
   const [contas, setContas] = useState<any[]>([])
   const [contaSelecionada, setContaSelecionada] = useState<string>("none")
+  
+  const contaAtual = contas.find(c => c.id === contaSelecionada)
 
   useEffect(() => {
     // Carregar regras e contas ao iniciar
@@ -256,6 +258,26 @@ export function CsvImporter() {
           </div>
 
           <div className="flex flex-col gap-4 bg-muted/30 p-4 rounded-lg border border-border/50">
+            {contaAtual ? (
+               <div className="flex items-center gap-3 bg-background border border-border p-3 rounded-md mb-2">
+                 <div 
+                   className="h-8 w-8 rounded-full flex items-center justify-center text-white font-bold text-xs"
+                   style={{ backgroundColor: contaAtual.cor || '#10b981' }}
+                 >
+                   {contaAtual.nome.substring(0, 2).toUpperCase()}
+                 </div>
+                 <div className="flex flex-col">
+                   <span className="text-sm font-medium text-foreground">Conta de Destino: {contaAtual.nome}</span>
+                   <span className="text-xs text-muted-foreground">Responsável: {contaAtual.responsavel}</span>
+                 </div>
+               </div>
+            ) : (
+               <div className="flex items-center gap-3 bg-yellow-500/10 border border-yellow-500/20 p-3 rounded-md mb-2">
+                 <AlertCircle className="h-5 w-5 text-yellow-600" />
+                 <span className="text-sm text-yellow-700 dark:text-yellow-400">Nenhuma conta bancária selecionada. As transações serão importadas como "Geral".</span>
+               </div>
+            )}
+
             <div className="flex flex-col gap-1">
                 <label htmlFor="saldo-inicial" className="text-sm font-medium text-foreground flex items-center gap-2">
                     <AlertCircle className="h-4 w-4 text-blue-500" />
@@ -265,29 +287,29 @@ export function CsvImporter() {
                     Se você já tem um histórico antes deste CSV, digite seu saldo atual do banco. O sistema criará um ajuste automático para que seu Dashboard bata perfeitamente com a realidade de hoje. Se estiver importando meses antigos separadamente, deixe em branco para não duplicar o ajuste.
                 </span>
             </div>
-            <div className="relative max-w-[200px]">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">R$</span>
-                <Input 
-                    id="saldo-inicial" 
-                    placeholder="0,00" 
-                    onChange={(e) => {
-                        const val = e.target.value
-                        const num = parseFloat(val.replace(/\./g, '').replace(',', '.'))
-                        if (!isNaN(num)) {
-                            const payload = data.map(({ id, ...rest }) => rest)
-                            const totalEntradas = payload.filter(t => t.tipo === 'Entrada').reduce((acc, t) => acc + t.valor, 0)
-                            const totalSaidas = payload.filter(t => t.tipo === 'Saída').reduce((acc, t) => acc + t.valor, 0)
-                            const resultadoCSV = totalEntradas - totalSaidas
-                            const diferenca = num - resultadoCSV
-                            setSaldoInicialInfo({ calculado: num, diferenca })
-                        } else {
-                            setSaldoInicialInfo(null)
-                        }
-                    }}
-                    className="pl-9 bg-background border-primary/20 focus:border-primary" 
-                />
-            </div>
-          </div>
+                    <div className="relative max-w-[200px]">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">R$</span>
+                        <Input 
+                            id="saldo-inicial" 
+                            placeholder="0,00" 
+                            onChange={(e) => {
+                                const val = e.target.value
+                                const num = parseFloat(val.replace(/\./g, '').replace(',', '.'))
+                                if (!isNaN(num)) {
+                                    const payload = data.map(({ id, ...rest }) => rest)
+                                    const totalEntradas = payload.filter(t => t.tipo === 'Entrada').reduce((acc, t) => acc + t.valor, 0)
+                                    const totalSaidas = payload.filter(t => t.tipo === 'Saída').reduce((acc, t) => acc + t.valor, 0)
+                                    const resultadoCSV = totalEntradas - totalSaidas
+                                    const diferenca = num - resultadoCSV
+                                    setSaldoInicialInfo({ calculado: num, diferenca })
+                                } else {
+                                    setSaldoInicialInfo(null)
+                                }
+                            }}
+                            className="pl-9 bg-background border-primary/20 focus:border-primary" 
+                        />
+                    </div>
+                 </div>
           
           {saldoInicialInfo && (
             <motion.div 
@@ -300,10 +322,11 @@ export function CsvImporter() {
                     <span>Resumo da Conciliação:</span>
                 </div>
                 <ul className="list-disc list-inside space-y-1 ml-1 text-muted-foreground">
+                    <li>Conta de Destino: <strong>{contaAtual ? contaAtual.nome : 'Geral'}</strong></li>
                     <li>Movimento deste CSV: <strong>{((data.filter(t => t.tipo === 'Entrada').reduce((acc, t) => acc + t.valor, 0)) - (data.filter(t => t.tipo === 'Saída').reduce((acc, t) => acc + t.valor, 0))).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong></li>
                     <li>Saldo Final Informado: <strong>{saldoInicialInfo.calculado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong></li>
                     <li className="text-foreground font-medium">
-                        O sistema criará um ajuste automático de <u>{Math.abs(saldoInicialInfo.diferenca).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</u> ({saldoInicialInfo.diferenca > 0 ? 'Entrada' : 'Saída'}) para equalizar o saldo anterior.
+                        O sistema criará um ajuste automático de <u>{Math.abs(saldoInicialInfo.diferenca).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</u> ({saldoInicialInfo.diferenca > 0 ? 'Entrada' : 'Saída'}) na conta {contaAtual ? contaAtual.nome : 'Geral'} para equalizar o saldo anterior.
                     </li>
                 </ul>
             </motion.div>
