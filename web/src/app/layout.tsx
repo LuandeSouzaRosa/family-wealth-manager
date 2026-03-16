@@ -24,6 +24,7 @@ import { MobileNav } from '@/components/mobile-nav'
 import { LandscapeBlocker } from '@/components/landscape-blocker'
 import { PrivacyBlur } from '@/components/privacy-blur'
 import { SplashScreen } from '@/components/splash-screen'
+import NextTopLoader from 'nextjs-toploader'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -60,6 +61,17 @@ export default async function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
+          <NextTopLoader 
+            color="#10b981"
+            initialPosition={0.08}
+            crawlSpeed={200}
+            height={3}
+            crawl={true}
+            showSpinner={false}
+            easing="ease"
+            speed={200}
+            shadow="0 0 10px #10b981,0 0 5px #10b981"
+          />
           <div className="flex flex-col md:flex-row min-h-screen relative z-0">
             <AmbientBackground />
             <LandscapeBlocker />

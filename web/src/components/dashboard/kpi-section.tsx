@@ -5,6 +5,7 @@ import { ArrowUpRight, ArrowDownRight } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { formatCurrency } from '@/lib/utils'
 import { WealthCard3D } from '@/components/dashboard/wealth-card-3d'
+import { TiltCard } from '@/components/ui/tilt-card'
 
 interface KpiSectionProps {
   saldoAtual: number
@@ -41,41 +42,49 @@ export function KpiSection({
         />
       </motion.div>
 
-      <motion.div whileHover={{ y: -5 }} transition={{ type: "spring", stiffness: 400 }}>
-        <Card className="h-full border border-border shadow-sm bg-card relative overflow-hidden group transition-all hover:shadow-primary/5 hover:border-primary/20">
+      <TiltCard intensity={10} className="h-full">
+        <Card className="h-full border border-border/50 bg-gradient-to-br from-card to-card/50 backdrop-blur-sm shadow-sm relative overflow-hidden group transition-all hover:shadow-primary/10 hover:border-primary/30">
           <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 group-hover:scale-110 transition-all duration-500 ease-out">
             <ArrowUpRight className="w-24 h-24 text-primary" />
           </div>
           <CardHeader className="pb-2">
-            <CardDescription className="text-sm font-semibold tracking-wider uppercase text-primary">
-                Entradas (Mês) {responsavel !== 'Todos' && '(Consolidado)'}
+            <CardDescription className="text-xs font-semibold tracking-wider uppercase text-primary/80 flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+                Entradas (Mês)
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-light tracking-tight tabular-nums text-foreground/90">
+            <div className="text-4xl font-light tracking-tight tabular-nums text-foreground">
               {formatCurrency(renda)}
             </div>
+            <p className="text-xs text-muted-foreground mt-2 opacity-70">
+                {responsavel !== 'Todos' ? 'Visão Consolidada' : 'Total Familiar'}
+            </p>
           </CardContent>
         </Card>
-      </motion.div>
+      </TiltCard>
 
-      <motion.div whileHover={{ y: -5 }} transition={{ type: "spring", stiffness: 400 }}>
-        <Card className="h-full border border-border shadow-sm bg-card relative overflow-hidden group transition-all hover:shadow-destructive/5 hover:border-destructive/20">
+      <TiltCard intensity={10} className="h-full">
+        <Card className="h-full border border-border/50 bg-gradient-to-br from-card to-card/50 backdrop-blur-sm shadow-sm relative overflow-hidden group transition-all hover:shadow-destructive/10 hover:border-destructive/30">
           <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 group-hover:scale-110 transition-all duration-500 ease-out">
             <ArrowDownRight className="w-24 h-24 text-destructive" />
           </div>
           <CardHeader className="pb-2">
-            <CardDescription className="text-sm font-semibold tracking-wider uppercase text-destructive">
-                Saídas (Mês) {responsavel !== 'Todos' && '(Consolidado)'}
+            <CardDescription className="text-xs font-semibold tracking-wider uppercase text-destructive/80 flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-destructive animate-pulse" />
+                Saídas (Mês)
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-light tracking-tight tabular-nums text-foreground/90">
+            <div className="text-4xl font-light tracking-tight tabular-nums text-foreground">
               {formatCurrency(despesas)}
             </div>
+             <p className="text-xs text-muted-foreground mt-2 opacity-70">
+                {responsavel !== 'Todos' ? 'Visão Consolidada' : 'Total Familiar'}
+            </p>
           </CardContent>
         </Card>
-      </motion.div>
+      </TiltCard>
 
     </div>
   )

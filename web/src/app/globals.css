@@ -108,3 +108,19 @@
     @apply font-sans;
   }
 }
+
+@layer utilities {
+  .glass-card {
+    @apply bg-white/60 border-white/20 backdrop-blur-xl shadow-lg shadow-black/5;
+  }
+  .dark .glass-card {
+    @apply bg-black/40 border-white/5 shadow-black/20;
+  }
+  
+  .glass-dock {
+    @apply bg-white/70 border-white/20 backdrop-blur-2xl shadow-2xl;
+  }
+  .dark .glass-dock {
+    @apply bg-black/60 border-white/10;
+  }
+}
