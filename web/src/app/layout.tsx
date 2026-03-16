@@ -72,14 +72,27 @@ export default async function RootLayout({
                   <nav className="hidden md:flex items-center gap-6 text-sm font-medium">
                     <Link href="/" className="transition-colors hover:text-foreground/80 text-foreground/60">Dashboard</Link>
                     <Link href="/transacoes" className="transition-colors hover:text-foreground/80 text-foreground/60">Extrato</Link>
-                    <Link href="/conciliacao" className="transition-colors hover:text-foreground/80 text-foreground/60">Conciliação</Link>
-                    <Link href="/recorrentes" className="transition-colors hover:text-foreground/80 text-foreground/60">Recorrentes</Link>
-                    <Link href="/orcamentos" className="transition-colors hover:text-foreground/80 text-foreground/60">Orçamentos</Link>
-                    <Link href="/metas" className="transition-colors hover:text-foreground/80 text-foreground/60">Metas</Link>
-                    <Link href="/investimentos" className="transition-colors hover:text-foreground/80 text-foreground/60">Investimentos</Link>
-                    <Link href="/contas" className="transition-colors hover:text-foreground/80 text-foreground/60">Contas</Link>
-                    <Link href="/patrimonio" className="transition-colors hover:text-foreground/80 text-foreground/60">Patrimônio</Link>
-                    <Link href="/configuracoes" className="transition-colors hover:text-foreground/80 text-foreground/60">Família</Link>
+                    
+                    {/* Menu Planejamento (Dropdown ou Grupo) */}
+                    <div className="flex items-center gap-4 border-l border-border/50 pl-4">
+                        <span className="text-xs font-medium text-muted-foreground uppercase tracking-widest hidden lg:inline-block">Planejamento</span>
+                        <Link href="/orcamentos" className="transition-colors hover:text-foreground/80 text-foreground/60 flex items-center gap-1">
+                           Orçamentos
+                        </Link>
+                        <Link href="/recorrentes" className="transition-colors hover:text-foreground/80 text-foreground/60 flex items-center gap-1">
+                           Recorrências
+                        </Link>
+                        <Link href="/metas" className="transition-colors hover:text-foreground/80 text-foreground/60 flex items-center gap-1">
+                           Metas
+                        </Link>
+                    </div>
+
+                    {/* Menu Riqueza */}
+                    <div className="flex items-center gap-4 border-l border-border/50 pl-4">
+                        <span className="text-xs font-medium text-muted-foreground uppercase tracking-widest hidden lg:inline-block">Riqueza</span>
+                        <Link href="/investimentos" className="transition-colors hover:text-foreground/80 text-foreground/60">Investimentos</Link>
+                        <Link href="/contas" className="transition-colors hover:text-foreground/80 text-foreground/60">Bancos</Link>
+                    </div>
                   </nav>
 
                   <div className="ml-auto flex items-center space-x-4">

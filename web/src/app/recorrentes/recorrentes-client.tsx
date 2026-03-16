@@ -47,7 +47,7 @@ export function RecorrentesClientShell({ recorrentes }: RecorrentesClientProps) 
   }
 
   const handleProcessar = () => {
-    if(!confirm("Deseja gerar as transações deste mês para as recorrências ativas?")) return;
+    if(!confirm("Deseja gerar as transações previstas deste mês para as recorrências ativas?")) return;
     
     startTransition(async () => {
       const res = await processarRecorrencias()
@@ -86,7 +86,7 @@ export function RecorrentesClientShell({ recorrentes }: RecorrentesClientProps) 
             disabled={isPending}
             className="border-primary/20 bg-primary/5 hover:bg-primary/10 text-primary hover:text-primary"
           >
-            <Play className="mr-2 h-4 w-4" /> Processar Mês
+            <Play className="mr-2 h-4 w-4" /> Gerar Previsões
           </Button>
           <AddRecorrenteDialog />
         </div>

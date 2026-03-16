@@ -16,6 +16,7 @@ const TransactionSchema = z.object({
   data: z.string().datetime().optional(),
   responsavel: z.string().default("Casal"),
   conta_id: z.string().nullable().optional(),
+  status: z.enum(["Realizado", "Agendado", "Pendente"]).default("Realizado").optional(),
 });
 
 // ==========================================
@@ -39,6 +40,7 @@ export async function createTransaction(formData: FormData) {
     data: formData.get("data") as string || new Date().toISOString(),
     responsavel: formData.get("responsavel") as string || "Casal",
     conta_id: formData.get("conta_id") as string || null,
+    status: (formData.get("status") as "Realizado" | "Agendado" | "Pendente") || "Realizado",
   };
 
   // 2. Validar
@@ -55,8 +57,7 @@ export async function createTransaction(formData: FormData) {
     .insert([
       {
         ...parsed.data,
-        origem: "Manual",
-        user_id: user.id
+        origem: "Manual"
       }
     ]);
 
@@ -418,7 +419,7 @@ export async function getOrcamentos() {
   const { data, error } = await supabase
     .from("orcamentos")
     .select("*")
-    .order("limite", { ascending: false });
+    .order("valor_limite", { ascending: false });
 
   if (error) {
     console.error("Erro ao buscar orçamentos:", error);
@@ -440,8 +441,10 @@ export async function getOrcamentoStatus() {
   
   // Mapper para garantir compatibilidade com componentes de UI
   return data.map((item: any) => ({
-    ...item,
-    gasto: item.gasto_atual // Alias para compatibilidade com ExpensePieChart
+    categoria: item.categoria,
+    gasto_atual: item.gasto_atual,
+    limite: item.limite,
+    percentual: item.limite > 0 ? (item.gasto_atual / item.limite) * 100 : 0
   }));
 }
 
@@ -607,65 +610,94 @@ export async function createTransactionsBatch(transactions: any[]) {
           .eq("user_id", user.id);
   }
 
-  // 3. Verificação de Duplicatas (Importante para re-importações de parciais de mês)
-  // Estratégia: Buscar transações existentes no range de datas do lote e comparar
+  // 3. Verificação de Duplicatas e CONCILIAÇÃO DE RECORRÊNCIAS
+  // Estratégia: Buscar transações existentes (Realizadas) e Agendadas (Recorrências)
   if (validTransactions.length > 0) {
       // Encontrar range de datas
       const dates = validTransactions.map(t => new Date(t.data!).getTime());
-      const minDate = new Date(Math.min(...dates)).toISOString();
-      const maxDate = new Date(Math.max(...dates)).toISOString();
+      const minDate = new Date(Math.min(...dates) - 86400000 * 5).toISOString(); // -5 dias de margem
+      const maxDate = new Date(Math.max(...dates) + 86400000 * 5).toISOString(); // +5 dias de margem
 
-      // Buscar existentes neste período
+      // Buscar existentes neste período (Realizadas e Agendadas)
       const { data: existing } = await supabase
           .from("transacoes")
-          .select("descricao, valor, data, conta_id")
+          .select("id, descricao, valor, data, conta_id, status, origem")
           .gte("data", minDate)
           .lte("data", maxDate);
 
-      if (existing && existing.length > 0) {
-           // Criar Set de assinaturas para comparação rápida O(1)
-           // Assinatura: data(YYYY-MM-DD) + valor + descricao (primeiros 15 chars) + conta_id
-           const signatures = new Set(existing.map(t => {
-               const d = new Date(t.data).toISOString().split('T')[0];
-               const v = t.valor.toFixed(2);
-               const desc = t.descricao.substring(0, 15).toLowerCase(); // Comparação flexível
-               const c = t.conta_id || 'null';
-               return `${d}|${v}|${desc}|${c}`;
-           }));
+      const toInsert: any[] = [];
+      const toDeleteIds: string[] = []; // IDs de agendamentos para remover (conciliados)
+      
+      // Assinaturas de transações JÁ REALIZADAS para evitar duplicidade de importação
+      const realizedSignatures = new Set(existing?.filter(t => t.status !== 'Agendado').map(t => {
+           const d = new Date(t.data).toISOString().split('T')[0];
+           const v = t.valor.toFixed(2);
+           const desc = t.descricao.substring(0, 15).toLowerCase();
+           const c = t.conta_id || 'null';
+           return `${d}|${v}|${desc}|${c}`;
+      }));
 
-           // Filtrar o que já existe
-           const originalCount = validTransactions.length;
-           const uniqueTransactions = validTransactions.filter(t => {
-                const d = new Date(t.data!).toISOString().split('T')[0];
-                const v = t.valor.toFixed(2);
-                const desc = t.descricao.substring(0, 15).toLowerCase();
-                const c = t.conta_id || 'null';
-                const key = `${d}|${v}|${desc}|${c}`;
-                
-                if (signatures.has(key)) {
-                    return false; // É duplicata
-                }
-                return true;
+      // Agendamentos disponíveis para conciliação
+      let availableScheduled = existing?.filter(t => t.status === 'Agendado') || [];
+
+      for (const t of validTransactions) {
+           const d = new Date(t.data!).toISOString().split('T')[0];
+           const v = t.valor.toFixed(2);
+           const desc = t.descricao.substring(0, 15).toLowerCase();
+           const c = t.conta_id || 'null';
+           const key = `${d}|${v}|${desc}|${c}`;
+
+           // 1. Se já existe realizada, pula (Duplicata Exata)
+           if (realizedSignatures.has(key)) {
+               continue;
+           }
+
+           // 2. Tentar conciliar com Agendado (Match Inteligente)
+           // Critério: Mesmo valor (ou muito próximo), mesma categoria (opcional), data próxima (+- 5 dias)
+           const matchIndex = availableScheduled.findIndex(scheduled => {
+               const sDate = new Date(scheduled.data).getTime();
+               const tDate = new Date(t.data!).getTime();
+               const diffDays = Math.abs(sDate - tDate) / (1000 * 60 * 60 * 24);
+               
+               // Match por valor exato OU descrição muito parecida
+               const valorMatch = Math.abs(scheduled.valor - t.valor) < 0.05; // diferença de centavos
+               const descMatch = t.descricao.toLowerCase().includes(scheduled.descricao.toLowerCase()) || 
+                                 scheduled.descricao.toLowerCase().includes(t.descricao.toLowerCase());
+
+               return diffDays <= 5 && (valorMatch || descMatch);
            });
 
-          // Se tudo foi filtrado (tudo duplicado), retorna sucesso mas avisa
-          if (uniqueTransactions.length === 0) {
-              return { success: true, count: 0, skipped: originalCount, message: "Todas as transações já foram importadas anteriormente." };
-          }
+           if (matchIndex >= 0) {
+               // CONCILIAÇÃO ENCONTRADA!
+               // Removemos o agendamento (será substituído pela importação real)
+               toDeleteIds.push(availableScheduled[matchIndex].id);
+               // Removemos da lista de disponíveis para não casar duas vezes
+               availableScheduled.splice(matchIndex, 1);
+           }
+
+           // Adiciona a transação importada (agora como Realizada)
+           toInsert.push(t);
+      }
+
+      // Executar operações
+      if (toDeleteIds.length > 0) {
+          await supabase.from("transacoes").delete().in("id", toDeleteIds);
+      }
+
+      if (toInsert.length > 0) {
+          const { error } = await supabase.from("transacoes").insert(toInsert);
+          if (error) return { error: error.message };
           
-          // Prosseguir apenas com as únicas
-          const { error } = await supabase
-            .from("transacoes")
-            .insert(uniqueTransactions);
-
-          if (error) {
-            console.error("Erro na importação em lote:", error);
-            return { error: error.message };
-          }
-
           revalidatePath("/");
           revalidatePath("/transacoes");
-          return { success: true, count: uniqueTransactions.length, skipped: originalCount - uniqueTransactions.length };
+          return { 
+              success: true, 
+              count: toInsert.length, 
+              conciliated: toDeleteIds.length,
+              skipped: validTransactions.length - toInsert.length 
+          };
+      } else {
+          return { success: true, count: 0, skipped: validTransactions.length, message: "Nenhuma transação nova." };
       }
   }
 
