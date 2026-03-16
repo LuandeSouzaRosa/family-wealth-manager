@@ -82,11 +82,11 @@ export function EditInvestimentoDialog({ investimento }: EditInvestimentoDialogP
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
+      <DialogTrigger render={
         <button className="text-muted-foreground hover:text-primary transition-colors">
           <Edit2 className="h-4 w-4" />
         </button>
-      </DialogTrigger>
+      } />
       <DialogContent className="sm:max-w-[400px]">
         <DialogHeader>
           <DialogTitle>Atualizar Investimento</DialogTitle>

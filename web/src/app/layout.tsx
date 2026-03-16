@@ -20,6 +20,7 @@ import { signout } from '@/app/login/actions'
 import { ResponsavelSelector } from '@/components/responsavel-selector'
 
 import { Sidebar } from '@/components/sidebar'
+import { MobileNav } from '@/components/mobile-nav'
 
 const inter = Inter({ subsets: ['latin'] })
 
