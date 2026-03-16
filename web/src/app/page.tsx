@@ -1,5 +1,13 @@
 import { createClient } from '@/utils/supabase/server'
-import { getDashboardMetrics, getRecentTransactions, getOrcamentoStatus, get503020Metrics, getFinancialEvolution } from '@/actions/finance'
+import { 
+  getDashboardMetrics, 
+  getRecentTransactions, 
+  getOrcamentoStatus, 
+  get503020Metrics, 
+  getFinancialEvolution,
+  getFinancialHealthMetrics,
+  getCashFlowForecast 
+} from '@/actions/finance'
 import { redirect } from 'next/navigation'
 import { DashboardClientShell } from '@/app/dashboard-client'
 
@@ -12,12 +20,22 @@ export default async function DashboardPage() {
   }
 
   // Buscar dados reais das Views do Supabase
-  const [metrics, recentTx, orcamentoStatus, breakdown503020, financialEvolution] = await Promise.all([
+  const [
+    metrics, 
+    recentTx, 
+    orcamentoStatus, 
+    breakdown503020, 
+    financialEvolution,
+    financialHealth,
+    cashFlowForecast
+  ] = await Promise.all([
     getDashboardMetrics(),
     getRecentTransactions(10),
     getOrcamentoStatus(),
     get503020Metrics(),
-    getFinancialEvolution()
+    getFinancialEvolution(),
+    getFinancialHealthMetrics(),
+    getCashFlowForecast()
   ])
 
   return (
@@ -28,6 +46,8 @@ export default async function DashboardPage() {
       orcamentoStatus={orcamentoStatus || []}
       breakdown503020={breakdown503020 || []}
       financialEvolution={financialEvolution || []}
+      financialHealth={financialHealth}
+      cashFlowForecast={cashFlowForecast || []}
     />
   )
 }

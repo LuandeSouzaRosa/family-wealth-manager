@@ -13,6 +13,7 @@ import Link from 'next/link'
 import { KpiSection } from '@/components/dashboard/kpi-section'
 import { RecentTransactions } from '@/components/dashboard/recent-transactions'
 import { MobileDashboard } from '@/components/dashboard/mobile-dashboard'
+import { FinancialHealthWidget } from '@/components/dashboard/financial-health'
 
 // Constants for orchestration
 const STAGGER_DELAY = 0.1
@@ -43,6 +44,8 @@ interface DashboardClientProps {
   orcamentoStatus: any[]
   breakdown503020: any[]
   financialEvolution: any[]
+  financialHealth: any
+  cashFlowForecast: any[]
 }
 
 export function DashboardClientShell({ 
@@ -51,7 +54,9 @@ export function DashboardClientShell({
   recentTx,
   orcamentoStatus,
   breakdown503020,
-  financialEvolution
+  financialEvolution,
+  financialHealth,
+  cashFlowForecast
 }: DashboardClientProps) {
   const { responsavel } = useFilter()
 
@@ -165,6 +170,11 @@ export function DashboardClientShell({
                 <FinancialEvolutionChart data={financialEvolution} />
              </CardContent>
            </Card>
+        </motion.div>
+
+        {/* Financial Health & Forecast (NEW - Advanced) */}
+        <motion.div variants={scaleUpVariant}>
+            <FinancialHealthWidget metrics={financialHealth} forecast={cashFlowForecast} />
         </motion.div>
 
         {/* 50/30/20 Analysis Section */}

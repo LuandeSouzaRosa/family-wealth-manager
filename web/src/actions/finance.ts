@@ -1050,3 +1050,103 @@ export async function deleteMeta(id: string) {
   revalidatePath("/metas");
   return { success: true };
 }
+
+// ==========================================
+// ANÁLISE AVANÇADA (Advanced Financial Analysis)
+// ==========================================
+
+export async function getFinancialHealthMetrics() {
+  const supabase = await createClient();
+  
+  // 1. Saldo Total (Runway Base)
+  const { data: contas } = await supabase.from("contas_bancarias").select("saldo_atual");
+  const { data: inv } = await supabase.from("investimentos").select("valor_atual").eq("ativo", true);
+  
+  const totalLiquidez = contas?.reduce((acc, c) => acc + (c.saldo_atual || 0), 0) || 0;
+  const totalInvestido = inv?.reduce((acc, i) => acc + (i.valor_atual || 0), 0) || 0;
+  const totalPatrimonio = totalLiquidez + totalInvestido;
+
+  // 2. Média de Despesas (Burn Rate) - Últimos 3 meses
+  const threeMonthsAgo = new Date();
+  threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+  
+  const { data: transactions } = await supabase
+    .from("transacoes")
+    .select("valor, tipo")
+    .gte("data", threeMonthsAgo.toISOString());
+
+  let totalEntradas = 0;
+  let totalSaidas = 0;
+
+  transactions?.forEach(t => {
+      if (t.tipo === 'Entrada') totalEntradas += t.valor;
+      if (t.tipo === 'Saída') totalSaidas += t.valor;
+  });
+
+  // Média mensal (dividir por 3)
+  const avgIncome = totalEntradas / 3;
+  const avgBurnRate = totalSaidas / 3;
+
+  // 3. Métricas
+  const savingsRate = avgIncome > 0 ? ((avgIncome - avgBurnRate) / avgIncome) * 100 : 0;
+  const runwayMonths = avgBurnRate > 0 ? totalLiquidez / avgBurnRate : 0; // Considera apenas liquidez imediata para runway de segurança
+  const financialFreedom = avgBurnRate > 0 ? (totalPatrimonio * 0.005) / avgBurnRate * 100 : 0; // Regra dos 0.5% a.m. de renda passiva
+
+  return {
+    savingsRate,      // Taxa de Poupança (%)
+    runwayMonths,     // Meses de Sobrevivência (Reserva)
+    financialFreedom, // % da Independência Financeira (Regra dos 300x ou 4%)
+    avgBurnRate,      // Custo de Vida Mensal
+    avgIncome         // Renda Média Mensal
+  };
+}
+
+export async function getCashFlowForecast() {
+  const supabase = await createClient();
+
+  // 1. Saldo Inicial (Bancos)
+  const { data: contas } = await supabase.from("contas_bancarias").select("saldo_atual");
+  let currentBalance = contas?.reduce((acc, c) => acc + (c.saldo_atual || 0), 0) || 0;
+
+  // 2. Recorrências Ativas (Motor da Projeção)
+  const { data: recorrentes } = await supabase
+    .from("recorrentes")
+    .select("*")
+    .eq("ativo", true);
+
+  if (!recorrentes || recorrentes.length === 0) return [];
+
+  // 3. Projetar 6 Meses
+  const forecast = [];
+  const today = new Date();
+
+  for (let i = 0; i < 6; i++) {
+      const monthDate = new Date(today.getFullYear(), today.getMonth() + i, 1);
+      const monthKey = monthDate.toLocaleString('pt-BR', { month: 'short', year: '2-digit' });
+      
+      // Calcular fluxo do mês baseado nas recorrências
+      let monthlyIn = 0;
+      let monthlyOut = 0;
+
+      recorrentes.forEach(r => {
+          // Simplificação: Assume que todas as mensais ocorrem 1x por mês
+          // TODO: Melhorar lógica para quinzenal/anual se necessário
+          if (r.frequencia === 'Mensal') {
+             if (r.tipo === 'Entrada') monthlyIn += r.valor;
+             if (r.tipo === 'Saída') monthlyOut += r.valor;
+          }
+      });
+
+      // Atualizar Saldo Projetado
+      currentBalance = currentBalance + monthlyIn - monthlyOut;
+
+      forecast.push({
+          month: monthKey,
+          saldo: currentBalance,
+          entradas: monthlyIn,
+          saidas: monthlyOut
+      });
+  }
+
+  return forecast;
+}

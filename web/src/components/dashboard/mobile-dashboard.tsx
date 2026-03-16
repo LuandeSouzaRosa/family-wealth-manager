@@ -6,6 +6,7 @@ import { AddTransactionDialog } from "@/components/add-transaction-dialog"
 import Link from "next/link"
 import { formatCurrency } from "@/lib/utils"
 import { FinancialEvolutionChart } from "@/components/charts/financial-evolution-chart"
+import { FinancialHealthWidget } from "@/components/dashboard/financial-health"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
 interface MobileDashboardProps {
@@ -16,6 +17,8 @@ interface MobileDashboardProps {
   recentTx: any[]
   responsavel: string
   financialEvolution: any[]
+  financialHealth: any
+  cashFlowForecast: any[]
 }
 
 export function MobileDashboard({ 
@@ -25,7 +28,9 @@ export function MobileDashboard({
   despesas, 
   recentTx,
   responsavel,
-  financialEvolution
+  financialEvolution,
+  financialHealth,
+  cashFlowForecast
 }: MobileDashboardProps) {
   const [hideValues, setHideValues] = useState(false)
   const [greeting, setGreeting] = useState("Olá")
@@ -94,9 +99,12 @@ export function MobileDashboard({
           </div>
       </div>
 
-      {/* 3.5 Evolução (Mobile) */}
+      {/* 3.5 Evolução e Saúde (Mobile) */}
       <div className="space-y-3">
-          <h3 className="text-base font-semibold">Evolução Patrimonial</h3>
+          <h3 className="text-base font-semibold">Saúde Financeira</h3>
+          <FinancialHealthWidget metrics={financialHealth} forecast={cashFlowForecast} />
+          
+          <h3 className="text-base font-semibold pt-4">Histórico Patrimonial</h3>
           <Card className="border border-border/50 shadow-sm bg-card">
              <CardContent className="h-[200px] p-0 pt-4 pr-2">
                 <FinancialEvolutionChart data={financialEvolution} />
