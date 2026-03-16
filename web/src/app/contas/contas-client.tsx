@@ -33,6 +33,7 @@ import { motion } from "framer-motion"
 import { toast } from "sonner"
 import { useFilter } from "@/contexts/filter-context"
 import { ContaSchema } from "@/lib/schemas"
+import { PluggyConnectButton } from "@/components/pluggy-connect-button"
 
 export function ContasClient({ initialContas }: { initialContas: any[] }) {
   const { responsavel: filtroResponsavel } = useFilter()
@@ -105,21 +106,13 @@ export function ContasClient({ initialContas }: { initialContas: any[] }) {
         </Card>
       </div>
 
-import { PluggyConnectButton } from "@/components/pluggy-connect-button"
-
-export function ContasClient({ initialContas }: { initialContas: any[] }) {
-// ...
-// (código existente)
-
       {/* Botão Nova Conta */}
       <div className="flex justify-between items-center">
         <h2 className="text-xl font-semibold">Minhas Contas</h2>
         <div className="flex gap-2">
             <PluggyConnectButton />
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-// ...
-// (restante do código)
-          <DialogTrigger asChild>
+              <DialogTrigger asChild>
             <Button onClick={handleOpenCreate} className="gap-2">
               <Plus className="h-4 w-4" /> Nova Conta
             </Button>
