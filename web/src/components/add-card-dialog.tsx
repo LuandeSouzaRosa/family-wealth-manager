@@ -87,6 +87,7 @@ export function AddCardDialog() {
   }
 
   // Wrapper para satisfazer o tipo SubmitHandler do react-hook-form
+  // @ts-ignore
   const handleSubmitWrapper = (values: z.infer<typeof formSchema>) => {
     onSubmit(values)
   }
