@@ -232,7 +232,9 @@ export function TransacoesClientShell({ initialData, initialCartoes }: Transacoe
                         <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Mês</label>
                         <Select value={month} onValueChange={(val) => setMonth(val || "0")}>
                           <SelectTrigger className="w-full bg-background border-input text-foreground h-10 px-3">
-                            <span className="truncate block">{currentMonthLabel}</span>
+                            <span className="truncate block text-left">
+                                {MONTHS.find(m => m.value === month)?.label || "Mês"}
+                            </span>
                           </SelectTrigger>
                           <SelectContent>
                             {MONTHS.map(m => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
@@ -246,7 +248,9 @@ export function TransacoesClientShell({ initialData, initialCartoes }: Transacoe
                     <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Categoria</label>
                     <Select value={selectedCategory} onValueChange={setSelectedCategory}>
                       <SelectTrigger className="w-full bg-background border-input text-foreground h-10 px-3">
-                        <span className="truncate block">{selectedCategory === "Todas" ? "Todas as Categorias" : selectedCategory}</span>
+                        <span className="truncate block text-left">
+                            {selectedCategory === "Todas" ? "Todas as Categorias" : selectedCategory}
+                        </span>
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="Todas">Todas as Categorias</SelectItem>
