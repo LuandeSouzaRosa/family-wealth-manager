@@ -17,7 +17,7 @@ export function ResponsavelSelector() {
                         {responsavel === "Luan" && <User className="w-4 h-4 text-blue-500" />}
                         {responsavel === "Esposa" && <UserCheck className="w-4 h-4 text-pink-500" />}
                     </div>
-                    <SelectValue />
+                    <span>{responsavel}</span>
                 </div>
             </SelectTrigger>
             <SelectContent align="end" className="w-[160px]">
