@@ -131,7 +131,7 @@ export function DashboardClientShell({
             <div className="flex items-center gap-3 mb-2">
                 <span className="px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium border border-primary/20 flex items-center gap-1.5">
                     <CalendarRange className="w-3 h-3" />
-                    Março 2026
+                    {new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }).replace(/^\w/, (c) => c.toUpperCase())}
                 </span>
             </div>
             <h1 className="text-4xl md:text-5xl font-semibold tracking-tight text-foreground/90">
