@@ -964,6 +964,7 @@ const MetaSchema = z.object({
   nome: z.string().min(2, "O nome da meta é obrigatório"),
   valor_alvo: z.number().positive("O valor alvo deve ser maior que zero"),
   valor_atual: z.number().min(0, "O valor atual não pode ser negativo").default(0),
+  data_limite: z.string().optional().nullable(),
   cor: z.string().default("#10b981"),
 });
 
@@ -991,6 +992,7 @@ export async function createMeta(formData: FormData) {
     nome: formData.get("nome") as string,
     valor_alvo: parseFloat(formData.get("valor_alvo") as string),
     valor_atual: parseFloat(formData.get("valor_atual") as string) || 0,
+    data_limite: formData.get("data_limite") as string || null,
     cor: formData.get("cor") as string || "#10b981",
   };
 
@@ -1017,6 +1019,7 @@ export async function updateMeta(id: string, formData: FormData) {
     nome: formData.get("nome") as string,
     valor_alvo: parseFloat(formData.get("valor_alvo") as string),
     valor_atual: parseFloat(formData.get("valor_atual") as string),
+    data_limite: formData.get("data_limite") as string || null,
     cor: formData.get("cor") as string,
   };
 

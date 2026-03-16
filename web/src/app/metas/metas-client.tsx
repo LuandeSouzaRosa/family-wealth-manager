@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react"
 import { createMeta, deleteMeta, updateMeta } from "@/actions/finance"
 import { Button } from "@/components/ui/button"
-import { Plus, Target, Trash2, Edit2, TrendingUp, PiggyBank } from "lucide-react"
+import { Plus, Target, Trash2, Edit2, TrendingUp, PiggyBank, Calendar } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import {
@@ -20,6 +20,7 @@ import { Label } from "@/components/ui/label"
 import { formatCurrency } from "@/lib/utils"
 import { motion } from "framer-motion"
 import { toast } from "sonner"
+import { differenceInMonths } from "date-fns"
 
 export function MetasClient({ initialMetas }: { initialMetas: any[] }) {
   const [metas, setMetas] = useState(initialMetas)
@@ -31,6 +32,7 @@ export function MetasClient({ initialMetas }: { initialMetas: any[] }) {
   const [nome, setNome] = useState("")
   const [valorAlvo, setValorAlvo] = useState("")
   const [valorAtual, setValorAtual] = useState("")
+  const [dataLimite, setDataLimite] = useState("")
 
   const totalAlvo = metas.reduce((acc, m) => acc + Number(m.valor_alvo), 0)
   const totalAtual = metas.reduce((acc, m) => acc + Number(m.valor_atual), 0)
@@ -41,6 +43,7 @@ export function MetasClient({ initialMetas }: { initialMetas: any[] }) {
     setNome("")
     setValorAlvo("")
     setValorAtual("")
+    setDataLimite("")
     setIsDialogOpen(true)
   }
 
@@ -49,6 +52,7 @@ export function MetasClient({ initialMetas }: { initialMetas: any[] }) {
     setNome(meta.nome)
     setValorAlvo(meta.valor_alvo.toString())
     setValorAtual(meta.valor_atual.toString())
+    setDataLimite(meta.data_limite || "")
     setIsDialogOpen(true)
   }
 
@@ -59,6 +63,7 @@ export function MetasClient({ initialMetas }: { initialMetas: any[] }) {
       formData.append("nome", nome)
       formData.append("valor_alvo", valorAlvo)
       formData.append("valor_atual", valorAtual || "0")
+      if (dataLimite) formData.append("data_limite", dataLimite)
       
       let result
       if (editingMeta) {
@@ -72,10 +77,23 @@ export function MetasClient({ initialMetas }: { initialMetas: any[] }) {
       } else {
         toast.success(editingMeta ? "Meta atualizada!" : "Meta criada com sucesso!")
         setIsDialogOpen(false)
-        // Recarregar página para atualizar dados (ou atualizar estado local se preferir otimizar)
+        // Recarregar página para atualizar dados
         window.location.reload()
       }
     })
+  }
+
+  const calculateMonthlyContribution = (meta: any) => {
+    if (!meta.data_limite || meta.valor_atual >= meta.valor_alvo) return null
+    
+    const today = new Date()
+    const targetDate = new Date(meta.data_limite)
+    const monthsLeft = differenceInMonths(targetDate, today)
+    
+    if (monthsLeft <= 0) return "Vencida"
+    
+    const remaining = meta.valor_alvo - meta.valor_atual
+    return remaining / monthsLeft
   }
 
   const handleDelete = async (id: string) => {
@@ -175,6 +193,18 @@ export function MetasClient({ initialMetas }: { initialMetas: any[] }) {
                   />
                 </div>
               </div>
+              <div className="space-y-2">
+                  <Label htmlFor="limite">Data Alvo (Opcional)</Label>
+                  <Input 
+                    id="limite" 
+                    type="date"
+                    value={dataLimite}
+                    onChange={e => setDataLimite(e.target.value)}
+                  />
+                  <p className="text-[10px] text-muted-foreground">
+                    Define o prazo para calcular a economia mensal necessária.
+                  </p>
+              </div>
               <DialogFooter>
                 <Button type="submit" disabled={isPending}>
                   {isPending ? "Salvando..." : "Salvar Meta"}
@@ -196,6 +226,8 @@ export function MetasClient({ initialMetas }: { initialMetas: any[] }) {
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {metas.map((meta) => {
             const progresso = meta.valor_alvo > 0 ? (meta.valor_atual / meta.valor_alvo) * 100 : 0
+            const aporteMensal = calculateMonthlyContribution(meta)
+            
             return (
               <motion.div
                 key={meta.id}
@@ -203,7 +235,7 @@ export function MetasClient({ initialMetas }: { initialMetas: any[] }) {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3 }}
               >
-                <Card className="overflow-hidden border-t-4 border-t-primary shadow-sm hover:shadow-md transition-shadow">
+                <Card className="overflow-hidden border-t-4 border-t-primary shadow-sm hover:shadow-md transition-shadow h-full flex flex-col">
                   <CardHeader className="pb-2 flex flex-row items-start justify-between space-y-0">
                     <div>
                       <CardTitle className="text-lg">{meta.nome}</CardTitle>
@@ -220,12 +252,30 @@ export function MetasClient({ initialMetas }: { initialMetas: any[] }) {
                       </Button>
                     </div>
                   </CardHeader>
-                  <CardContent className="pb-2">
+                  <CardContent className="pb-2 flex-1">
                     <div className="flex justify-between text-sm mb-2">
                       <span className="font-semibold text-primary">{formatCurrency(meta.valor_atual)}</span>
                       <span className="text-muted-foreground">{formatCurrency(meta.valor_alvo)}</span>
                     </div>
                     <Progress value={progresso} className="h-3" />
+                    
+                    {meta.data_limite && (
+                        <div className="mt-4 pt-3 border-t border-border flex items-center justify-between text-xs">
+                            <span className="text-muted-foreground flex items-center gap-1">
+                                <Calendar className="h-3 w-3" /> {new Date(meta.data_limite).toLocaleDateString('pt-BR')}
+                            </span>
+                            {aporteMensal && typeof aporteMensal === 'number' && (
+                                <span className="font-medium text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                                    Poupar {formatCurrency(aporteMensal)}/mês
+                                </span>
+                            )}
+                            {aporteMensal === 'Vencida' && (
+                                <span className="font-medium text-red-600 bg-red-500/10 px-2 py-0.5 rounded-full">
+                                    Prazo Vencido
+                                </span>
+                            )}
+                        </div>
+                    )}
                   </CardContent>
                   <CardFooter className="pt-2 pb-4">
                     <div className="text-xs text-muted-foreground w-full text-center">

@@ -3,6 +3,8 @@
 import { motion } from 'framer-motion'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { AddInvestimentoDialog } from '@/components/add-investimento-dialog'
+import { EditInvestimentoDialog } from '@/components/edit-investimento-dialog'
+import { AllocationPieChart } from '@/components/charts/allocation-pie-chart'
 import { TrendingUp, PieChart, Wallet, Calendar, ArrowUpRight, DollarSign, Building2 } from 'lucide-react'
 import { useTransition } from 'react'
 import { deleteInvestimento } from '@/actions/finance'
@@ -86,42 +88,59 @@ export function InvestimentosClientShell({ initialInvestimentos }: Investimentos
         </div>
       </motion.div>
 
-      {/* KPI Cards */}
-      <motion.div variants={scaleUpVariant} className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <Card className="bg-gradient-to-br from-background to-muted/20 border-border shadow-sm">
-            <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Total Investido (Bruto)</CardTitle>
-            </CardHeader>
-            <CardContent>
-                <div className="text-3xl font-bold text-foreground">{formatBRL(totalAtual)}</div>
-                <div className="text-xs text-muted-foreground mt-1">Custo: {formatBRL(totalAplicado)}</div>
-            </CardContent>
-          </Card>
+      {/* KPI Cards & Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Left Column: KPIs */}
+        <motion.div variants={scaleUpVariant} className="grid grid-cols-1 md:grid-cols-2 gap-6 content-start">
+            <Card className="md:col-span-2 bg-gradient-to-br from-background to-muted/20 border-border shadow-sm">
+              <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Total Investido (Bruto)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                  <div className="text-3xl font-bold text-foreground">{formatBRL(totalAtual)}</div>
+                  <div className="text-xs text-muted-foreground mt-1">Custo: {formatBRL(totalAplicado)}</div>
+              </CardContent>
+            </Card>
 
-          <Card className="bg-gradient-to-br from-background to-muted/20 border-border shadow-sm">
-            <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Rentabilidade</CardTitle>
-            </CardHeader>
-            <CardContent>
-                <div className={`text-3xl font-bold ${rentabilidadeAbsoluta >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
-                    {rentabilidadeAbsoluta >= 0 ? '+' : ''}{formatBRL(rentabilidadeAbsoluta)}
-                </div>
-                <div className={`text-xs mt-1 font-medium ${rentabilidadePercentual >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                    {rentabilidadePercentual.toFixed(2)}% de retorno
-                </div>
-            </CardContent>
-          </Card>
+            <Card className="bg-gradient-to-br from-background to-muted/20 border-border shadow-sm">
+              <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Rentabilidade</CardTitle>
+              </CardHeader>
+              <CardContent>
+                  <div className={`text-2xl font-bold ${rentabilidadeAbsoluta >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+                      {rentabilidadeAbsoluta >= 0 ? '+' : ''}{formatBRL(rentabilidadeAbsoluta)}
+                  </div>
+                  <div className={`text-xs mt-1 font-medium ${rentabilidadePercentual >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                      {rentabilidadePercentual.toFixed(2)}% de retorno
+                  </div>
+              </CardContent>
+            </Card>
 
-          <Card className="bg-gradient-to-br from-background to-muted/20 border-border shadow-sm">
-             <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Ativos na Carteira</CardTitle>
-            </CardHeader>
-            <CardContent>
-                <div className="text-3xl font-bold text-foreground">{filteredInvestimentos.length}</div>
-                <div className="text-xs text-muted-foreground mt-1">Produtos Financeiros</div>
-            </CardContent>
-          </Card>
-      </motion.div>
+            <Card className="bg-gradient-to-br from-background to-muted/20 border-border shadow-sm">
+               <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Ativos na Carteira</CardTitle>
+              </CardHeader>
+              <CardContent>
+                  <div className="text-2xl font-bold text-foreground">{filteredInvestimentos.length}</div>
+                  <div className="text-xs text-muted-foreground mt-1">Produtos Financeiros</div>
+              </CardContent>
+            </Card>
+        </motion.div>
+
+        {/* Right Column: Allocation Chart */}
+        <motion.div variants={scaleUpVariant}>
+            <Card className="h-full border border-border shadow-sm bg-card">
+               <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                    <PieChart className="w-4 h-4" /> Alocação de Ativos
+                  </CardTitle>
+               </CardHeader>
+               <CardContent className="h-[250px]">
+                  <AllocationPieChart data={filteredInvestimentos.map(i => ({ tipo: i.tipo, valor: i.valor_atual }))} />
+               </CardContent>
+            </Card>
+        </motion.div>
+      </div>
 
       {/* Tabela de Ativos */}
       <motion.div variants={fadeUpVariant} className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
@@ -183,13 +202,16 @@ export function InvestimentosClientShell({ initialInvestimentos }: Investimentos
                                          {item.data_vencimento ? new Date(item.data_vencimento).toLocaleDateString('pt-BR') : '-'}
                                      </td>
                                      <td className="px-6 py-4 text-right">
-                                         <button 
-                                            onClick={() => handleDelete(item.id)}
-                                            disabled={isPending}
-                                            className="text-muted-foreground hover:text-destructive transition-colors text-xs underline"
-                                         >
-                                             Remover
-                                         </button>
+                                         <div className="flex items-center justify-end gap-2">
+                                            <EditInvestimentoDialog investimento={item} />
+                                            <button 
+                                               onClick={() => handleDelete(item.id)}
+                                               disabled={isPending}
+                                               className="text-muted-foreground hover:text-destructive transition-colors text-xs underline"
+                                            >
+                                                Remover
+                                            </button>
+                                         </div>
                                      </td>
                                  </tr>
                              )
