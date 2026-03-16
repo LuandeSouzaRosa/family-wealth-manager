@@ -1,10 +1,10 @@
 "use client"
 
 import React, { useRef, useState } from "react"
-import { motion, useMotionValue, useSpring, useTransform } from "framer-motion"
+import { motion, useMotionValue, useSpring, useTransform, HTMLMotionProps } from "framer-motion"
 import { cn } from "@/lib/utils"
 
-interface TiltCardProps extends React.HTMLAttributes<HTMLDivElement> {
+interface TiltCardProps extends HTMLMotionProps<"div"> {
   children: React.ReactNode
   className?: string
   intensity?: number
@@ -56,7 +56,7 @@ export function TiltCard({ children, className, intensity = 15, ...props }: Tilt
         transformStyle: "preserve-3d",
       }}
       className={cn("relative group glass-card rounded-xl", className)}
-      {...props}
+      {...props as any}
     >
       <div
         style={{
