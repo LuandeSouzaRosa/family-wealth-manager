@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Progress } from "@/components/ui/progress"
 import { Button } from "@/components/ui/button"
 import { AddCardDialog } from "@/components/add-card-dialog"
-import { deleteCartaoCredito } from "@/actions/finance"
+import { deleteCartaoCredito } from "@/actions/accounts";
 import { formatCurrency } from "@/lib/utils"
 import { toast } from "sonner"
 

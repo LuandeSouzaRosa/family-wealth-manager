@@ -33,7 +33,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
-import { createPatrimonio } from "@/actions/finance"
+import { createPatrimonio } from "@/actions/assets";
 
 const CATEGORIAS_ATIVO = ["Conta Corrente", "Investimento", "Imóvel", "Veículo", "Outros Bens"]
 const CATEGORIAS_PASSIVO = ["Imobiliário", "Veículo", "Empréstimo", "Cartão de Crédito", "Outras Dívidas"]

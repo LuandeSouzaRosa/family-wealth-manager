@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/form-new"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { createCartaoCredito } from "@/actions/finance"
+import { createCartaoCredito } from "@/actions/accounts";
 import { toast } from "sonner"
 
 import { CartaoSchema } from "@/lib/schemas"

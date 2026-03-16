@@ -33,7 +33,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
-import { createRecorrente } from "@/actions/finance"
+import { createRecorrente } from "@/actions/recurrences";
 import { CATEGORIAS_ENTRADA, CATEGORIAS_SAIDA, RESPONSAVEIS } from "@/lib/constants"
 
 import { RecorrenteSchema } from "@/lib/schemas"

@@ -1,13 +1,12 @@
 import { createClient } from '@/utils/supabase/server'
 import { 
   getDashboardMetrics, 
-  getRecentTransactions, 
-  getOrcamentoStatus, 
-  get503020Metrics, 
   getFinancialEvolution,
   getFinancialHealthMetrics,
   getCashFlowForecast 
-} from '@/actions/finance'
+} from '@/actions/dashboard'
+import { getRecentTransactions } from '@/actions/transactions'
+import { getOrcamentoStatus, get503020Metrics } from '@/actions/budgets'
 import { redirect } from 'next/navigation'
 import { DashboardClientShell } from '@/app/dashboard-client'
 

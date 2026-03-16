@@ -33,7 +33,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
-import { createOrcamento } from "@/actions/finance"
+import { createOrcamento } from "@/actions/budgets";
 import { CATEGORIAS_SAIDA, RESPONSAVEIS } from "@/lib/constants"
 
 import { OrcamentoSchema } from "@/lib/schemas"

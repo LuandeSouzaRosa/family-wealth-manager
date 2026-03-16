@@ -1,4 +1,5 @@
-import { getTransactions, getCartoesCredito } from "@/actions/finance"
+import { getTransactions, deleteTransaction } from "@/actions/transactions"
+import { getContasBancarias, getCartoesCredito } from "@/actions/accounts"
 import { TransacoesClientShell } from "./transacoes-client"
 import { createClient } from "@/utils/supabase/server"
 import { redirect } from "next/navigation"

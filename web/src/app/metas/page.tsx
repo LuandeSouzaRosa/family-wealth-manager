@@ -1,5 +1,5 @@
 import { Suspense } from "react"
-import { getMetas, createMeta, deleteMeta, updateMeta } from "@/actions/finance"
+import { getMetas } from "@/actions/goals";
 import { Button } from "@/components/ui/button"
 import { Plus, Target, Trash2, Edit2, TrendingUp } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"

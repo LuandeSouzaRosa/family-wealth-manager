@@ -1,5 +1,5 @@
 import { Suspense } from "react"
-import { getContasBancarias } from "@/actions/finance"
+import { getContasBancarias } from "@/actions/accounts";
 import { ContasClient } from "./contas-client"
 import { WalletCards } from "lucide-react"
 

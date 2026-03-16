@@ -50,16 +50,21 @@ interface DashboardClientProps {
   cashFlowForecast: any[]
 }
 
+import { AiAdvisorWidget } from '@/components/dashboard/ai-advisor-widget'
+
 export function DashboardClientShell({ 
-  userEmail, 
-  metrics, 
-  recentTx,
-  orcamentoStatus,
-  breakdown503020,
-  financialEvolution,
-  financialHealth,
-  cashFlowForecast
-}: DashboardClientProps) {
+// ...
+// (manter o restante do código)
+  return (
+    <motion.div 
+      // ...
+    >
+      {/* ... */}
+      
+      <AiAdvisorWidget />
+    </motion.div>
+  )
+}
   const { responsavel } = useFilter()
 
   const shouldShow = (itemResponsavel: string) => {

@@ -1,4 +1,4 @@
-import { getRecorrentes } from "@/actions/finance"
+import { getRecorrentes, toggleRecorrente, deleteRecorrente, processarRecorrencias } from "@/actions/recurrences";
 import { RecorrentesClientShell } from "./recorrentes-client"
 
 export const metadata = {

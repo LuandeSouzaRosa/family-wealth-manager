@@ -1,4 +1,4 @@
-import { getPatrimonio } from "@/actions/finance"
+import { getPatrimonio, deletePatrimonio } from "@/actions/assets"
 import { PatrimonioClientShell } from "./patrimonio-client"
 
 export const metadata = {

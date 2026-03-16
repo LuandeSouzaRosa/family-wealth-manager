@@ -1,4 +1,4 @@
-import { getInvestimentos } from "@/actions/finance"
+import { getInvestimentos, deleteInvestimento } from "@/actions/investments"
 import { InvestimentosClientShell } from "./investimentos-client"
 
 export const metadata = {

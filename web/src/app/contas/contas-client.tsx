@@ -4,7 +4,7 @@ import { useState, useTransition } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { createContaBancaria } from "@/actions/finance"
+import { createContaBancaria } from "@/actions/accounts";
 import { Button } from "@/components/ui/button"
 import { Plus, Building2, User, Users } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"

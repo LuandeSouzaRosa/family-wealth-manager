@@ -42,7 +42,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
-import { createInvestimento } from "@/actions/finance"
+import { createInvestimento } from "@/actions/investments";
 
 import { InvestimentoSchema } from "@/lib/schemas"
 

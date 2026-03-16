@@ -42,7 +42,8 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
-import { createTransaction, getContasBancarias } from "@/actions/finance"
+import { getContasBancarias } from "@/actions/accounts"
+import { createTransaction } from "@/actions/transactions"
 import { CATEGORIAS_ENTRADA, CATEGORIAS_SAIDA } from "@/lib/constants"
 
 import { TransactionSchema } from "@/lib/schemas"

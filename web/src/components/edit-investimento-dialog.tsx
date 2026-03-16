@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/form-new"
 import { Input } from "@/components/ui/input"
 
-import { updateInvestimento } from "@/actions/finance"
+import { updateInvestimento } from "@/actions/investments";
 
 const formSchema = z.object({
   nome: z.string().min(2, { message: "Nome do ativo é obrigatório." }),
