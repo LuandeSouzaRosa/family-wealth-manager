@@ -60,18 +60,18 @@ const TIPOS_INVESTIMENTO = [
 const formSchema = z.object({
   nome: z.string().min(2, { message: "Nome do ativo é obrigatório." }),
   tipo: z.string().min(1, { message: "Selecione o tipo." }),
-  instituicao: z.string().default("XP"), // Tornando obrigatório para o TS
+  instituicao: z.string(), // Tornando obrigatório para o TS
   valor_aplicado: z.string().refine((val) => !isNaN(Number(val)) && Number(val) >= 0, {
     message: "Valor inválido.",
   }),
   valor_atual: z.string().refine((val) => !isNaN(Number(val)) && Number(val) >= 0, {
     message: "Valor inválido.",
   }),
-  quantidade: z.string().default("1"),
+  quantidade: z.string(),
   data_aplicacao: z.date(),
   data_vencimento: z.date().optional().nullable(),
   liquidez: z.string().optional(),
-  responsavel: z.string().default("Casal"),
+  responsavel: z.string(),
 })
 
 type FormSchemaType = z.infer<typeof formSchema>
@@ -80,9 +80,7 @@ export function AddInvestimentoDialog() {
   const [open, setOpen] = React.useState(false)
   const [isPending, startTransition] = React.useTransition()
 
-  // @ts-ignore
   const form = useForm<FormSchemaType>({
-    // @ts-ignore
     resolver: zodResolver(formSchema),
     defaultValues: {
       nome: "",
@@ -98,8 +96,7 @@ export function AddInvestimentoDialog() {
     },
   })
 
-  // @ts-ignore
-  function onSubmit(values: any) {
+  function onSubmit(values: FormSchemaType) {
     startTransition(async () => {
       const formData = new FormData()
       formData.append("nome", values.nome)
@@ -128,11 +125,11 @@ export function AddInvestimentoDialog() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={
+      <DialogTrigger asChild>
         <Button className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2 rounded-full shadow-lg hover:shadow-primary/25 transition-all">
           <Plus size={18} /> Novo Aporte
         </Button>
-      } />
+      </DialogTrigger>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -147,7 +144,6 @@ export function AddInvestimentoDialog() {
             
             <div className="grid grid-cols-2 gap-4">
                 <FormField
-                  // @ts-ignore
                   control={form.control}
                   name="tipo"
                   render={({ field }) => (
@@ -171,7 +167,6 @@ export function AddInvestimentoDialog() {
                 />
                 
                 <FormField
-                  // @ts-ignore
                   control={form.control}
                   name="instituicao"
                   render={({ field }) => (
@@ -187,7 +182,6 @@ export function AddInvestimentoDialog() {
             </div>
 
             <FormField
-              // @ts-ignore
               control={form.control}
               name="nome"
               render={({ field }) => (
@@ -203,7 +197,6 @@ export function AddInvestimentoDialog() {
 
             <div className="grid grid-cols-2 gap-4">
                 <FormField
-                  // @ts-ignore
                   control={form.control}
                   name="valor_aplicado"
                   render={({ field }) => (
@@ -227,7 +220,6 @@ export function AddInvestimentoDialog() {
                 />
 
                 <FormField
-                  // @ts-ignore
                   control={form.control}
                   name="valor_atual"
                   render={({ field }) => (
@@ -244,7 +236,6 @@ export function AddInvestimentoDialog() {
 
             <div className="grid grid-cols-2 gap-4">
                  <FormField
-                  // @ts-ignore
                   control={form.control}
                   name="data_aplicacao"
                   render={({ field }) => (
@@ -283,7 +274,6 @@ export function AddInvestimentoDialog() {
                 />
                 
                 <FormField
-                  // @ts-ignore
                   control={form.control}
                   name="responsavel"
                   render={({ field }) => (
@@ -308,7 +298,6 @@ export function AddInvestimentoDialog() {
             </div>
             
              <FormField
-                  // @ts-ignore
                   control={form.control}
                   name="data_vencimento"
                   render={({ field }) => (

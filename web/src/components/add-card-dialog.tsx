@@ -42,17 +42,15 @@ const formSchema = z.object({
     const num = Number(val);
     return !isNaN(num) && num >= 1 && num <= 31;
   }, { message: "Dia deve ser entre 1 e 31." }),
-  responsavel: z.string().default("Todos"),
-  cor: z.string().default("#000000"),
+  responsavel: z.string(),
+  cor: z.string(),
 })
 
 export function AddCardDialog() {
   const [open, setOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
 
-  // @ts-ignore
   const form = useForm<z.infer<typeof formSchema>>({
-    // @ts-ignore
     resolver: zodResolver(formSchema),
     defaultValues: {
       nome: "",
@@ -86,19 +84,13 @@ export function AddCardDialog() {
     })
   }
 
-  // Wrapper para satisfazer o tipo SubmitHandler do react-hook-form
-  // @ts-ignore
-  const handleSubmitWrapper = (values: z.infer<typeof formSchema>) => {
-    onSubmit(values)
-  }
-
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={
+      <DialogTrigger asChild>
         <Button className="gap-2 bg-gradient-to-r from-primary to-primary/80 hover:opacity-90">
           <Plus className="h-4 w-4" /> Novo Cartão
         </Button>
-      } />
+      </DialogTrigger>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -113,10 +105,9 @@ export function AddCardDialog() {
         </DialogHeader>
         
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleSubmitWrapper)} className="space-y-4">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             
             <FormField
-              // @ts-ignore
               control={form.control}
               name="nome"
               render={({ field }) => (
@@ -132,7 +123,6 @@ export function AddCardDialog() {
 
             <div className="grid grid-cols-2 gap-4">
                 <FormField
-                  // @ts-ignore
                   control={form.control}
                   name="limite"
                   render={({ field }) => (
@@ -147,7 +137,6 @@ export function AddCardDialog() {
                 />
 
                 <FormField
-                  // @ts-ignore
                   control={form.control}
                   name="responsavel"
                   render={({ field }) => (
@@ -173,7 +162,6 @@ export function AddCardDialog() {
 
             <div className="grid grid-cols-2 gap-4">
                 <FormField
-                  // @ts-ignore
                   control={form.control}
                   name="dia_fechamento"
                   render={({ field }) => (
@@ -205,7 +193,6 @@ export function AddCardDialog() {
             </div>
 
             <FormField
-              // @ts-ignore
               control={form.control}
               name="cor"
               render={({ field }) => (

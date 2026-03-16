@@ -57,7 +57,7 @@ const formSchema = z.object({
   categoria: z.string().min(1, { message: "Por favor selecione uma categoria." }),
   conta_id: z.string().optional(),
   cartao_id: z.string().optional(),
-  metodo: z.enum(["conta", "cartao"]).default("conta"),
+  metodo: z.enum(["conta", "cartao"]),
 })
 
 export function AddTransactionDialog({ children, cartoes = [] }: { children?: React.ReactNode, cartoes?: any[] }) {
@@ -133,9 +133,9 @@ export function AddTransactionDialog({ children, cartoes = [] }: { children?: Re
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={
-        children ? (children as React.ReactElement) : triggerButton
-      } />
+      <DialogTrigger asChild>
+        {children ? (children as React.ReactElement) : triggerButton}
+      </DialogTrigger>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Adicionar Transação</DialogTitle>

@@ -89,11 +89,11 @@ export function ContasClient({ initialContas }: { initialContas: any[] }) {
       <div className="flex justify-between items-center">
         <h2 className="text-xl font-semibold">Minhas Contas</h2>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger render={
+          <DialogTrigger asChild>
             <Button onClick={handleOpenCreate} className="gap-2">
               <Plus className="h-4 w-4" /> Nova Conta
             </Button>
-          } />
+          </DialogTrigger>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Adicionar Conta Bancária</DialogTitle>

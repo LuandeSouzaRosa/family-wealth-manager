@@ -41,7 +41,7 @@ const formSchema = z.object({
   limite_mensal: z.string().refine((val) => !isNaN(Number(val)) && Number(val) > 0, {
     message: "Valor inválido.",
   }),
-  responsavel: z.string().min(1).default("Casal"),
+  responsavel: z.string().min(1),
 })
 
 type FormSchemaType = z.infer<typeof formSchema>
@@ -51,7 +51,6 @@ export function AddOrcamentoDialog() {
   const [isPending, startTransition] = React.useTransition()
 
   const form = useForm<FormSchemaType>({
-    // @ts-ignore
     resolver: zodResolver(formSchema),
     defaultValues: {
       categoria: "",
@@ -60,7 +59,6 @@ export function AddOrcamentoDialog() {
     },
   })
 
-  // @ts-ignore
   function onSubmit(values: FormSchemaType) {
     startTransition(async () => {
       const formData = new FormData()
@@ -96,11 +94,9 @@ export function AddOrcamentoDialog() {
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          {/* @ts-ignore */}
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             
             <FormField
-              // @ts-ignore
               control={form.control}
               name="categoria"
               render={({ field }) => (
@@ -140,7 +136,6 @@ export function AddOrcamentoDialog() {
                 />
 
                 <FormField
-                  // @ts-ignore
                   control={form.control}
                   name="responsavel"
                   render={({ field }) => (

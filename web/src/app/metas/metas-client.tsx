@@ -145,11 +145,11 @@ export function MetasClient({ initialMetas }: { initialMetas: any[] }) {
       {/* Botão Nova Meta */}
       <div className="flex justify-end">
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger render={
+          <DialogTrigger asChild>
             <Button onClick={handleOpenCreate} className="gap-2">
               <Plus className="h-4 w-4" /> Nova Meta
             </Button>
-          } />
+          </DialogTrigger>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>{editingMeta ? "Editar Meta" : "Nova Meta Financeira"}</DialogTitle>

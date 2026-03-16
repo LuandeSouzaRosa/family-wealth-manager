@@ -33,7 +33,7 @@ const formSchema = z.object({
   valor_atual: z.string().refine((val) => !isNaN(Number(val)) && Number(val) >= 0, {
     message: "Valor inválido.",
   }),
-  quantidade: z.string().default("1"),
+  quantidade: z.string(),
 })
 
 type FormSchemaType = z.infer<typeof formSchema>
@@ -51,9 +51,7 @@ export function EditInvestimentoDialog({ investimento }: EditInvestimentoDialogP
   const [open, setOpen] = React.useState(false)
   const [isPending, startTransition] = React.useTransition()
 
-  // @ts-ignore
   const form = useForm<FormSchemaType>({
-    // @ts-ignore
     resolver: zodResolver(formSchema),
     defaultValues: {
       nome: investimento.nome,
@@ -62,8 +60,7 @@ export function EditInvestimentoDialog({ investimento }: EditInvestimentoDialogP
     },
   })
 
-  // @ts-ignore
-  function onSubmit(values: any) {
+  function onSubmit(values: FormSchemaType) {
     startTransition(async () => {
       const formData = new FormData()
       formData.append("nome", values.nome)
@@ -82,11 +79,11 @@ export function EditInvestimentoDialog({ investimento }: EditInvestimentoDialogP
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={
+      <DialogTrigger asChild>
         <button className="text-muted-foreground hover:text-primary transition-colors">
           <Edit2 className="h-4 w-4" />
         </button>
-      } />
+      </DialogTrigger>
       <DialogContent className="sm:max-w-[400px]">
         <DialogHeader>
           <DialogTitle>Atualizar Investimento</DialogTitle>
@@ -98,7 +95,6 @@ export function EditInvestimentoDialog({ investimento }: EditInvestimentoDialogP
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             
             <FormField
-              // @ts-ignore
               control={form.control}
               name="nome"
               render={({ field }) => (
@@ -114,7 +110,6 @@ export function EditInvestimentoDialog({ investimento }: EditInvestimentoDialogP
 
             <div className="grid grid-cols-2 gap-4">
                 <FormField
-                  // @ts-ignore
                   control={form.control}
                   name="valor_atual"
                   render={({ field }) => (
@@ -129,7 +124,6 @@ export function EditInvestimentoDialog({ investimento }: EditInvestimentoDialogP
                 />
 
                 <FormField
-                  // @ts-ignore
                   control={form.control}
                   name="quantidade"
                   render={({ field }) => (

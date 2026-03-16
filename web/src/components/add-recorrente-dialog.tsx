@@ -48,7 +48,7 @@ const formSchema = z.object({
     return !isNaN(n) && n >= 1 && n <= 31
   }, { message: "Dia deve ser entre 1 e 31." }),
   frequencia: z.enum(["Mensal", "Semanal", "Quinzenal", "Anual"]),
-  responsavel: z.string().min(1).default("Casal"),
+  responsavel: z.string().min(1),
 })
 
 type FormSchemaType = z.infer<typeof formSchema>
@@ -58,7 +58,6 @@ export function AddRecorrenteDialog() {
   const [isPending, startTransition] = React.useTransition()
 
   const form = useForm<FormSchemaType>({
-    // @ts-ignore
     resolver: zodResolver(formSchema),
     defaultValues: {
       descricao: "",
@@ -75,7 +74,6 @@ export function AddRecorrenteDialog() {
   const tipoSelecionado = form.watch("tipo")
   const categoriasDisponiveis = tipoSelecionado === "Entrada" ? CATEGORIAS_ENTRADA : CATEGORIAS_SAIDA
 
-  // @ts-ignore
   function onSubmit(values: FormSchemaType) {
     startTransition(async () => {
       const formData = new FormData()
@@ -115,11 +113,9 @@ export function AddRecorrenteDialog() {
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          {/* @ts-ignore */}
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             
             <FormField
-              // @ts-ignore
               control={form.control}
               name="descricao"
               render={({ field }) => (
@@ -135,7 +131,6 @@ export function AddRecorrenteDialog() {
 
             <div className="grid grid-cols-2 gap-4">
                 <FormField
-                  // @ts-ignore
                   control={form.control}
                   name="valor"
                   render={({ field }) => (
@@ -150,7 +145,6 @@ export function AddRecorrenteDialog() {
                 />
 
                 <FormField
-                  // @ts-ignore
                   control={form.control}
                   name="dia_vencimento"
                   render={({ field }) => (
@@ -167,7 +161,6 @@ export function AddRecorrenteDialog() {
 
             <div className="grid grid-cols-2 gap-4">
                  <FormField
-                  // @ts-ignore
                   control={form.control}
                   name="tipo"
                   render={({ field }) => (
@@ -190,7 +183,6 @@ export function AddRecorrenteDialog() {
                 />
 
                 <FormField
-                  // @ts-ignore
                   control={form.control}
                   name="categoria"
                   render={({ field }) => (
@@ -241,7 +233,6 @@ export function AddRecorrenteDialog() {
                 />
                 
                 <FormField
-                  // @ts-ignore
                   control={form.control}
                   name="responsavel"
                   render={({ field }) => (
