@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { AddInvestimentoDialog } from '@/components/add-investimento-dialog'
 import { EditInvestimentoDialog } from '@/components/edit-investimento-dialog'
 import { AllocationPieChart } from '@/components/charts/allocation-pie-chart'
+import { SmartAllocationWidget } from '@/components/investments/smart-allocation'
 import { TrendingUp, PieChart, Wallet, Calendar, ArrowUpRight, DollarSign, Building2 } from 'lucide-react'
 import { useTransition } from 'react'
 import { deleteInvestimento } from '@/actions/finance'
@@ -141,6 +142,11 @@ export function InvestimentosClientShell({ initialInvestimentos }: Investimentos
             </Card>
         </motion.div>
       </div>
+
+      {/* Smart Allocation (Rebalanceamento) */}
+      <motion.div variants={fadeUpVariant}>
+        <SmartAllocationWidget investimentos={filteredInvestimentos} />
+      </motion.div>
 
       {/* Tabela de Ativos */}
       <motion.div variants={fadeUpVariant} className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
