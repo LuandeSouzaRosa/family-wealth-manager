@@ -113,7 +113,8 @@ export function Sidebar({ userEmail }: SidebarProps) {
         <NavItem href="/patrimonio" icon={Wallet} label="Balanço Patrimonial" />
 
         <SectionLabel label="Configurações" />
-        <NavItem href="/configuracoes" icon={Users} label="Família & Perfil" />
+        <NavItem href="/categorias" icon={Users} label="Categorias" />
+        {/* <NavItem href="/configuracoes" icon={Users} label="Família & Perfil" /> */}
       </div>
 
       {/* Footer Actions */}
