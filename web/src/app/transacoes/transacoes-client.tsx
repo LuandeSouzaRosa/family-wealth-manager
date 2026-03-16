@@ -214,11 +214,11 @@ export function TransacoesClientShell({ initialData, initialCartoes }: Transacoe
                   </div>
 
                   {/* Periodo */}
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-2">
                         <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Ano</label>
                         <Select value={year} onValueChange={(val) => setYear(val || "0")}>
-                          <SelectTrigger className="bg-background border-input text-foreground">
+                          <SelectTrigger className="w-full bg-background border-input text-foreground h-10 px-3">
                             <SelectValue placeholder="Ano" />
                           </SelectTrigger>
                           <SelectContent>
@@ -231,8 +231,8 @@ export function TransacoesClientShell({ initialData, initialCartoes }: Transacoe
                       <div className="space-y-2">
                         <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Mês</label>
                         <Select value={month} onValueChange={(val) => setMonth(val || "0")}>
-                          <SelectTrigger className="bg-background border-input text-foreground">
-                            <SelectValue>{currentMonthLabel}</SelectValue>
+                          <SelectTrigger className="w-full bg-background border-input text-foreground h-10 px-3">
+                            <span className="truncate block">{currentMonthLabel}</span>
                           </SelectTrigger>
                           <SelectContent>
                             {MONTHS.map(m => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
@@ -245,8 +245,8 @@ export function TransacoesClientShell({ initialData, initialCartoes }: Transacoe
                   <div className="space-y-2">
                     <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Categoria</label>
                     <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                      <SelectTrigger className="bg-background border-input text-foreground">
-                        <SelectValue placeholder="Todas" />
+                      <SelectTrigger className="w-full bg-background border-input text-foreground h-10 px-3">
+                        <span className="truncate block">{selectedCategory === "Todas" ? "Todas as Categorias" : selectedCategory}</span>
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="Todas">Todas as Categorias</SelectItem>
