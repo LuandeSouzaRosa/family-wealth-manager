@@ -44,7 +44,8 @@ import {
 
 import { getContasBancarias } from "@/actions/accounts"
 import { createTransaction } from "@/actions/transactions"
-import { CATEGORIAS_ENTRADA, CATEGORIAS_SAIDA } from "@/lib/constants"
+import { getCategorias } from "@/actions/categories"
+// CATEGORIAS_ENTRADA e CATEGORIAS_SAIDA removidos como fallback estático, usaremos dinâmico
 
 import { TransactionSchema } from "@/lib/schemas"
 
@@ -52,11 +53,15 @@ export function AddTransactionDialog({ children, cartoes = [] }: { children?: Re
   const [open, setOpen] = React.useState(false)
   const [isPending, startTransition] = React.useTransition()
   const [contas, setContas] = React.useState<any[]>([])
+  const [categoriasDB, setCategoriasDB] = React.useState<any[]>([])
 
   React.useEffect(() => {
     if (open) {
       getContasBancarias().then(data => {
         if (data) setContas(data)
+      })
+      getCategorias().then(data => {
+        if (data) setCategoriasDB(data)
       })
     }
   }, [open])
@@ -300,7 +305,13 @@ export function AddTransactionDialog({ children, cartoes = [] }: { children?: Re
                 <FormField
                   control={form.control}
                   name="categoria"
-                  render={({ field }) => (
+                  render={({ field }) => {
+                    // Filtrar categorias pelo tipo selecionado (ou "Ambos")
+                    const categoriasFiltradas = categoriasDB.filter(
+                      c => c.tipo === tipoSelecionado || c.tipo === "Ambos"
+                    );
+                    
+                    return (
                     <FormItem>
                       <FormLabel>Categoria</FormLabel>
                       <Select onValueChange={field.onChange} value={field.value}>
@@ -310,18 +321,18 @@ export function AddTransactionDialog({ children, cartoes = [] }: { children?: Re
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                           {tipoSelecionado === "Entrada" 
-                            ? CATEGORIAS_ENTRADA.map(cat => (
-                                <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                              ))
-                            : CATEGORIAS_SAIDA.map(cat => (
-                                <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                            ))}
+                           {categoriasFiltradas.length > 0 ? (
+                               categoriasFiltradas.map(cat => (
+                                 <SelectItem key={cat.id || cat.nome} value={cat.nome}>{cat.nome}</SelectItem>
+                               ))
+                           ) : (
+                               <SelectItem value="Outros">Outros</SelectItem>
+                           )}
                         </SelectContent>
                       </Select>
                       <FormMessage />
                     </FormItem>
-                  )}
+                  )}}
                 />
             </div>
 

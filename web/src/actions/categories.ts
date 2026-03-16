@@ -1,6 +1,62 @@
 "use server";
 
 import { createClient } from "@/utils/supabase/server";
+import { revalidatePath } from "next/cache";
+
+// ==========================================
+// CATEGORIAS DINÂMICAS (Dynamic Categories)
+// ==========================================
+
+export async function getCategorias() {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("categorias")
+    .select("*")
+    .order("nome", { ascending: true });
+
+  if (error) {
+    console.error("Erro ao buscar categorias:", error);
+    return [];
+  }
+  return data;
+}
+
+export async function createCategoria(formData: FormData) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Sessão expirada." };
+
+  const data = {
+    nome: formData.get("nome") as string,
+    tipo: formData.get("tipo") as string || "Saída",
+    cor: formData.get("cor") as string || "#64748b",
+    icone: formData.get("icone") as string || "tag",
+  };
+
+  const { error } = await supabase
+    .from("categorias")
+    .insert([{ ...data, user_id: user.id }]);
+
+  if (error) {
+    if (error.code === '23505') return { error: "Já existe uma categoria com este nome." };
+    return { error: error.message };
+  }
+
+  revalidatePath("/");
+  return { success: true };
+}
+
+export async function deleteCategoria(id: string) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("categorias")
+    .delete()
+    .match({ id });
+
+  if (error) return { error: error.message };
+  revalidatePath("/");
+  return { success: true };
+}
 
 // ==========================================
 // CATEGORIZAÇÃO (Rules)
