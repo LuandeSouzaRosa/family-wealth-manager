@@ -32,6 +32,7 @@ const scaleUpVariant: Variants = {
 }
 
 import { AiAdvisorWidget } from '@/components/dashboard/ai-advisor-widget'
+import { QuickAddWidget } from '@/components/dashboard/quick-add-widget'
 
 interface DashboardClientProps {
   userEmail: string
@@ -235,7 +236,11 @@ export function DashboardClientShell({
         </motion.div>
       </div>
       </div>
+      {/* AI Advisor Widget Floating */}
       <AiAdvisorWidget />
+      
+      {/* Quick Add Widget (Mobile Only) */}
+      <QuickAddWidget />
     </motion.div>
   )
 }

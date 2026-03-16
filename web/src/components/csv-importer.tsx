@@ -13,6 +13,7 @@ import { Upload, Check, AlertCircle, Loader2, FileSpreadsheet, PlusCircle } from
 import { motion } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import { Checkbox } from "@/components/ui/checkbox"
+import { toast } from "sonner"
 
 const CATEGORIAS = [
   "Alimentação", "Moradia", "Transporte", "Lazer", "Saúde", 
@@ -132,7 +133,7 @@ export function CsvImporter() {
       },
       error: (error) => {
         console.error(error)
-        alert("Erro ao ler CSV")
+        toast.error("Erro ao ler CSV: " + error.message)
       }
     })
   }
@@ -199,10 +200,11 @@ export function CsvImporter() {
     if (result.success) {
       const skippedMsg = result.skipped && result.skipped > 0 ? ` (${result.skipped} duplicadas ignoradas)` : ""
       setSuccessMsg(`${result.count} transações importadas com sucesso!${skippedMsg}`)
+      toast.success("Importação concluída com sucesso!")
       setData([])
       setFileName("")
     } else {
-      alert("Erro na importação: " + result.error)
+      toast.error("Erro na importação: " + result.error)
     }
   }
 
