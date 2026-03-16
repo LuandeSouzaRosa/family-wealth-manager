@@ -86,6 +86,11 @@ export function AddCardDialog() {
     })
   }
 
+  // Wrapper para satisfazer o tipo SubmitHandler do react-hook-form
+  const handleSubmitWrapper = (values: z.infer<typeof formSchema>) => {
+    onSubmit(values)
+  }
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger render={
@@ -107,7 +112,7 @@ export function AddCardDialog() {
         </DialogHeader>
         
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={form.handleSubmit(handleSubmitWrapper)} className="space-y-4">
             
             <FormField
               // @ts-ignore
