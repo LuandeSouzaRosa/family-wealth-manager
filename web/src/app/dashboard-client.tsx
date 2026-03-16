@@ -107,6 +107,7 @@ export function DashboardClientShell({
         despesas={metrics.despesas}
         recentTx={filteredRecentTx}
         responsavel={responsavel}
+        financialEvolution={financialEvolution}
       />
 
       {/* ===================================================================================== */}

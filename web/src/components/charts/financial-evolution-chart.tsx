@@ -4,8 +4,8 @@ import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianG
 
 interface FinancialEvolutionChartProps {
   data: {
-    month: string
-    acumulado: number
+    name: string
+    total: number
   }[]
 }
 
@@ -18,60 +18,53 @@ export function FinancialEvolutionChart({ data }: FinancialEvolutionChartProps) 
     )
   }
 
-  // Formatar data para exibição (ex: "Jan 26")
-  const formattedData = data.map(item => {
-      const [year, month] = item.month.split('-')
-      const date = new Date(parseInt(year), parseInt(month) - 1)
-      return {
-          ...item,
-          label: date.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }),
-          acumulado: item.acumulado
-      }
-  })
-
   return (
-    <ResponsiveContainer width="100%" height={300}>
-      <AreaChart data={formattedData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-        <defs>
-          <linearGradient id="colorSaldo" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
-            <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-          </linearGradient>
-        </defs>
-        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.1)" />
-        <XAxis 
-            dataKey="label" 
+    <div className="w-full h-full min-h-[200px]">
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+          <defs>
+            <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+              <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+            </linearGradient>
+          </defs>
+          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.1)" />
+          <XAxis 
+            dataKey="name" 
             axisLine={false} 
             tickLine={false} 
             tick={{ fill: '#888', fontSize: 12 }} 
             dy={10}
-        />
-        <YAxis 
+          />
+          <YAxis 
             axisLine={false} 
             tickLine={false} 
             tick={{ fill: '#888', fontSize: 12 }} 
             tickFormatter={(value) => `R$${(value/1000).toFixed(0)}k`}
-        />
-        <Tooltip 
-           formatter={(value: any) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value))}
-           contentStyle={{ 
-             backgroundColor: 'rgba(10, 10, 10, 0.9)', 
-             border: '1px solid rgba(255,255,255,0.1)', 
-             borderRadius: '12px',
-             backdropFilter: 'blur(10px)',
-             color: '#fff'
-           }}
-           labelStyle={{ color: '#aaa', marginBottom: '5px' }}
-        />
-        <Area 
+          />
+          <Tooltip 
+             formatter={(value: any) => [new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value)), "Patrimônio"]}
+             contentStyle={{ 
+               backgroundColor: 'hsl(var(--popover))', 
+               border: '1px solid hsl(var(--border))', 
+               borderRadius: 'var(--radius)',
+               boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+               color: 'hsl(var(--popover-foreground))'
+             }}
+             labelStyle={{ color: 'hsl(var(--muted-foreground))', marginBottom: '4px', fontSize: '12px' }}
+             cursor={{ stroke: 'hsl(var(--muted-foreground))', strokeWidth: 1, strokeDasharray: '4 4' }}
+          />
+          <Area 
             type="monotone" 
-            dataKey="acumulado" 
+            dataKey="total" 
             stroke="#10b981" 
             strokeWidth={3}
             fillOpacity={1} 
-            fill="url(#colorSaldo)" 
-        />
-      </AreaChart>
-    </ResponsiveContainer>
+            fill="url(#colorTotal)" 
+            activeDot={{ r: 6, strokeWidth: 0, fill: '#10b981' }}
+          />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
   )
 }

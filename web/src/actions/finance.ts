@@ -170,45 +170,77 @@ export async function getDashboardMetrics() {
 export async function getFinancialEvolution() {
   const supabase = await createClient();
   
-  // Busca transações dos últimos 6 meses para o gráfico
-  const { data, error } = await supabase
+  // 1. Get Current Total Balance (Banks + Investments)
+  const { data: contas } = await supabase.from("contas_bancarias").select("saldo_atual");
+  const { data: inv } = await supabase.from("investimentos").select("valor_atual").eq("ativo", true);
+  
+  const totalBancos = contas?.reduce((acc, c) => acc + (c.saldo_atual || 0), 0) || 0;
+  const totalInvest = inv?.reduce((acc, i) => acc + (i.valor_atual || 0), 0) || 0;
+  
+  // Start point (Today)
+  let balancePointer = totalBancos + totalInvest;
+
+  // 2. Get Transactions for last 6 months
+  const sixMonthsAgo = new Date();
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5); // 6 months including current
+  sixMonthsAgo.setDate(1);
+  
+  const { data: transactions, error } = await supabase
     .from("transacoes")
     .select("data, valor, tipo")
-    .order("data", { ascending: true });
+    .gte("data", sixMonthsAgo.toISOString())
+    .order("data", { ascending: false }); // Newest first
 
   if (error) {
     console.error("Erro evolution:", error);
     return [];
   }
 
-  // Agrupar por mês (JS aggregation)
-  const grouped = data.reduce((acc: any, curr) => {
-    const monthKey = curr.data.substring(0, 7); // YYYY-MM
-    if (!acc[monthKey]) {
-      acc[monthKey] = { month: monthKey, saldo: 0, entradas: 0, saidas: 0 };
-    }
-    
-    if (curr.tipo === 'Entrada') {
-      acc[monthKey].entradas += curr.valor;
-      acc[monthKey].saldo += curr.valor;
-    } else if (curr.tipo === 'Saída') {
-      acc[monthKey].saidas += curr.valor;
-      acc[monthKey].saldo -= curr.valor;
-    }
-    return acc;
-  }, {});
+  // 3. Group by Month (YYYY-MM)
+  const monthlyFlows: Record<string, number> = {};
+  
+  // Initialize all months to 0 to handle gaps
+  const today = new Date();
+  for (let i = 0; i < 6; i++) {
+      const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+      const key = d.toISOString().substring(0, 7);
+      monthlyFlows[key] = 0;
+  }
 
-  // Transformar em array e calcular saldo acumulado ao longo do tempo se desejar, 
-  // ou apenas o resultado do mês.
-  // Para "Evolução Financeira", geralmente queremos o Saldo Acumulado.
+  transactions?.forEach(t => {
+      const key = t.data.substring(0, 7);
+      if (monthlyFlows[key] !== undefined) {
+          const val = t.tipo === 'Saída' ? -t.valor : t.valor;
+          monthlyFlows[key] += val;
+      }
+  });
+
+  // 4. Calculate Retrospective Balances
+  // Keys sorted descending (Current -> Past)
+  const sortedKeys = Object.keys(monthlyFlows).sort().reverse();
   
-  const result = Object.values(grouped).sort((a: any, b: any) => a.month.localeCompare(b.month));
+  const result = [];
   
-  // Calcular acumulado
-  let acumulado = 0;
-  return result.map((item: any) => {
-    acumulado += item.saldo;
-    return { ...item, acumulado };
+  for (const month of sortedKeys) {
+      // The balance at the END of this month is balancePointer
+      result.push({
+          monthKey: month,
+          saldo: balancePointer
+      });
+
+      // Prepare balance for the previous month: Balance(Prev) = Balance(Curr) - Flow(Curr)
+      balancePointer = balancePointer - monthlyFlows[month];
+  }
+
+  // 5. Return sorted ascending for Chart
+  return result.reverse().map(r => {
+      const [y, m] = r.monthKey.split('-');
+      const dateObj = new Date(parseInt(y), parseInt(m)-1, 1);
+      const monthName = dateObj.toLocaleString('pt-BR', { month: 'short' });
+      return {
+          name: monthName.charAt(0).toUpperCase() + monthName.slice(1),
+          total: r.saldo
+      };
   });
 }
 

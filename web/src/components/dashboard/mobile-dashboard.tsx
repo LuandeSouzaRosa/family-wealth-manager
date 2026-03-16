@@ -5,6 +5,8 @@ import { Eye, EyeOff, Plus, ListFilter, ArrowUpRight, ArrowDownRight } from "luc
 import { AddTransactionDialog } from "@/components/add-transaction-dialog"
 import Link from "next/link"
 import { formatCurrency } from "@/lib/utils"
+import { FinancialEvolutionChart } from "@/components/charts/financial-evolution-chart"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
 interface MobileDashboardProps {
   userEmail: string
@@ -13,6 +15,7 @@ interface MobileDashboardProps {
   despesas: number
   recentTx: any[]
   responsavel: string
+  financialEvolution: any[]
 }
 
 export function MobileDashboard({ 
@@ -21,7 +24,8 @@ export function MobileDashboard({
   renda, 
   despesas, 
   recentTx,
-  responsavel
+  responsavel,
+  financialEvolution
 }: MobileDashboardProps) {
   const [hideValues, setHideValues] = useState(false)
   const [greeting, setGreeting] = useState("Olá")
@@ -88,6 +92,16 @@ export function MobileDashboard({
                   {hideValues ? "•••••" : formatCurrency(despesas)}
               </span>
           </div>
+      </div>
+
+      {/* 3.5 Evolução (Mobile) */}
+      <div className="space-y-3">
+          <h3 className="text-base font-semibold">Evolução Patrimonial</h3>
+          <Card className="border border-border/50 shadow-sm bg-card">
+             <CardContent className="h-[200px] p-0 pt-4 pr-2">
+                <FinancialEvolutionChart data={financialEvolution} />
+             </CardContent>
+          </Card>
       </div>
 
       {/* 4. Últimas Transações (Lista Limpa) */}

@@ -19,6 +19,8 @@ import {
 import { signout } from '@/app/login/actions'
 import { ResponsavelSelector } from '@/components/responsavel-selector'
 
+import { MobileNav } from '@/components/mobile-nav'
+
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
@@ -102,46 +104,7 @@ export default async function RootLayout({
                     <ResponsavelSelector />
                     <ModeToggle />
                     
-                    {/* Mobile Menu */}
-                    <div className="md:hidden">
-                        <Sheet>
-                            <SheetTrigger render={
-                                <Button variant="ghost" size="icon" className="md:hidden">
-                                    <Menu className="h-6 w-6" />
-                                </Button>
-                            } />
-                            <SheetContent side="right" className="w-[85vw] max-w-[350px] border-l border-border/40 bg-background/95 backdrop-blur-xl">
-                                <SheetHeader className="text-left border-b border-border/40 pb-4 mb-4">
-                                    <SheetTitle className="flex items-center gap-2">
-                                        <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center">
-                                            <div className="h-3 w-3 rounded-full bg-primary-foreground"></div>
-                                        </div>
-                                        L&L Wealth
-                                    </SheetTitle>
-                                </SheetHeader>
-                                <nav className="flex flex-col gap-2">
-                                    <SheetClose render={<Link href="/" className="flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-md hover:bg-accent hover:text-accent-foreground transition-colors">Dashboard</Link>} />
-                                    <SheetClose render={<Link href="/transacoes" className="flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-md hover:bg-accent hover:text-accent-foreground transition-colors">Extrato</Link>} />
-                                    <SheetClose render={<Link href="/conciliacao" className="flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-md hover:bg-accent hover:text-accent-foreground transition-colors">Conciliação</Link>} />
-                                    <SheetClose render={<Link href="/recorrentes" className="flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-md hover:bg-accent hover:text-accent-foreground transition-colors">Recorrentes</Link>} />
-                                    <SheetClose render={<Link href="/orcamentos" className="flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-md hover:bg-accent hover:text-accent-foreground transition-colors">Orçamentos</Link>} />
-                                    <SheetClose render={<Link href="/metas" className="flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-md hover:bg-accent hover:text-accent-foreground transition-colors">Metas</Link>} />
-                                    <SheetClose render={<Link href="/investimentos" className="flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-md hover:bg-accent hover:text-accent-foreground transition-colors">Investimentos</Link>} />
-                                    <SheetClose render={<Link href="/contas" className="flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-md hover:bg-accent hover:text-accent-foreground transition-colors">Contas</Link>} />
-                                    <SheetClose render={<Link href="/patrimonio" className="flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-md hover:bg-accent hover:text-accent-foreground transition-colors">Patrimônio</Link>} />
-                                    <SheetClose render={<Link href="/configuracoes" className="flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-md hover:bg-accent hover:text-accent-foreground transition-colors">Família</Link>} />
-                                    
-                                    <div className="mt-auto pt-8">
-                                        <form action={signout} className="w-full">
-                                            <Button variant="outline" className="w-full justify-center text-red-500 hover:text-red-600 hover:bg-red-500/10 border-red-500/20">
-                                                Sair da Conta
-                                            </Button>
-                                        </form>
-                                    </div>
-                                </nav>
-                            </SheetContent>
-                        </Sheet>
-                    </div>
+                    {/* Mobile Menu - Moved to Bottom Nav */}
 
                     <form action={signout} className="hidden md:block">
                       <Button variant="ghost" className="rounded-full text-sm font-medium px-6 hover:bg-secondary">
@@ -153,9 +116,11 @@ export default async function RootLayout({
               </header>
             )}
             
-            <main className="flex-1 max-w-7xl mx-auto w-full">
+            <main className="flex-1 max-w-7xl mx-auto w-full pb-20 md:pb-0">
               {children}
             </main>
+            
+            {user && <MobileNav />}
           </div>
         </Providers>
       </body>
