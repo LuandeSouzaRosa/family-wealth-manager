@@ -1,6 +1,6 @@
 import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
-import { getCartoesCredito } from '@/actions/finance'
+import { getCartoesCredito, deleteCartaoCredito } from '@/actions/accounts'
 import { CartoesClient } from './cartoes-client'
 
 export default async function CartoesPage() {

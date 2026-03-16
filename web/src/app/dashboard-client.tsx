@@ -31,6 +31,8 @@ const scaleUpVariant: Variants = {
   visible: { opacity: 1, scale: 1, transition: SPRING_TRANSITION }
 }
 
+import { AiAdvisorWidget } from '@/components/dashboard/ai-advisor-widget'
+
 interface DashboardClientProps {
   userEmail: string
   metrics: {
@@ -50,21 +52,16 @@ interface DashboardClientProps {
   cashFlowForecast: any[]
 }
 
-import { AiAdvisorWidget } from '@/components/dashboard/ai-advisor-widget'
-
 export function DashboardClientShell({ 
-// ...
-// (manter o restante do código)
-  return (
-    <motion.div 
-      // ...
-    >
-      {/* ... */}
-      
-      <AiAdvisorWidget />
-    </motion.div>
-  )
-}
+  userEmail,
+  metrics,
+  recentTx,
+  orcamentoStatus,
+  breakdown503020,
+  financialEvolution,
+  financialHealth,
+  cashFlowForecast
+}: DashboardClientProps) {
   const { responsavel } = useFilter()
 
   const shouldShow = (itemResponsavel: string) => {
@@ -238,6 +235,7 @@ export function DashboardClientShell({
         </motion.div>
       </div>
       </div>
+      <AiAdvisorWidget />
     </motion.div>
   )
 }
