@@ -204,6 +204,7 @@ export function ContasClient({ initialContas }: { initialContas: any[] }) {
           </DialogContent>
         </Dialog>
       </div>
+      </div>
 
       {/* Lista de Contas */}
       {contasExibidas.length === 0 ? (
