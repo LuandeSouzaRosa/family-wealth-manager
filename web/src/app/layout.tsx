@@ -22,6 +22,7 @@ import { ResponsavelSelector } from '@/components/responsavel-selector'
 import { Sidebar } from '@/components/sidebar'
 import { MobileNav } from '@/components/mobile-nav'
 import { LandscapeBlocker } from '@/components/landscape-blocker'
+import { PrivacyBlur } from '@/components/privacy-blur'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -61,6 +62,7 @@ export default async function RootLayout({
           <div className="flex flex-col md:flex-row min-h-screen relative z-0">
             <AmbientBackground />
             <LandscapeBlocker />
+            <PrivacyBlur />
             
             {/* Nav Header Minimalista (Mobile Only) */}
             {user && (
