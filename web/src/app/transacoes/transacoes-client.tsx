@@ -3,10 +3,11 @@
 import { useState, useTransition, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { Card, CardContent } from '@/components/ui/card'
-import { Trash2, Calendar, FileText, ArrowUpRight, ArrowDownRight, Edit3, Upload } from 'lucide-react'
+import { Trash2, Calendar, FileText, ArrowUpRight, ArrowDownRight, Edit3, Upload, Search, Filter, Download } from 'lucide-react'
 import { deleteTransaction } from '@/actions/finance'
 import { AddTransactionDialog } from '@/components/add-transaction-dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Input } from '@/components/ui/input'
 import { useFilter } from '@/contexts/filter-context'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -60,6 +61,13 @@ export function TransacoesClientShell({ initialData }: TransacoesClientProps) {
   const [isPending, startTransition] = useTransition()
   const [month, setMonth] = useState<string>("0") // 0 means all for the selected year
   const [year, setYear] = useState<string>(new Date().getFullYear().toString())
+  const [searchTerm, setSearchTerm] = useState("")
+  const [selectedCategory, setSelectedCategory] = useState("Todas")
+
+  const uniqueCategories = useMemo(() => {
+    const cats = new Set(initialData.map(tx => tx.categoria))
+    return Array.from(cats).sort()
+  }, [initialData])
 
   // Note: For a fully Server-Side approach we would push router params (?month=X&year=Y)
   // For maximum fluidity + 0 latency, we filter the pre-fetched massive list locally if small enough,
@@ -82,8 +90,23 @@ export function TransacoesClientShell({ initialData }: TransacoesClientProps) {
     if (month !== "0") {
       result = result.filter(tx => (new Date(tx.data).getMonth() + 1).toString() === month)
     }
+
+    // 4. Filtrar por Termo de Busca
+    if (searchTerm) {
+      const lower = searchTerm.toLowerCase()
+      result = result.filter(tx => 
+        tx.descricao.toLowerCase().includes(lower) || 
+        tx.valor.toString().includes(lower)
+      )
+    }
+
+    // 5. Filtrar por Categoria
+    if (selectedCategory !== "Todas") {
+      result = result.filter(tx => tx.categoria === selectedCategory)
+    }
+
     return result
-  }, [initialData, month, year, responsavel])
+  }, [initialData, month, year, responsavel, searchTerm, selectedCategory])
 
   // Get month label for display
   const currentMonthLabel = MONTHS.find(m => m.value === month)?.label || "Mês"
@@ -101,6 +124,32 @@ export function TransacoesClientShell({ initialData }: TransacoesClientProps) {
         deleteTransaction(id)
       })
     }
+  }
+
+  const handleExportCSV = () => {
+    const headers = ["Data", "Descrição", "Categoria", "Valor", "Tipo", "Responsável"]
+    const rows = filteredData.map(tx => [
+      new Date(tx.data).toLocaleDateString('pt-BR'),
+      tx.descricao,
+      tx.categoria,
+      tx.valor.toFixed(2).replace('.', ','),
+      tx.tipo,
+      tx.responsavel || ""
+    ])
+
+    const csvContent = [
+      headers.join(";"),
+      ...rows.map(r => r.join(";"))
+    ].join("\n")
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.setAttribute("href", url)
+    link.setAttribute("download", `extrato_export_${new Date().toISOString().split('T')[0]}.csv`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
   }
 
   return (
@@ -124,6 +173,9 @@ export function TransacoesClientShell({ initialData }: TransacoesClientProps) {
         </div>
         
         <div className="flex items-center gap-3">
+          <Button variant="outline" className="gap-2 hidden md:flex" onClick={handleExportCSV}>
+              <Download size={16} /> Exportar
+          </Button>
           <Link href="/conciliacao">
             <Button variant="outline" className="gap-2">
                 <Upload size={16} /> Importar CSV
@@ -140,35 +192,68 @@ export function TransacoesClientShell({ initialData }: TransacoesClientProps) {
             <Card className="border border-border bg-card shadow-sm h-full">
               <CardContent className="p-6 space-y-6">
                 <div className="flex items-center gap-2 mb-4 border-b border-border pb-4">
-                  <Calendar className="text-primary w-5 h-5" />
-                  <h3 className="text-foreground font-medium tracking-tight">Período</h3>
+                  <Filter className="text-primary w-5 h-5" />
+                  <h3 className="text-foreground font-medium tracking-tight">Filtros Avançados</h3>
                 </div>
                 
                 <div className="space-y-4">
+                  
+                  {/* Busca */}
                   <div className="space-y-2">
-                    <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Ano</label>
-                    <Select value={year} onValueChange={(val) => setYear(val || "0")}>
+                    <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Buscar</label>
+                    <div className="relative">
+                        <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                        <Input 
+                            placeholder="Descrição ou valor..." 
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="pl-8 bg-background border-input" 
+                        />
+                    </div>
+                  </div>
+
+                  {/* Periodo */}
+                  <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-2">
+                        <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Ano</label>
+                        <Select value={year} onValueChange={(val) => setYear(val || "0")}>
+                          <SelectTrigger className="bg-background border-input text-foreground">
+                            <SelectValue placeholder="Ano" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="0">Todos</SelectItem>
+                            {YEARS.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Mês</label>
+                        <Select value={month} onValueChange={(val) => setMonth(val || "0")}>
+                          <SelectTrigger className="bg-background border-input text-foreground">
+                            <SelectValue>{currentMonthLabel}</SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            {MONTHS.map(m => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                  </div>
+
+                  {/* Categoria */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Categoria</label>
+                    <Select value={selectedCategory} onValueChange={setSelectedCategory}>
                       <SelectTrigger className="bg-background border-input text-foreground">
-                        <SelectValue placeholder="Selecione o ano" />
+                        <SelectValue placeholder="Todas" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="0">Todos os Anos</SelectItem>
-                        {YEARS.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
+                        <SelectItem value="Todas">Todas as Categorias</SelectItem>
+                        {uniqueCategories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
 
-                  <div className="space-y-2">
-                    <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Mês</label>
-                    <Select value={month} onValueChange={(val) => setMonth(val || "0")}>
-                      <SelectTrigger className="bg-background border-input text-foreground">
-                        <SelectValue>{currentMonthLabel}</SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {MONTHS.map(m => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
                 </div>
               </CardContent>
             </Card>
