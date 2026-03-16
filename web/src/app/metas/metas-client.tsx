@@ -1,6 +1,9 @@
 "use client"
 
 import { useState, useTransition } from "react"
+import { useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { z } from "zod"
 import { createMeta, deleteMeta, updateMeta } from "@/actions/finance"
 import { Button } from "@/components/ui/button"
 import { Plus, Target, Trash2, Edit2, TrendingUp, PiggyBank, Calendar } from "lucide-react"
@@ -15,12 +18,21 @@ import {
   DialogTrigger,
   DialogFooter
 } from "@/components/ui/dialog"
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form-new"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { formatCurrency } from "@/lib/utils"
 import { motion } from "framer-motion"
 import { toast } from "sonner"
 import { differenceInMonths } from "date-fns"
+import { MetaSchema } from "@/lib/schemas"
 
 export function MetasClient({ initialMetas }: { initialMetas: any[] }) {
   const [metas, setMetas] = useState(initialMetas)
@@ -28,11 +40,16 @@ export function MetasClient({ initialMetas }: { initialMetas: any[] }) {
   const [isPending, startTransition] = useTransition()
   const [editingMeta, setEditingMeta] = useState<any>(null)
 
-  // Estados do formulário
-  const [nome, setNome] = useState("")
-  const [valorAlvo, setValorAlvo] = useState("")
-  const [valorAtual, setValorAtual] = useState("")
-  const [dataLimite, setDataLimite] = useState("")
+  const form = useForm<z.infer<typeof MetaSchema>>({
+    resolver: zodResolver(MetaSchema) as any,
+    defaultValues: {
+      nome: "",
+      valor_alvo: 0,
+      valor_atual: 0,
+      data_limite: null,
+      cor: "#10b981",
+    },
+  })
 
   const totalAlvo = metas.reduce((acc, m) => acc + Number(m.valor_alvo), 0)
   const totalAtual = metas.reduce((acc, m) => acc + Number(m.valor_atual), 0)
@@ -40,30 +57,38 @@ export function MetasClient({ initialMetas }: { initialMetas: any[] }) {
 
   const handleOpenCreate = () => {
     setEditingMeta(null)
-    setNome("")
-    setValorAlvo("")
-    setValorAtual("")
-    setDataLimite("")
+    form.reset({
+      nome: "",
+      valor_alvo: 0,
+      valor_atual: 0,
+      data_limite: null,
+      cor: "#10b981",
+    })
     setIsDialogOpen(true)
   }
 
   const handleOpenEdit = (meta: any) => {
     setEditingMeta(meta)
-    setNome(meta.nome)
-    setValorAlvo(meta.valor_alvo.toString())
-    setValorAtual(meta.valor_atual.toString())
-    setDataLimite(meta.data_limite || "")
+    form.reset({
+      nome: meta.nome,
+      valor_alvo: Number(meta.valor_alvo),
+      valor_atual: Number(meta.valor_atual),
+      data_limite: meta.data_limite ? new Date(meta.data_limite) : null,
+      cor: meta.cor || "#10b981",
+    })
     setIsDialogOpen(true)
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleSubmit = (values: z.infer<typeof MetaSchema>) => {
     startTransition(async () => {
       const formData = new FormData()
-      formData.append("nome", nome)
-      formData.append("valor_alvo", valorAlvo)
-      formData.append("valor_atual", valorAtual || "0")
-      if (dataLimite) formData.append("data_limite", dataLimite)
+      formData.append("nome", values.nome)
+      formData.append("valor_alvo", String(values.valor_alvo))
+      formData.append("valor_atual", String(values.valor_atual || 0))
+      if (values.data_limite) {
+          formData.append("data_limite", values.data_limite.toISOString())
+      }
+      formData.append("cor", values.cor)
       
       let result
       if (editingMeta) {
@@ -157,60 +182,81 @@ export function MetasClient({ initialMetas }: { initialMetas: any[] }) {
                 Defina quanto você quer juntar e para quê.
               </DialogDescription>
             </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="nome">Nome da Meta</Label>
-                <Input 
-                  id="nome" 
-                  placeholder="Ex: Reserva de Emergência" 
-                  value={nome}
-                  onChange={e => setNome(e.target.value)}
-                  required
+            
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4 py-4">
+                <FormField
+                  control={form.control}
+                  name="nome"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Nome da Meta</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Ex: Reserva de Emergência" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="alvo">Valor Alvo (R$)</Label>
-                  <Input 
-                    id="alvo" 
-                    type="number" 
-                    step="0.01" 
-                    placeholder="10000.00" 
-                    value={valorAlvo}
-                    onChange={e => setValorAlvo(e.target.value)}
-                    required
+
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="valor_alvo"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Valor Alvo (R$)</FormLabel>
+                        <FormControl>
+                          <Input type="number" step="0.01" placeholder="10000.00" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="valor_atual"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Já Tenho (R$)</FormLabel>
+                        <FormControl>
+                          <Input type="number" step="0.01" placeholder="0.00" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="atual">Já Tenho (R$)</Label>
-                  <Input 
-                    id="atual" 
-                    type="number" 
-                    step="0.01" 
-                    placeholder="0.00" 
-                    value={valorAtual}
-                    onChange={e => setValorAtual(e.target.value)}
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                  <Label htmlFor="limite">Data Alvo (Opcional)</Label>
-                  <Input 
-                    id="limite" 
-                    type="date"
-                    value={dataLimite}
-                    onChange={e => setDataLimite(e.target.value)}
-                  />
-                  <p className="text-[10px] text-muted-foreground">
-                    Define o prazo para calcular a economia mensal necessária.
-                  </p>
-              </div>
-              <DialogFooter>
-                <Button type="submit" disabled={isPending}>
-                  {isPending ? "Salvando..." : "Salvar Meta"}
-                </Button>
-              </DialogFooter>
-            </form>
+
+                <FormField
+                  control={form.control}
+                  name="data_limite"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Data Alvo (Opcional)</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="date" 
+                          value={field.value ? field.value.toISOString().split('T')[0] : ''} 
+                          onChange={e => field.onChange(e.target.value ? new Date(e.target.value) : null)} 
+                        />
+                      </FormControl>
+                      <p className="text-[10px] text-muted-foreground">
+                        Define o prazo para calcular a economia mensal necessária.
+                      </p>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <DialogFooter>
+                  <Button type="submit" disabled={isPending}>
+                    {isPending ? "Salvando..." : "Salvar Meta"}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </Form>
           </DialogContent>
         </Dialog>
       </div>

@@ -36,34 +36,26 @@ import {
 import { createOrcamento } from "@/actions/finance"
 import { CATEGORIAS_SAIDA, RESPONSAVEIS } from "@/lib/constants"
 
-const formSchema = z.object({
-  categoria: z.string().min(1, { message: "Selecione uma categoria." }),
-  limite_mensal: z.string().refine((val) => !isNaN(Number(val)) && Number(val) > 0, {
-    message: "Valor inválido.",
-  }),
-  responsavel: z.string().min(1),
-})
-
-type FormSchemaType = z.infer<typeof formSchema>
+import { OrcamentoSchema } from "@/lib/schemas"
 
 export function AddOrcamentoDialog() {
   const [open, setOpen] = React.useState(false)
   const [isPending, startTransition] = React.useTransition()
 
-  const form = useForm<FormSchemaType>({
-    resolver: zodResolver(formSchema),
+  const form = useForm<z.infer<typeof OrcamentoSchema>>({
+    resolver: zodResolver(OrcamentoSchema) as any,
     defaultValues: {
       categoria: "",
-      limite_mensal: "",
+      limite_mensal: 0,
       responsavel: "Casal",
     },
   })
 
-  function onSubmit(values: FormSchemaType) {
+  function onSubmit(values: z.infer<typeof OrcamentoSchema>) {
     startTransition(async () => {
       const formData = new FormData()
       formData.append("categoria", values.categoria)
-      formData.append("limite_mensal", values.limite_mensal)
+      formData.append("limite_mensal", String(values.limite_mensal))
       formData.append("responsavel", values.responsavel)
 
       const result = await createOrcamento(formData)

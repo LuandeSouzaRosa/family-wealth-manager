@@ -1,14 +1,17 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  /* config options here */
-  reactStrictMode: false, // Desabilita o modo estrito para evitar double-render e alguns erros
+  /* 
+    Strict Mode enabled for production safety.
+    Checks for TypeScript errors and ESLint warnings during build.
+  */
+  reactStrictMode: true,
   productionBrowserSourceMaps: false,
   poweredByHeader: false,
   eslint: {
-    ignoreDuringBuilds: true,
+    ignoreDuringBuilds: false,
   },
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
   },
   compiler: {
     removeConsole: process.env.NODE_ENV === "production" ? { exclude: ["error"] } : false,

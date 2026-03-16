@@ -2,23 +2,17 @@
 
 import { createClient } from "@/utils/supabase/server";
 import { revalidatePath } from "next/cache";
+import { 
+  TransactionSchema, 
+  RecorrenteSchema, 
+  OrcamentoSchema, 
+  PatrimonioSchema, 
+  ContaSchema, 
+  CartaoSchema, 
+  InvestimentoSchema, 
+  MetaSchema 
+} from "@/lib/schemas";
 import { z } from "zod";
-
-// ==========================================
-// SCHEMAS (Substitui validações do antigo core/utils.py)
-// ==========================================
-
-const TransactionSchema = z.object({
-  descricao: z.string().min(1, "A descrição é obrigatória").max(200, "Máximo de 200 caracteres"),
-  valor: z.number().positive("O valor deve ser maior que zero"),
-  categoria: z.string().min(1, "A categoria é obrigatória"),
-  tipo: z.enum(["Entrada", "Saída", "Transferência"]),
-  data: z.string().datetime().optional(),
-  responsavel: z.string().default("Casal"),
-  conta_id: z.string().nullable().optional(),
-  cartao_id: z.string().nullable().optional(),
-  status: z.enum(["Realizado", "Agendado", "Pendente"]).default("Realizado").optional(),
-});
 
 // ==========================================
 // ACTIONS (Escrita de Dados)
@@ -59,6 +53,7 @@ export async function createTransaction(formData: FormData) {
     .insert([
       {
         ...parsed.data,
+        data: parsed.data.data?.toISOString(), // Garantir string ISO
         origem: "Manual"
       }
     ]);
@@ -108,7 +103,10 @@ export async function updateTransaction(id: string, formData: FormData) {
 
   const { error } = await supabase
     .from("transacoes")
-    .update({ ...parsed.data })
+    .update({ 
+      ...parsed.data,
+      data: parsed.data.data?.toISOString() // Garantir string ISO
+    })
     .match({ id, user_id: user.id });
 
   if (error) return { error: error.message };
@@ -295,16 +293,6 @@ export async function getTransactions(month?: number, year?: number) {
 // RECORRENTES (Recurring Expenses)
 // ==========================================
 
-const RecorrenteSchema = z.object({
-  descricao: z.string().min(1, "A descrição é obrigatória"),
-  valor: z.number().positive("O valor deve ser maior que zero"),
-  categoria: z.string().min(1, "A categoria é obrigatória"),
-  tipo: z.enum(["Entrada", "Saída"]),
-  dia_vencimento: z.number().min(1).max(31),
-  frequencia: z.enum(["Mensal", "Semanal", "Anual", "Quinzenal"]).default("Mensal"),
-  responsavel: z.string().default("Casal"),
-});
-
 export async function getRecorrentes() {
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -471,12 +459,6 @@ export async function processarRecorrencias() {
 // ORÇAMENTOS (Budgets)
 // ==========================================
 
-const OrcamentoSchema = z.object({
-  categoria: z.string().min(1, "A categoria é obrigatória"),
-  limite: z.number().positive("O limite deve ser maior que zero"),
-  responsavel: z.string().default("Casal"),
-});
-
 export async function getOrcamentos() {
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -569,14 +551,6 @@ export async function deleteOrcamento(id: string) {
 // ==========================================
 // PATRIMÔNIO (Net Worth)
 // ==========================================
-
-const PatrimonioSchema = z.object({
-  item: z.string().min(2, "A descrição do item é obrigatória"),
-  valor: z.number().positive("O valor deve ser maior que zero"),
-  tipo: z.enum(["Ativo", "Passivo"]),
-  categoria: z.string().min(1, "A categoria é obrigatória"),
-  responsavel: z.string().default("Casal"),
-});
 
 export async function getPatrimonio() {
   const supabase = await createClient();
@@ -814,14 +788,6 @@ export async function createCategorizationRule(texto: string, categoria: string)
 // CONTAS BANCÁRIAS (Múltiplas Contas)
 // ==========================================
 
-const ContaSchema = z.object({
-  nome: z.string().min(2, "Nome da conta é obrigatório"),
-  instituicao: z.string().optional(),
-  saldo_atual: z.number().default(0),
-  responsavel: z.string().default("Todos"),
-  cor: z.string().default("#10b981"),
-});
-
 export async function getContasBancarias() {
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -865,15 +831,6 @@ export async function createContaBancaria(formData: FormData) {
 // ==========================================
 // CARTÕES DE CRÉDITO (Credit Cards)
 // ==========================================
-
-const CartaoSchema = z.object({
-  nome: z.string().min(2, "Nome do cartão é obrigatório"),
-  limite: z.number().positive("Limite deve ser maior que zero"),
-  dia_fechamento: z.number().min(1).max(31),
-  dia_vencimento: z.number().min(1).max(31),
-  responsavel: z.string().default("Todos"),
-  cor: z.string().default("#000000"),
-});
 
 export async function getCartoesCredito() {
   const supabase = await createClient();
@@ -1011,19 +968,6 @@ export async function deleteCartaoCredito(id: string) {
 // INVESTIMENTOS (XP, etc.)
 // ==========================================
 
-const InvestimentoSchema = z.object({
-  nome: z.string().min(2, "Nome do ativo é obrigatório"),
-  tipo: z.string().min(1, "Tipo é obrigatório"),
-  instituicao: z.string().default("XP"),
-  valor_aplicado: z.number().min(0),
-  valor_atual: z.number().min(0),
-  quantidade: z.number().min(0).default(1),
-  data_aplicacao: z.string().datetime().optional(),
-  data_vencimento: z.string().datetime().optional().nullable(),
-  liquidez: z.string().optional(),
-  responsavel: z.string().default("Casal"),
-});
-
 export async function getInvestimentos() {
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -1062,7 +1006,13 @@ export async function createInvestimento(formData: FormData) {
 
   const { error } = await supabase
     .from("investimentos")
-    .insert([{ ...parsed.data, user_id: user.id, ativo: true }]);
+    .insert([{ 
+      ...parsed.data, 
+      data_aplicacao: parsed.data.data_aplicacao?.toISOString(),
+      data_vencimento: parsed.data.data_vencimento?.toISOString() || null,
+      user_id: user.id, 
+      ativo: true 
+    }]);
 
   if (error) return { error: error.message };
 
@@ -1107,15 +1057,6 @@ export async function deleteInvestimento(id: string) {
   return { success: true };
 }
 
-
-const MetaSchema = z.object({
-  nome: z.string().min(2, "O nome da meta é obrigatório"),
-  valor_alvo: z.number().positive("O valor alvo deve ser maior que zero"),
-  valor_atual: z.number().min(0, "O valor atual não pode ser negativo").default(0),
-  data_limite: z.string().optional().nullable(),
-  cor: z.string().default("#10b981"),
-});
-
 export async function getMetas() {
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -1149,7 +1090,11 @@ export async function createMeta(formData: FormData) {
 
   const { error } = await supabase
     .from("metas")
-    .insert([{ ...parsed.data, user_id: user.id }]);
+    .insert([{ 
+      ...parsed.data, 
+      data_limite: parsed.data.data_limite?.toISOString() || null,
+      user_id: user.id 
+    }]);
 
   if (error) return { error: error.message };
 
@@ -1176,7 +1121,10 @@ export async function updateMeta(id: string, formData: FormData) {
 
   const { error } = await supabase
     .from("metas")
-    .update({ ...parsed.data })
+    .update({ 
+      ...parsed.data, 
+      data_limite: parsed.data.data_limite?.toISOString() || null
+    })
     .match({ id, user_id: user.id });
 
   if (error) return { error: error.message };

@@ -36,35 +36,20 @@ import {
 import { createRecorrente } from "@/actions/finance"
 import { CATEGORIAS_ENTRADA, CATEGORIAS_SAIDA, RESPONSAVEIS } from "@/lib/constants"
 
-const formSchema = z.object({
-  descricao: z.string().min(2, { message: "Descrição obrigatória." }),
-  valor: z.string().refine((val) => !isNaN(Number(val)) && Number(val) > 0, {
-    message: "Valor inválido.",
-  }),
-  categoria: z.string().min(1, { message: "Selecione uma categoria." }),
-  tipo: z.enum(["Entrada", "Saída"]),
-  dia_vencimento: z.string().refine((val) => {
-    const n = Number(val)
-    return !isNaN(n) && n >= 1 && n <= 31
-  }, { message: "Dia deve ser entre 1 e 31." }),
-  frequencia: z.enum(["Mensal", "Semanal", "Quinzenal", "Anual"]),
-  responsavel: z.string().min(1),
-})
-
-type FormSchemaType = z.infer<typeof formSchema>
+import { RecorrenteSchema } from "@/lib/schemas"
 
 export function AddRecorrenteDialog() {
   const [open, setOpen] = React.useState(false)
   const [isPending, startTransition] = React.useTransition()
 
-  const form = useForm<FormSchemaType>({
-    resolver: zodResolver(formSchema),
+  const form = useForm<z.infer<typeof RecorrenteSchema>>({
+    resolver: zodResolver(RecorrenteSchema) as any,
     defaultValues: {
       descricao: "",
-      valor: "",
+      valor: 0,
       categoria: "",
       tipo: "Saída",
-      dia_vencimento: "5",
+      dia_vencimento: 5,
       frequencia: "Mensal",
       responsavel: "Casal",
     },
@@ -74,14 +59,14 @@ export function AddRecorrenteDialog() {
   const tipoSelecionado = form.watch("tipo")
   const categoriasDisponiveis = tipoSelecionado === "Entrada" ? CATEGORIAS_ENTRADA : CATEGORIAS_SAIDA
 
-  function onSubmit(values: FormSchemaType) {
+  function onSubmit(values: z.infer<typeof RecorrenteSchema>) {
     startTransition(async () => {
       const formData = new FormData()
       formData.append("descricao", values.descricao)
-      formData.append("valor", values.valor)
+      formData.append("valor", String(values.valor))
       formData.append("categoria", values.categoria)
       formData.append("tipo", values.tipo)
-      formData.append("dia_vencimento", values.dia_vencimento)
+      formData.append("dia_vencimento", String(values.dia_vencimento))
       formData.append("frequencia", values.frequencia)
       formData.append("responsavel", values.responsavel)
 

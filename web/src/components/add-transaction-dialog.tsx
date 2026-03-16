@@ -45,20 +45,7 @@ import {
 import { createTransaction, getContasBancarias } from "@/actions/finance"
 import { CATEGORIAS_ENTRADA, CATEGORIAS_SAIDA } from "@/lib/constants"
 
-const formSchema = z.object({
-  descricao: z.string().min(2, {
-    message: "A descrição deve ter pelo menos 2 caracteres.",
-  }).max(200),
-  valor: z.string().refine((val) => !isNaN(Number(val)) && Number(val) > 0, {
-    message: "O valor deve ser um número positivo.",
-  }),
-  data: z.date(),
-  tipo: z.enum(["Entrada", "Saída", "Transferência"]),
-  categoria: z.string().min(1, { message: "Por favor selecione uma categoria." }),
-  conta_id: z.string().optional(),
-  cartao_id: z.string().optional(),
-  metodo: z.enum(["conta", "cartao"]),
-})
+import { TransactionSchema } from "@/lib/schemas"
 
 export function AddTransactionDialog({ children, cartoes = [] }: { children?: React.ReactNode, cartoes?: any[] }) {
   const [open, setOpen] = React.useState(false)
@@ -73,42 +60,42 @@ export function AddTransactionDialog({ children, cartoes = [] }: { children?: Re
     }
   }, [open])
 
-  const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
+  const form = useForm<z.infer<typeof TransactionSchema>>({
+    resolver: zodResolver(TransactionSchema) as any,
     defaultValues: {
       descricao: "",
-      valor: "",
+      valor: 0,
       tipo: "Saída",
       categoria: "",
       data: new Date(),
       conta_id: "none",
       cartao_id: "",
-      metodo: "conta",
+      status: "Realizado",
     },
   })
 
   // Assistir o 'tipo' para renderizar as categorias certas
   const tipoSelecionado = form.watch("tipo")
-  const metodoSelecionado = form.watch("metodo")
 
-  function onSubmit(values: z.infer<typeof formSchema>) {
+  function onSubmit(values: z.infer<typeof TransactionSchema>) {
     startTransition(async () => {
       // Usar FormData para enviar para a Server Action
       const formData = new FormData()
       formData.append("descricao", values.descricao)
-      formData.append("valor", values.valor)
+      formData.append("valor", String(values.valor))
       formData.append("categoria", values.categoria)
       formData.append("tipo", values.tipo)
-      formData.append("data", values.data.toISOString())
+      if (values.data) {
+          formData.append("data", values.data.toISOString())
+      }
       
-      if (values.metodo === "conta") {
-          if (values.conta_id && values.conta_id !== "none") {
-            formData.append("conta_id", values.conta_id)
-          }
-      } else if (values.metodo === "cartao") {
-          if (values.cartao_id) {
-            formData.append("cartao_id", values.cartao_id)
-          }
+      // Lógica de seleção de conta/cartão simplificada
+      // O schema centralizado já tem os campos opcionais
+      if (values.conta_id && values.conta_id !== "none") {
+        formData.append("conta_id", values.conta_id)
+      }
+      if (values.cartao_id) {
+        formData.append("cartao_id", values.cartao_id)
       }
 
       const result = await createTransaction(formData)
@@ -230,21 +217,28 @@ export function AddTransactionDialog({ children, cartoes = [] }: { children?: Re
 
             {/* Seleção de Método de Pagamento (Apenas para Saída ou Geral) */}
             <div className="grid grid-cols-2 gap-4">
-                <FormField
+                 <FormField
                   control={form.control}
-                  name="metodo"
+                  name="conta_id"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Forma</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <FormLabel>Conta Bancária</FormLabel>
+                      <Select onValueChange={(val) => {
+                          field.onChange(val);
+                          if (val !== "none") form.setValue("cartao_id", null);
+                      }} value={field.value || "none"}>
                         <FormControl>
                           <SelectTrigger>
-                            <SelectValue />
+                            <SelectValue placeholder="Selecione..." />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="conta">Conta / Débito</SelectItem>
-                          <SelectItem value="cartao">Crédito</SelectItem>
+                          <SelectItem value="none">Sem conta / Cartão</SelectItem>
+                          {contas.map(conta => (
+                            <SelectItem key={conta.id} value={conta.id}>
+                              {conta.nome}
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -252,58 +246,34 @@ export function AddTransactionDialog({ children, cartoes = [] }: { children?: Re
                   )}
                 />
 
-                {metodoSelecionado === "conta" ? (
-                    <FormField
-                      control={form.control}
-                      name="conta_id"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Conta Bancária</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Selecione..." />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="none">Sem conta (Geral)</SelectItem>
-                              {contas.map(conta => (
-                                <SelectItem key={conta.id} value={conta.id}>
-                                  {conta.nome}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                ) : (
-                    <FormField
-                      control={form.control}
-                      name="cartao_id"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Cartão de Crédito</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Selecione..." />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {cartoes.map(cartao => (
-                                <SelectItem key={cartao.id} value={cartao.id}>
-                                  {cartao.nome}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                )}
+                <FormField
+                  control={form.control}
+                  name="cartao_id"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Ou Cartão de Crédito</FormLabel>
+                      <Select onValueChange={(val) => {
+                          field.onChange(val);
+                          if (val) form.setValue("conta_id", "none");
+                      }} value={field.value || ""}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione..." />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="">Nenhum</SelectItem>
+                          {cartoes.map(cartao => (
+                            <SelectItem key={cartao.id} value={cartao.id}>
+                              {cartao.nome}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
             </div>
 
             <div className="grid grid-cols-2 gap-4">

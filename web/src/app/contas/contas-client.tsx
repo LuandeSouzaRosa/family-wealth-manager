@@ -1,6 +1,9 @@
 "use client"
 
 import { useState, useTransition } from "react"
+import { useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { z } from "zod"
 import { createContaBancaria } from "@/actions/finance"
 import { Button } from "@/components/ui/button"
 import { Plus, Building2, User, Users } from "lucide-react"
@@ -14,6 +17,14 @@ import {
   DialogTrigger,
   DialogFooter
 } from "@/components/ui/dialog"
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form-new"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -21,17 +32,23 @@ import { formatCurrency } from "@/lib/utils"
 import { motion } from "framer-motion"
 import { toast } from "sonner"
 import { useFilter } from "@/contexts/filter-context"
+import { ContaSchema } from "@/lib/schemas"
 
 export function ContasClient({ initialContas }: { initialContas: any[] }) {
   const { responsavel: filtroResponsavel } = useFilter()
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
 
-  // Estados do formulário
-  const [nome, setNome] = useState("")
-  const [instituicao, setInstituicao] = useState("")
-  const [saldoAtual, setSaldoAtual] = useState("")
-  const [responsavel, setResponsavel] = useState("Casal")
+  const form = useForm<z.infer<typeof ContaSchema>>({
+    resolver: zodResolver(ContaSchema) as any,
+    defaultValues: {
+      nome: "",
+      instituicao: "",
+      saldo_atual: 0,
+      responsavel: "Casal",
+      cor: "#10b981",
+    },
+  })
 
   // Filtra as contas exibidas na tela de acordo com o filtro global no topo
   const contasExibidas = initialContas.filter(c => {
@@ -42,21 +59,24 @@ export function ContasClient({ initialContas }: { initialContas: any[] }) {
   const totalExibido = contasExibidas.reduce((acc, c) => acc + Number(c.saldo_atual), 0)
 
   const handleOpenCreate = () => {
-    setNome("")
-    setInstituicao("")
-    setSaldoAtual("")
-    setResponsavel("Casal")
+    form.reset({
+      nome: "",
+      instituicao: "",
+      saldo_atual: 0,
+      responsavel: "Casal",
+      cor: "#10b981",
+    })
     setIsDialogOpen(true)
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleSubmit = (values: z.infer<typeof ContaSchema>) => {
     startTransition(async () => {
       const formData = new FormData()
-      formData.append("nome", nome)
-      formData.append("instituicao", instituicao)
-      formData.append("saldo_atual", saldoAtual || "0")
-      formData.append("responsavel", responsavel)
+      formData.append("nome", values.nome)
+      formData.append("instituicao", values.instituicao || "")
+      formData.append("saldo_atual", String(values.saldo_atual))
+      formData.append("responsavel", values.responsavel)
+      formData.append("cor", values.cor)
       
       const result = await createContaBancaria(formData)
 
@@ -101,58 +121,83 @@ export function ContasClient({ initialContas }: { initialContas: any[] }) {
                 Cadastre uma nova conta para acompanhar o saldo real.
               </DialogDescription>
             </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="nome">Apelido da Conta (Ex: Nubank Luan)</Label>
-                <Input 
-                  id="nome" 
-                  value={nome}
-                  onChange={e => setNome(e.target.value)}
-                  required
+            
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4 py-4">
+                <FormField
+                  control={form.control}
+                  name="nome"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Apelido da Conta (Ex: Nubank Luan)</FormLabel>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="instituicao">Banco / Instituição</Label>
-                  <Input 
-                    id="instituicao" 
-                    placeholder="Ex: Itaú" 
-                    value={instituicao}
-                    onChange={e => setInstituicao(e.target.value)}
+
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="instituicao"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Banco / Instituição</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Ex: Itaú" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="saldo_atual"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Saldo Atual (R$)</FormLabel>
+                        <FormControl>
+                          <Input type="number" step="0.01" placeholder="0.00" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="saldo">Saldo Atual (R$)</Label>
-                  <Input 
-                    id="saldo" 
-                    type="number" 
-                    step="0.01" 
-                    placeholder="0.00" 
-                    value={saldoAtual}
-                    onChange={e => setSaldoAtual(e.target.value)}
-                    required
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label>De quem é essa conta?</Label>
-                <Select value={responsavel} onValueChange={setResponsavel}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Luan">Luan</SelectItem>
-                    <SelectItem value="Luana">Luana</SelectItem>
-                    <SelectItem value="Casal">Conta Conjunta</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <DialogFooter>
-                <Button type="submit" disabled={isPending}>
-                  {isPending ? "Salvando..." : "Salvar Conta"}
-                </Button>
-              </DialogFooter>
-            </form>
+
+                <FormField
+                  control={form.control}
+                  name="responsavel"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>De quem é essa conta?</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="Luan">Luan</SelectItem>
+                          <SelectItem value="Luana">Luana</SelectItem>
+                          <SelectItem value="Casal">Conta Conjunta</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <DialogFooter>
+                  <Button type="submit" disabled={isPending}>
+                    {isPending ? "Salvando..." : "Salvar Conta"}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </Form>
           </DialogContent>
         </Dialog>
       </div>

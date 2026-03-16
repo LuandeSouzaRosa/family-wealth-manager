@@ -44,6 +44,8 @@ import {
 
 import { createInvestimento } from "@/actions/finance"
 
+import { InvestimentoSchema } from "@/lib/schemas"
+
 // Tipos de Investimentos Comuns na XP
 const TIPOS_INVESTIMENTO = [
   "Renda Fixa (CDB/LCI/LCA)", 
@@ -52,43 +54,24 @@ const TIPOS_INVESTIMENTO = [
   "FIIs", 
   "Fundos de Investimento", 
   "Previdência Privada", 
-  "COE",
-  "Criptomoedas",
+  "COE", 
+  "Criptomoedas", 
   "Saldo em Conta (XP)"
 ]
-
-const formSchema = z.object({
-  nome: z.string().min(2, { message: "Nome do ativo é obrigatório." }),
-  tipo: z.string().min(1, { message: "Selecione o tipo." }),
-  instituicao: z.string(), // Tornando obrigatório para o TS
-  valor_aplicado: z.string().refine((val) => !isNaN(Number(val)) && Number(val) >= 0, {
-    message: "Valor inválido.",
-  }),
-  valor_atual: z.string().refine((val) => !isNaN(Number(val)) && Number(val) >= 0, {
-    message: "Valor inválido.",
-  }),
-  quantidade: z.string(),
-  data_aplicacao: z.date(),
-  data_vencimento: z.date().optional().nullable(),
-  liquidez: z.string().optional(),
-  responsavel: z.string(),
-})
-
-type FormSchemaType = z.infer<typeof formSchema>
 
 export function AddInvestimentoDialog() {
   const [open, setOpen] = React.useState(false)
   const [isPending, startTransition] = React.useTransition()
 
-  const form = useForm<FormSchemaType>({
-    resolver: zodResolver(formSchema),
+  const form = useForm<z.infer<typeof InvestimentoSchema>>({
+    resolver: zodResolver(InvestimentoSchema) as any,
     defaultValues: {
       nome: "",
       tipo: "Renda Fixa (CDB/LCI/LCA)",
       instituicao: "XP",
-      valor_aplicado: "",
-      valor_atual: "",
-      quantidade: "1",
+      valor_aplicado: 0,
+      valor_atual: 0,
+      quantidade: 1,
       data_aplicacao: new Date(),
       data_vencimento: undefined,
       liquidez: "No Vencimento",
@@ -96,16 +79,18 @@ export function AddInvestimentoDialog() {
     },
   })
 
-  function onSubmit(values: FormSchemaType) {
+  function onSubmit(values: z.infer<typeof InvestimentoSchema>) {
     startTransition(async () => {
       const formData = new FormData()
       formData.append("nome", values.nome)
       formData.append("tipo", values.tipo)
-      formData.append("instituicao", values.instituicao)
-      formData.append("valor_aplicado", values.valor_aplicado)
-      formData.append("valor_atual", values.valor_atual) // Inicialmente igual ao aplicado ou mercado
-      formData.append("quantidade", values.quantidade)
-      formData.append("data_aplicacao", values.data_aplicacao.toISOString())
+      formData.append("instituicao", values.instituicao || "XP")
+      formData.append("valor_aplicado", String(values.valor_aplicado))
+      formData.append("valor_atual", String(values.valor_atual))
+      formData.append("quantidade", String(values.quantidade))
+      if (values.data_aplicacao) {
+          formData.append("data_aplicacao", values.data_aplicacao.toISOString())
+      }
       if (values.data_vencimento) {
         formData.append("data_vencimento", values.data_vencimento.toISOString())
       }
@@ -209,7 +194,7 @@ export function AddInvestimentoDialog() {
                                 field.onChange(e);
                                 // Sugere o mesmo valor para 'valor_atual' se estiver vazio
                                 if (!form.getValues("valor_atual")) {
-                                    form.setValue("valor_atual", e.target.value);
+                                    form.setValue("valor_atual", Number(e.target.value));
                                 }
                             }}
                         />

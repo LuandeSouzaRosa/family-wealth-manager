@@ -38,38 +38,33 @@ import { createPatrimonio } from "@/actions/finance"
 const CATEGORIAS_ATIVO = ["Conta Corrente", "Investimento", "Imóvel", "Veículo", "Outros Bens"]
 const CATEGORIAS_PASSIVO = ["Imobiliário", "Veículo", "Empréstimo", "Cartão de Crédito", "Outras Dívidas"]
 
-const formSchema = z.object({
-  item: z.string().min(2, { message: "Descrição muito curta." }).max(150),
-  valor: z.string().refine((val) => !isNaN(Number(val)) && Number(val) > 0, {
-    message: "O valor deve ser um número positivo.",
-  }),
-  tipo: z.enum(["Ativo", "Passivo"]),
-  categoria: z.string().min(1, { message: "Selecione uma categoria." }),
-})
+import { PatrimonioSchema } from "@/lib/schemas"
 
 export function AddPatrimonioDialog() {
   const [open, setOpen] = React.useState(false)
   const [isPending, startTransition] = React.useTransition()
 
-  const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
+  const form = useForm<z.infer<typeof PatrimonioSchema>>({
+    resolver: zodResolver(PatrimonioSchema) as any,
     defaultValues: {
       item: "",
-      valor: "",
+      valor: 0,
       tipo: "Ativo",
       categoria: "",
+      responsavel: "Casal",
     },
   })
 
   const tipoSelecionado = form.watch("tipo")
 
-  function onSubmit(values: z.infer<typeof formSchema>) {
+  function onSubmit(values: z.infer<typeof PatrimonioSchema>) {
     startTransition(async () => {
       const formData = new FormData()
       formData.append("item", values.item)
-      formData.append("valor", values.valor)
+      formData.append("valor", String(values.valor))
       formData.append("categoria", values.categoria)
       formData.append("tipo", values.tipo)
+      formData.append("responsavel", values.responsavel)
 
       const result = await createPatrimonio(formData)
 
@@ -105,6 +100,29 @@ export function AddPatrimonioDialog() {
             )}
             
             <div className="grid grid-cols-2 gap-4">
+               <FormField
+                  control={form.control}
+                  name="responsavel"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Responsável</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione..." />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="Casal">Casal</SelectItem>
+                          <SelectItem value="Luan">Luan</SelectItem>
+                          <SelectItem value="Luana">Luana</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+            
                <FormField
                   control={form.control}
                   name="tipo"

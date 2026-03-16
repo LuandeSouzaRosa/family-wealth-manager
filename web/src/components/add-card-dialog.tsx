@@ -29,46 +29,31 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { createCartaoCredito } from "@/actions/finance"
 import { toast } from "sonner"
 
-const formSchema = z.object({
-  nome: z.string().min(2, { message: "Nome do cartão é obrigatório." }),
-  limite: z.string().refine((val) => !isNaN(Number(val)) && Number(val) > 0, {
-    message: "Limite deve ser maior que zero.",
-  }),
-  dia_fechamento: z.string().refine((val) => {
-    const num = Number(val);
-    return !isNaN(num) && num >= 1 && num <= 31;
-  }, { message: "Dia deve ser entre 1 e 31." }),
-  dia_vencimento: z.string().refine((val) => {
-    const num = Number(val);
-    return !isNaN(num) && num >= 1 && num <= 31;
-  }, { message: "Dia deve ser entre 1 e 31." }),
-  responsavel: z.string(),
-  cor: z.string(),
-})
+import { CartaoSchema } from "@/lib/schemas"
 
 export function AddCardDialog() {
   const [open, setOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
 
-  const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
+  const form = useForm<z.infer<typeof CartaoSchema>>({
+    resolver: zodResolver(CartaoSchema) as any,
     defaultValues: {
       nome: "",
-      limite: "",
-      dia_fechamento: "",
-      dia_vencimento: "",
+      limite: 0,
+      dia_fechamento: 1,
+      dia_vencimento: 10,
       responsavel: "Todos",
       cor: "#000000",
     },
   })
 
-  function onSubmit(values: z.infer<typeof formSchema>) {
+  function onSubmit(values: z.infer<typeof CartaoSchema>) {
     startTransition(async () => {
       const formData = new FormData()
       formData.append("nome", values.nome)
-      formData.append("limite", values.limite)
-      formData.append("dia_fechamento", values.dia_fechamento)
-      formData.append("dia_vencimento", values.dia_vencimento)
+      formData.append("limite", String(values.limite))
+      formData.append("dia_fechamento", String(values.dia_fechamento))
+      formData.append("dia_vencimento", String(values.dia_vencimento))
       formData.append("responsavel", values.responsavel)
       formData.append("cor", values.cor)
 
