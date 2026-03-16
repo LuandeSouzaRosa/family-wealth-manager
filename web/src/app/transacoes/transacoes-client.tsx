@@ -4,7 +4,7 @@ import { useState, useTransition, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { Card, CardContent } from '@/components/ui/card'
 import { Trash2, Calendar, FileText, ArrowUpRight, ArrowDownRight, Edit3, Upload, Search, Filter, Download } from 'lucide-react'
-import { deleteTransaction } from '@/actions/finance'
+import { deleteTransaction } from "@/actions/transactions";
 import { AddTransactionDialog } from '@/components/add-transaction-dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
 import { Input } from '@/components/ui/input'

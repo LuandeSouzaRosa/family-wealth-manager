@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { AddOrcamentoDialog } from '@/components/add-orcamento-dialog'
 import { PiggyBank, TrendingDown, AlertTriangle, CheckCircle } from 'lucide-react'
 import { useTransition } from 'react'
-import { deleteOrcamento } from '@/actions/finance'
+import { deleteOrcamento } from "@/actions/budgets";
 import { Progress } from '@/components/ui/progress'
 import { cn } from '@/lib/utils'
 import { useFilter } from '@/contexts/filter-context'

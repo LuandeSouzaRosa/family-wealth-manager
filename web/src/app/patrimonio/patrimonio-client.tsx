@@ -5,7 +5,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { AddPatrimonioDialog } from '@/components/add-patrimonio-dialog'
 import { Trash2, Landmark, TrendingUp, TrendingDown, Building2, Car, CreditCard, PiggyBank, Briefcase } from 'lucide-react'
 import { useTransition } from 'react'
-import { deletePatrimonio } from '@/actions/finance'
+import { deletePatrimonio } from "@/actions/assets";
 
 interface Patrimonio {
   id: string

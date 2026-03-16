@@ -8,7 +8,7 @@ import { AllocationPieChart } from '@/components/charts/allocation-pie-chart'
 import { SmartAllocationWidget } from '@/components/investments/smart-allocation'
 import { TrendingUp, PieChart, Wallet, Calendar, ArrowUpRight, DollarSign, Building2 } from 'lucide-react'
 import { useTransition } from 'react'
-import { deleteInvestimento } from '@/actions/finance'
+import { deleteInvestimento, updateInvestimento } from '@/actions/investments'
 import { useFilter } from '@/contexts/filter-context'
 
 interface Investimento {

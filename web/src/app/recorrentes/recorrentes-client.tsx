@@ -5,7 +5,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { AddRecorrenteDialog } from '@/components/add-recorrente-dialog'
 import { Trash2, Power, PowerOff, Wallet, RefreshCw, Play } from 'lucide-react'
 import { useTransition } from 'react'
-import { toggleRecorrente, deleteRecorrente, processarRecorrencias } from '@/actions/finance'
+import { toggleRecorrente, deleteRecorrente, processarRecorrencias } from "@/actions/recurrences";
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
