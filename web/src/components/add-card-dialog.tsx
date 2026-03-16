@@ -88,11 +88,11 @@ export function AddCardDialog() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
+      <DialogTrigger render={
         <Button className="gap-2 bg-gradient-to-r from-primary to-primary/80 hover:opacity-90">
           <Plus className="h-4 w-4" /> Novo Cartão
         </Button>
-      </DialogTrigger>
+      } />
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
