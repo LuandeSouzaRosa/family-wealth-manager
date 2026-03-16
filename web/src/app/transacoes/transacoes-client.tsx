@@ -6,7 +6,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Trash2, Calendar, FileText, ArrowUpRight, ArrowDownRight, Edit3, Upload, Search, Filter, Download } from 'lucide-react'
 import { deleteTransaction } from '@/actions/finance'
 import { AddTransactionDialog } from '@/components/add-transaction-dialog'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
 import { Input } from '@/components/ui/input'
 import { useFilter } from '@/contexts/filter-context'
 import Link from 'next/link'
@@ -219,7 +219,9 @@ export function TransacoesClientShell({ initialData, initialCartoes }: Transacoe
                         <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Ano</label>
                         <Select value={year} onValueChange={(val) => setYear(val || "0")}>
                           <SelectTrigger className="w-full bg-background border-input text-foreground h-10 px-3">
-                            <SelectValue placeholder="Ano" />
+                            <span className="flex-1 min-w-0 truncate text-left">
+                                {year === "0" ? "Todos" : year}
+                            </span>
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="0">Todos</SelectItem>
@@ -232,7 +234,7 @@ export function TransacoesClientShell({ initialData, initialCartoes }: Transacoe
                         <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Mês</label>
                         <Select value={month} onValueChange={(val) => setMonth(val || "0")}>
                           <SelectTrigger className="w-full bg-background border-input text-foreground h-10 px-3">
-                            <span className="truncate block text-left">
+                            <span className="flex-1 min-w-0 truncate text-left">
                                 {MONTHS.find(m => m.value === month)?.label || "Mês"}
                             </span>
                           </SelectTrigger>
@@ -248,7 +250,7 @@ export function TransacoesClientShell({ initialData, initialCartoes }: Transacoe
                     <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Categoria</label>
                     <Select value={selectedCategory} onValueChange={setSelectedCategory}>
                       <SelectTrigger className="w-full bg-background border-input text-foreground h-10 px-3">
-                        <span className="truncate block text-left">
+                        <span className="flex-1 min-w-0 truncate text-left">
                             {selectedCategory === "Todas" ? "Todas as Categorias" : selectedCategory}
                         </span>
                       </SelectTrigger>
