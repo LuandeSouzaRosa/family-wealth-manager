@@ -309,6 +309,34 @@ export async function createRecorrente(formData: FormData) {
 
   if (error) return { error: error.message };
 
+  // =================================================================================
+  // INTEGRAÇÃO INTELIGENTE: CRIAR REGRA DE CATEGORIZAÇÃO AUTOMÁTICA
+  // =================================================================================
+  // Se eu criei uma conta fixa chamada "Netflix", provavelmente quero que tudo que 
+  // venha do banco com "Netflix" vá para a mesma categoria.
+  try {
+      const termo = parsed.data.descricao.split(" ")[0]; // Pega a primeira palavra (Ex: "Aluguel" de "Aluguel Apto")
+      if (termo.length > 3) {
+          // Verifica se já existe regra
+          const { data: regraExiste } = await supabase
+              .from("regras_categorizacao")
+              .select("id")
+              .ilike("texto_contem", `%${termo}%`)
+              .single();
+          
+          if (!regraExiste) {
+              await supabase.from("regras_categorizacao").insert([{
+                  texto_contem: termo,
+                  categoria_destino: parsed.data.categoria,
+                  user_id: user.id
+              }]);
+          }
+      }
+  } catch (err) {
+      console.error("Erro silencioso ao criar regra automática:", err);
+      // Não falha a criação da recorrência por isso
+  }
+
   revalidatePath("/recorrentes");
   return { success: true };
 }
