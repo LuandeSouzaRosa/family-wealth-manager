@@ -43,10 +43,7 @@ import {
 } from "@/components/ui/select"
 
 import { createTransaction, getContasBancarias } from "@/actions/finance"
-
-// Definir as categorias baseado na antiga cfg.CATEGORIAS_TODAS
-const CATEGORIAS_ENTRADA = ["Salário", "Dividendos", "Bônus", "Extra", "Reembolso"]
-const CATEGORIAS_SAIDA = ["Moradia", "Alimentação", "Lazer", "Saúde", "Transporte", "Investimento", "Assinaturas", "Educação", "Outros"]
+import { CATEGORIAS_ENTRADA, CATEGORIAS_SAIDA } from "@/lib/constants"
 
 const formSchema = z.object({
   descricao: z.string().min(2, {

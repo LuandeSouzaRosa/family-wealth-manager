@@ -34,11 +34,7 @@ import {
 } from "@/components/ui/select"
 
 import { createOrcamento } from "@/actions/finance"
-
-const CATEGORIAS = [
-  "Moradia", "Alimentação", "Transporte", "Lazer", "Saúde", 
-  "Educação", "Assinaturas", "Serviços", "Outros"
-]
+import { CATEGORIAS_SAIDA, RESPONSAVEIS } from "@/lib/constants"
 
 const formSchema = z.object({
   categoria: z.string().min(1, { message: "Selecione uma categoria." }),
@@ -85,11 +81,11 @@ export function AddOrcamentoDialog() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={
+      <DialogTrigger asChild>
         <Button className="bg-primary hover:bg-primary/90 gap-2">
           <Plus size={18} /> Novo Orçamento
         </Button>
-      } />
+      </DialogTrigger>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -117,7 +113,7 @@ export function AddOrcamentoDialog() {
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {CATEGORIAS.map(c => (
+                      {CATEGORIAS_SAIDA.map(c => (
                           <SelectItem key={c} value={c}>{c}</SelectItem>
                       ))}
                     </SelectContent>
@@ -157,9 +153,9 @@ export function AddOrcamentoDialog() {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                            <SelectItem value="Casal">Casal</SelectItem>
-                            <SelectItem value="Luan">Luan</SelectItem>
-                            <SelectItem value="Luana">Luana</SelectItem>
+                            {RESPONSAVEIS.map(r => (
+                                <SelectItem key={r} value={r}>{r}</SelectItem>
+                            ))}
                         </SelectContent>
                       </Select>
                       <FormMessage />

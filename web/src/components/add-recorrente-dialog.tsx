@@ -34,11 +34,7 @@ import {
 } from "@/components/ui/select"
 
 import { createRecorrente } from "@/actions/finance"
-
-const CATEGORIAS = [
-  "Moradia", "Alimentação", "Transporte", "Lazer", "Saúde", 
-  "Educação", "Salário", "Investimentos", "Assinaturas", "Serviços", "Outros"
-]
+import { CATEGORIAS_ENTRADA, CATEGORIAS_SAIDA, RESPONSAVEIS } from "@/lib/constants"
 
 const formSchema = z.object({
   descricao: z.string().min(2, { message: "Descrição obrigatória." }),
@@ -75,6 +71,10 @@ export function AddRecorrenteDialog() {
     },
   })
 
+  // Assistir tipo para categorias
+  const tipoSelecionado = form.watch("tipo")
+  const categoriasDisponiveis = tipoSelecionado === "Entrada" ? CATEGORIAS_ENTRADA : CATEGORIAS_SAIDA
+
   // @ts-ignore
   function onSubmit(values: FormSchemaType) {
     startTransition(async () => {
@@ -100,11 +100,11 @@ export function AddRecorrenteDialog() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={
+      <DialogTrigger asChild>
         <Button className="bg-primary hover:bg-primary/90 gap-2">
           <Plus size={18} /> Nova Recorrência
         </Button>
-      } />
+      </DialogTrigger>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -203,7 +203,7 @@ export function AddRecorrenteDialog() {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {CATEGORIAS.map(c => (
+                          {categoriasDisponiveis.map(c => (
                               <SelectItem key={c} value={c}>{c}</SelectItem>
                           ))}
                         </SelectContent>
@@ -254,9 +254,9 @@ export function AddRecorrenteDialog() {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                            <SelectItem value="Casal">Casal</SelectItem>
-                            <SelectItem value="Luan">Luan</SelectItem>
-                            <SelectItem value="Luana">Luana</SelectItem>
+                            {RESPONSAVEIS.map(r => (
+                                <SelectItem key={r} value={r}>{r}</SelectItem>
+                            ))}
                         </SelectContent>
                       </Select>
                       <FormMessage />
