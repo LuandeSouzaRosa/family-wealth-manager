@@ -113,6 +113,8 @@ export function DashboardClientShell({
         recentTx={filteredRecentTx}
         responsavel={responsavel}
         financialEvolution={financialEvolution}
+        financialHealth={financialHealth}
+        cashFlowForecast={cashFlowForecast}
       />
 
       {/* ===================================================================================== */}
