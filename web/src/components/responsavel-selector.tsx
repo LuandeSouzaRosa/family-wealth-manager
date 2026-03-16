@@ -10,18 +10,35 @@ export function ResponsavelSelector() {
   return (
     <div className="flex items-center gap-2">
         <Select value={responsavel} onValueChange={(val: any) => setResponsavel(val)}>
-            <SelectTrigger className="w-[130px] h-9 bg-background/50 border-border/50 text-xs font-medium focus:ring-primary/20">
-                <div className="flex items-center gap-2">
-                    {responsavel === "Todos" && <Users className="w-3.5 h-3.5 text-muted-foreground" />}
-                    {responsavel === "Luan" && <User className="w-3.5 h-3.5 text-blue-500" />}
-                    {responsavel === "Esposa" && <UserCheck className="w-3.5 h-3.5 text-pink-500" />}
+            <SelectTrigger className="w-[140px] h-12 bg-background/50 border-transparent shadow-none text-sm font-medium focus:ring-0 hover:bg-background/80 transition-colors">
+                <div className="flex items-center gap-2.5">
+                    <div className="p-1.5 rounded-full bg-secondary">
+                        {responsavel === "Todos" && <Users className="w-4 h-4 text-foreground" />}
+                        {responsavel === "Luan" && <User className="w-4 h-4 text-blue-500" />}
+                        {responsavel === "Esposa" && <UserCheck className="w-4 h-4 text-pink-500" />}
+                    </div>
                     <SelectValue />
                 </div>
             </SelectTrigger>
-            <SelectContent>
-                <SelectItem value="Todos">Todos</SelectItem>
-                <SelectItem value="Luan">Luan</SelectItem>
-                <SelectItem value="Esposa">Esposa</SelectItem>
+            <SelectContent align="end" className="w-[160px]">
+                <SelectItem value="Todos">
+                    <div className="flex items-center gap-2">
+                        <Users className="w-4 h-4 text-muted-foreground" />
+                        <span>Todos</span>
+                    </div>
+                </SelectItem>
+                <SelectItem value="Luan">
+                    <div className="flex items-center gap-2">
+                        <User className="w-4 h-4 text-blue-500" />
+                        <span>Luan</span>
+                    </div>
+                </SelectItem>
+                <SelectItem value="Esposa">
+                    <div className="flex items-center gap-2">
+                        <UserCheck className="w-4 h-4 text-pink-500" />
+                        <span>Esposa</span>
+                    </div>
+                </SelectItem>
             </SelectContent>
         </Select>
     </div>

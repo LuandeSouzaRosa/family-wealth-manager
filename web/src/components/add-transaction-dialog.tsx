@@ -112,9 +112,14 @@ export function AddTransactionDialog({ children, cartoes = [] }: { children?: Re
   const triggerButton = (
     <Button 
       data-testid="btn-nova-transacao"
-      className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full text-sm font-medium transition-all shadow-sm hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-12 px-6"
+      className="h-12 px-6 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 shadow-[0_0_20px_rgba(var(--primary),0.3)] hover:shadow-[0_0_30px_rgba(var(--primary),0.5)] transition-all duration-300 font-semibold tracking-wide"
     >
-      <Plus className="mr-2 h-4 w-4" /> Nova Transação
+      <div className="flex items-center gap-2">
+        <div className="p-1 bg-white/20 rounded-full">
+            <Plus className="w-4 h-4" />
+        </div>
+        <span>Nova Transação</span>
+      </div>
     </Button>
   );
 

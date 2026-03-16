@@ -14,6 +14,8 @@ import { KpiSection } from '@/components/dashboard/kpi-section'
 import { RecentTransactions } from '@/components/dashboard/recent-transactions'
 import { MobileDashboard } from '@/components/dashboard/mobile-dashboard'
 import { FinancialHealthWidget } from '@/components/dashboard/financial-health'
+import { ResponsavelSelector } from '@/components/responsavel-selector'
+import { CalendarRange } from 'lucide-react'
 
 // Constants for orchestration
 const STAGGER_DELAY = 0.1
@@ -123,23 +125,38 @@ export function DashboardClientShell({
       <div className="hidden md:block">
       
       {/* Premium Hero Section */}
-      <motion.section variants={fadeUpVariant} className="px-6 py-12 md:py-20 max-w-5xl mx-auto">
+      <motion.section variants={fadeUpVariant} className="px-6 py-12 md:py-20 max-w-7xl mx-auto">
         <div className="flex flex-col md:flex-row items-start md:items-end justify-between gap-8">
           <div className="space-y-2 relative">
+            <div className="flex items-center gap-3 mb-2">
+                <span className="px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium border border-primary/20 flex items-center gap-1.5">
+                    <CalendarRange className="w-3 h-3" />
+                    Março 2026
+                </span>
+            </div>
             <h1 className="text-4xl md:text-5xl font-semibold tracking-tight text-foreground/90">
               Gestão de Patrimônio
             </h1>
             <p className="text-muted-foreground text-lg flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-primary animate-pulse shadow-[0_0_8px_rgba(var(--primary),0.5)]"></span>
-              Visão geral consolidada para {userEmail}
+              Visão geral consolidada
             </p>
           </div>
+          
           <motion.div 
-            whileHover={{ scale: 1.05 }} 
-            whileTap={{ scale: 0.95 }}
-            className="w-full md:w-auto mt-4 md:mt-0"
+            className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 w-full md:w-auto mt-4 md:mt-0 bg-card/50 p-2 rounded-2xl border border-border/50 backdrop-blur-sm"
           >
-            <AddTransactionDialog />
+            <div className="flex-1 sm:flex-none">
+                <ResponsavelSelector />
+            </div>
+            <div className="h-px sm:h-10 w-full sm:w-px bg-border/50" />
+            <motion.div 
+                whileHover={{ scale: 1.02 }} 
+                whileTap={{ scale: 0.98 }}
+                className="flex-1 sm:flex-none"
+            >
+                <AddTransactionDialog />
+            </motion.div>
           </motion.div>
         </div>
       </motion.section>
