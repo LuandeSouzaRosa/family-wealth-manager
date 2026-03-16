@@ -72,6 +72,9 @@ export default async function RootLayout({
                   <nav className="hidden md:flex items-center gap-6 text-sm font-medium">
                     <Link href="/" className="transition-colors hover:text-foreground/80 text-foreground/60">Dashboard</Link>
                     <Link href="/transacoes" className="transition-colors hover:text-foreground/80 text-foreground/60">Extrato</Link>
+                    <Link href="/conciliacao" className="transition-colors hover:text-foreground/80 text-foreground/60 flex items-center gap-1">
+                        Importar
+                    </Link>
                     
                     {/* Menu Planejamento (Dropdown ou Grupo) */}
                     <div className="flex items-center gap-4 border-l border-border/50 pl-4">

@@ -3,11 +3,13 @@
 import { useState, useTransition, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { Card, CardContent } from '@/components/ui/card'
-import { Trash2, Calendar, FileText, ArrowUpRight, ArrowDownRight, Edit3 } from 'lucide-react'
+import { Trash2, Calendar, FileText, ArrowUpRight, ArrowDownRight, Edit3, Upload } from 'lucide-react'
 import { deleteTransaction } from '@/actions/finance'
 import { AddTransactionDialog } from '@/components/add-transaction-dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useFilter } from '@/contexts/filter-context'
+import Link from 'next/link'
+import { Button } from '@/components/ui/button'
 
 interface Transaction {
   id: string
@@ -122,6 +124,11 @@ export function TransacoesClientShell({ initialData }: TransacoesClientProps) {
         </div>
         
         <div className="flex items-center gap-3">
+          <Link href="/conciliacao">
+            <Button variant="outline" className="gap-2">
+                <Upload size={16} /> Importar CSV
+            </Button>
+          </Link>
           <AddTransactionDialog />
         </div>
       </motion.div>
