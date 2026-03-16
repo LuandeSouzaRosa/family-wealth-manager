@@ -99,6 +99,7 @@ export function Sidebar({ userEmail }: SidebarProps) {
       <div className="flex-1 overflow-y-auto overflow-x-hidden py-4 px-3 space-y-1 scrollbar-thin">
         <NavItem href="/" icon={LayoutDashboard} label="Dashboard" />
         <NavItem href="/transacoes" icon={CreditCard} label="Extrato" />
+        <NavItem href="/cartoes" icon={CreditCard} label="Cartões" />
         <NavItem href="/conciliacao" icon={Wallet} label="Conciliação" />
 
         <SectionLabel label="Planejamento" />

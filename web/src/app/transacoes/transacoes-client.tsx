@@ -24,6 +24,7 @@ interface Transaction {
 
 interface TransacoesClientProps {
   initialData: Transaction[]
+  initialCartoes: any[]
 }
 
 const SPRING_TRANSITION = { type: "spring" as const, bounce: 0.4, duration: 0.8 }
@@ -39,7 +40,7 @@ const scaleUpVariant = {
 }
 
 const MONTHS = [
-  { value: "0", label: "Ano Inteiro" },
+  { value: "0", label: "Todos" },
   { value: "1", label: "Janeiro" },
   { value: "2", label: "Fevereiro" },
   { value: "3", label: "Março" },
@@ -56,7 +57,7 @@ const MONTHS = [
 
 const YEARS = ["2026", "2025", "2024"]
 
-export function TransacoesClientShell({ initialData }: TransacoesClientProps) {
+export function TransacoesClientShell({ initialData, initialCartoes }: TransacoesClientProps) {
   const { responsavel } = useFilter()
   const [isPending, startTransition] = useTransition()
   const [month, setMonth] = useState<string>("0") // 0 means all for the selected year
@@ -181,7 +182,7 @@ export function TransacoesClientShell({ initialData }: TransacoesClientProps) {
                 <Upload size={16} /> Importar CSV
             </Button>
           </Link>
-          <AddTransactionDialog />
+          <AddTransactionDialog cartoes={initialCartoes} />
         </div>
       </motion.div>
 

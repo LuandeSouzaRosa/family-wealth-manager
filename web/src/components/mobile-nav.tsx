@@ -104,6 +104,12 @@ export function MobileNav() {
                 </Link>
               } />
               <SheetClose render={
+                <Link href="/cartoes" className="flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-md hover:bg-accent hover:text-accent-foreground transition-colors">
+                  <CreditCard className="h-4 w-4" />
+                  Cartões
+                </Link>
+              } />
+              <SheetClose render={
                 <Link href="/conciliacao" className="flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-md hover:bg-accent hover:text-accent-foreground transition-colors">
                   <Wallet className="h-4 w-4" />
                   Conciliação

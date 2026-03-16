@@ -59,9 +59,11 @@ const formSchema = z.object({
   tipo: z.enum(["Entrada", "Saída", "Transferência"]),
   categoria: z.string().min(1, { message: "Por favor selecione uma categoria." }),
   conta_id: z.string().optional(),
+  cartao_id: z.string().optional(),
+  metodo: z.enum(["conta", "cartao"]).default("conta"),
 })
 
-export function AddTransactionDialog({ children }: { children?: React.ReactNode }) {
+export function AddTransactionDialog({ children, cartoes = [] }: { children?: React.ReactNode, cartoes?: any[] }) {
   const [open, setOpen] = React.useState(false)
   const [isPending, startTransition] = React.useTransition()
   const [contas, setContas] = React.useState<any[]>([])
@@ -83,11 +85,14 @@ export function AddTransactionDialog({ children }: { children?: React.ReactNode 
       categoria: "",
       data: new Date(),
       conta_id: "none",
+      cartao_id: "",
+      metodo: "conta",
     },
   })
 
   // Assistir o 'tipo' para renderizar as categorias certas
   const tipoSelecionado = form.watch("tipo")
+  const metodoSelecionado = form.watch("metodo")
 
   function onSubmit(values: z.infer<typeof formSchema>) {
     startTransition(async () => {
@@ -98,8 +103,15 @@ export function AddTransactionDialog({ children }: { children?: React.ReactNode 
       formData.append("categoria", values.categoria)
       formData.append("tipo", values.tipo)
       formData.append("data", values.data.toISOString())
-      if (values.conta_id && values.conta_id !== "none") {
-        formData.append("conta_id", values.conta_id)
+      
+      if (values.metodo === "conta") {
+          if (values.conta_id && values.conta_id !== "none") {
+            formData.append("conta_id", values.conta_id)
+          }
+      } else if (values.metodo === "cartao") {
+          if (values.cartao_id) {
+            formData.append("cartao_id", values.cartao_id)
+          }
       }
 
       const result = await createTransaction(formData)
@@ -219,31 +231,83 @@ export function AddTransactionDialog({ children }: { children?: React.ReactNode 
               )}
             />
 
-            <FormField
-              control={form.control}
-              name="conta_id"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Conta Bancária</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione a conta..." />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="none">Sem conta específica (Geral)</SelectItem>
-                      {contas.map(conta => (
-                        <SelectItem key={conta.id} value={conta.id}>
-                          {conta.nome} ({conta.responsavel})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {/* Seleção de Método de Pagamento (Apenas para Saída ou Geral) */}
+            <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="metodo"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Forma</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="conta">Conta / Débito</SelectItem>
+                          <SelectItem value="cartao">Crédito</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {metodoSelecionado === "conta" ? (
+                    <FormField
+                      control={form.control}
+                      name="conta_id"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Conta Bancária</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Selecione..." />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="none">Sem conta (Geral)</SelectItem>
+                              {contas.map(conta => (
+                                <SelectItem key={conta.id} value={conta.id}>
+                                  {conta.nome}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                ) : (
+                    <FormField
+                      control={form.control}
+                      name="cartao_id"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Cartão de Crédito</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Selecione..." />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {cartoes.map(cartao => (
+                                <SelectItem key={cartao.id} value={cartao.id}>
+                                  {cartao.nome}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                )}
+            </div>
 
             <div className="grid grid-cols-2 gap-4">
                  <FormField
