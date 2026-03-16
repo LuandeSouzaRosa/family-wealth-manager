@@ -89,7 +89,7 @@ export function AddCardDialog() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button className="gap-2">
+        <Button className="gap-2 bg-gradient-to-r from-primary to-primary/80 hover:opacity-90">
           <Plus className="h-4 w-4" /> Novo Cartão
         </Button>
       </DialogTrigger>
