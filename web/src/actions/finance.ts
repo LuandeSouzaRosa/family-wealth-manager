@@ -900,41 +900,71 @@ export async function getCartoesCredito() {
   return cartoesComFatura;
 }
 
+/**
+ * Retorna uma data segura respeitando o limite de dias do mês.
+ * Ex: 31 de Abril retorna 30 de Abril.
+ */
+function getClampedDate(year: number, month: number, day: number) {
+  const lastDay = new Date(year, month + 1, 0).getDate();
+  return new Date(year, month, Math.min(day, lastDay));
+}
+
 async function calcularFaturaAtual(supabase: any, cartao: any) {
-    const hoje = new Date();
-    const diaAtual = hoje.getDate();
-    const mesAtual = hoje.getMonth();
-    const anoAtual = hoje.getFullYear();
+  const hoje = new Date();
+  const diaAtual = hoje.getDate();
+  const mesAtual = hoje.getMonth();
+  const anoAtual = hoje.getFullYear();
 
-    let dataInicio, dataFim;
+  let dataInicio, dataFim;
 
-    if (diaAtual < cartao.dia_fechamento) {
-        // Fatura aberta: fechou mês passado até dia de fechamento deste mês
-        dataInicio = new Date(anoAtual, mesAtual - 1, cartao.dia_fechamento + 1);
-        dataFim = new Date(anoAtual, mesAtual, cartao.dia_fechamento);
-    } else {
-        // Fatura aberta: fechou este mês até dia de fechamento do próximo
-        dataInicio = new Date(anoAtual, mesAtual, cartao.dia_fechamento + 1);
-        dataFim = new Date(anoAtual, mesAtual + 1, cartao.dia_fechamento);
-    }
+  if (diaAtual < cartao.dia_fechamento) {
+    // Fatura aberta: fechou mês passado até dia de fechamento deste mês
+    const dataFimAnterior = getClampedDate(anoAtual, mesAtual - 1, cartao.dia_fechamento);
+    dataInicio = new Date(dataFimAnterior);
+    dataInicio.setDate(dataInicio.getDate() + 1);
+    dataInicio.setHours(0, 0, 0, 0);
 
-    // Buscar transações vinculadas a este cartão neste período
-    const { data: transacoes } = await supabase
-        .from("transacoes")
-        .select("valor")
-        .eq("cartao_id", cartao.id)
-        .eq("tipo", "Saída") // Apenas gastos
-        .gte("data", dataInicio.toISOString())
-        .lte("data", dataFim.toISOString());
+    dataFim = getClampedDate(anoAtual, mesAtual, cartao.dia_fechamento);
+    dataFim.setHours(23, 59, 59, 999);
+  } else {
+    // Fatura aberta: fechou este mês até dia de fechamento do próximo
+    const dataFimEsteMes = getClampedDate(anoAtual, mesAtual, cartao.dia_fechamento);
+    dataInicio = new Date(dataFimEsteMes);
+    dataInicio.setDate(dataInicio.getDate() + 1);
+    dataInicio.setHours(0, 0, 0, 0);
 
-    const total = transacoes?.reduce((acc: number, t: any) => acc + t.valor, 0) || 0;
-    
-    return {
-        valor: total,
-        vencimento: new Date(dataFim.getFullYear(), dataFim.getMonth(), cartao.dia_vencimento).toISOString(),
-        fechamento: dataFim.toISOString(),
-        status: "Aberta"
-    };
+    dataFim = getClampedDate(anoAtual, mesAtual + 1, cartao.dia_fechamento);
+    dataFim.setHours(23, 59, 59, 999);
+  }
+
+  // Vencimento: se dia_vencimento < dia_fechamento, o vencimento é no mês seguinte ao fechamento
+  let mesVencimento = dataFim.getMonth();
+  let anoVencimento = dataFim.getFullYear();
+
+  if (cartao.dia_vencimento < cartao.dia_fechamento) {
+    mesVencimento += 1;
+  }
+
+  const dataVencimento = getClampedDate(anoVencimento, mesVencimento, cartao.dia_vencimento);
+  dataVencimento.setHours(23, 59, 59, 999);
+
+  // Buscar transações vinculadas a este cartão neste período
+  const { data: transacoes } = await supabase
+      .from("transacoes")
+      .select("valor")
+      .eq("cartao_id", cartao.id)
+      .eq("tipo", "Saída") // Apenas gastos
+      .gte("data", dataInicio.toISOString())
+      .lte("data", dataFim.toISOString());
+
+  const total = transacoes?.reduce((acc: number, t: any) => acc + t.valor, 0) || 0;
+  
+  return {
+      valor: total,
+      vencimento: dataVencimento.toISOString(),
+      fechamento: dataFim.toISOString(),
+      status: "Aberta"
+  };
 }
 
 export async function createCartaoCredito(formData: FormData) {
