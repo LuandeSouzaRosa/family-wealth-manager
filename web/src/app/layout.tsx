@@ -23,6 +23,7 @@ import { Sidebar } from '@/components/sidebar'
 import { MobileNav } from '@/components/mobile-nav'
 import { LandscapeBlocker } from '@/components/landscape-blocker'
 import { PrivacyBlur } from '@/components/privacy-blur'
+import { SplashScreen } from '@/components/splash-screen'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -63,6 +64,7 @@ export default async function RootLayout({
             <AmbientBackground />
             <LandscapeBlocker />
             <PrivacyBlur />
+            <SplashScreen />
             
             {/* Nav Header Minimalista (Mobile Only) */}
             {user && (
