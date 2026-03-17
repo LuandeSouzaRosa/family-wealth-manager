@@ -4,22 +4,10 @@ import './globals.css'
 import { Providers } from '@/components/providers'
 import { ModeToggle } from '@/components/theme-toggle'
 import { createClient } from '@/utils/supabase/server'
-import { Button } from '@/components/ui/button'
 import { AmbientBackground } from '@/components/ambient-background'
-import Link from 'next/link'
-import { Menu } from 'lucide-react'
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-  SheetClose,
-} from "@/components/ui/sheet"
-import { signout } from '@/app/login/actions'
-import { ResponsavelSelector } from '@/components/responsavel-selector'
 
 import { Sidebar } from '@/components/sidebar'
+import { MobileDrawer } from '@/components/mobile-drawer'
 import { MobileNav } from '@/components/mobile-nav'
 import { LandscapeBlocker } from '@/components/landscape-blocker'
 import { PrivacyBlur } from '@/components/privacy-blur'
@@ -81,22 +69,18 @@ export default async function RootLayout({
             {/* Nav Header Minimalista (Mobile Only) */}
             {user && (
               <header className="md:hidden sticky top-0 z-50 w-full border-b border-border/40 bg-background/80 backdrop-blur-md supports-[backdrop-filter]:bg-background/60">
-                <div className="flex h-16 items-center px-6 max-w-7xl mx-auto w-full">
-                  <div className="flex items-center gap-2 mr-8">
+                <div className="flex h-14 items-center px-4 w-full">
+                  <MobileDrawer />
+                  
+                  <div className="flex items-center gap-2 ml-2">
                     <div className="h-6 w-6 rounded-full bg-primary flex items-center justify-center">
                       <div className="h-2 w-2 rounded-full bg-primary-foreground"></div>
                     </div>
-                    <span className="font-semibold tracking-tight text-lg">L&L Wealth</span>
+                    <span className="font-semibold tracking-tight">L&L Wealth</span>
                   </div>
                   
-                  <div className="ml-auto flex items-center space-x-4">
+                  <div className="ml-auto flex items-center">
                     <ModeToggle />
-                    
-                    <form action={signout} className="hidden md:block">
-                      <Button variant="ghost" className="rounded-full text-sm font-medium px-6 hover:bg-secondary">
-                        Sair da Conta
-                      </Button>
-                    </form>
                   </div>
                 </div>
               </header>
