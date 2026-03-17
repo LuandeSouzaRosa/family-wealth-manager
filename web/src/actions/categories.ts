@@ -2,6 +2,7 @@
 
 import { createClient } from "@/utils/supabase/server";
 import { revalidatePath } from "next/cache";
+import { IdSchema } from "@/lib/schemas";
 
 // ==========================================
 // CATEGORIAS DINÂMICAS (Dynamic Categories)
@@ -47,11 +48,17 @@ export async function createCategoria(formData: FormData) {
 }
 
 export async function deleteCategoria(id: string) {
+  const parsed = IdSchema.safeParse(id);
+  if (!parsed.success) return { error: "ID inválido." };
+
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Sessão expirada." };
+
   const { error } = await supabase
     .from("categorias")
     .delete()
-    .match({ id });
+    .match({ id, user_id: user.id });
 
   if (error) return { error: error.message };
   revalidatePath("/");

@@ -2,7 +2,7 @@
 
 import { createClient } from "@/utils/supabase/server";
 import { revalidatePath } from "next/cache";
-import { RecorrenteSchema } from "@/lib/schemas";
+import { RecorrenteSchema, IdSchema } from "@/lib/schemas";
 
 // ==========================================
 // RECORRENTES (Recurring Expenses)
@@ -80,11 +80,17 @@ export async function createRecorrente(formData: FormData) {
 }
 
 export async function toggleRecorrente(id: string, currentStatus: boolean) {
+  const parsed = IdSchema.safeParse(id);
+  if (!parsed.success) return { error: "ID inválido." };
+
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Sessão expirada." };
+
   const { error } = await supabase
     .from("recorrentes")
     .update({ ativo: !currentStatus })
-    .match({ id });
+    .match({ id, user_id: user.id });
 
   if (error) return { error: error.message };
   revalidatePath("/recorrentes");
@@ -92,11 +98,17 @@ export async function toggleRecorrente(id: string, currentStatus: boolean) {
 }
 
 export async function deleteRecorrente(id: string) {
+  const parsed = IdSchema.safeParse(id);
+  if (!parsed.success) return { error: "ID inválido." };
+
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Sessão expirada." };
+
   const { error } = await supabase
     .from("recorrentes")
     .delete()
-    .match({ id });
+    .match({ id, user_id: user.id });
 
   if (error) return { error: error.message };
   revalidatePath("/recorrentes");

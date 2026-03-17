@@ -2,7 +2,7 @@
 
 import { createClient } from "@/utils/supabase/server";
 import { revalidatePath } from "next/cache";
-import { PatrimonioSchema } from "@/lib/schemas";
+import { PatrimonioSchema, IdSchema } from "@/lib/schemas";
 
 // ==========================================
 // PATRIMÔNIO (Net Worth)
@@ -54,11 +54,17 @@ export async function createPatrimonio(formData: FormData) {
 }
 
 export async function deletePatrimonio(id: string) {
+  const parsed = IdSchema.safeParse(id);
+  if (!parsed.success) return { error: "ID inválido." };
+
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Sessão expirada." };
+
   const { error } = await supabase
     .from("patrimonio")
     .delete()
-    .match({ id });
+    .match({ id, user_id: user.id });
 
   if (error) return { error: error.message };
   revalidatePath("/patrimonio");

@@ -2,7 +2,7 @@
 
 import { createClient } from "@/utils/supabase/server";
 import { revalidatePath } from "next/cache";
-import { TransactionSchema } from "@/lib/schemas";
+import { TransactionSchema, IdSchema } from "@/lib/schemas";
 import { z } from "zod";
 
 // ==========================================
@@ -61,11 +61,17 @@ export async function createTransaction(formData: FormData) {
 }
 
 export async function deleteTransaction(id: string) {
+  const parsed = IdSchema.safeParse(id);
+  if (!parsed.success) return { error: "ID inválido." };
+
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Sessão expirada." };
+
   const { error } = await supabase
     .from("transacoes")
     .delete()
-    .match({ id });
+    .match({ id, user_id: user.id });
 
   if (error) return { error: error.message };
   revalidatePath("/");

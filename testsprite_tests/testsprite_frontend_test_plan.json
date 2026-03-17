@@ -1,14 +1,18 @@
 [
   {
     "id": "TC001",
-    "title": "View dashboard overview KPIs and recent transactions",
-    "description": "Verifies the authenticated dashboard shows total balance, income/expense breakdown, and a recent transactions section.",
-    "category": "Dashboard Overview",
+    "title": "Login with valid credentials redirects to dashboard",
+    "description": "Verifies a user can log in with correct email and password and reach the authenticated dashboard.",
+    "category": "User Authentication",
     "priority": "High",
     "steps": [
       {
         "type": "action",
         "description": "Navigate to /login"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Login\" is visible"
       },
       {
         "type": "action",
@@ -20,7 +24,7 @@
       },
       {
         "type": "action",
-        "description": "Click the \"Login\" button"
+        "description": "Click on the \"Login\" button"
       },
       {
         "type": "assertion",
@@ -28,23 +32,15 @@
       },
       {
         "type": "assertion",
-        "description": "Verify text \"Saldo\" is visible"
-      },
-      {
-        "type": "assertion",
-        "description": "Verify text \"Receitas\" is visible"
-      },
-      {
-        "type": "assertion",
-        "description": "Verify text \"Transações\" is visible"
+        "description": "Verify text \"total balance\" is visible"
       }
     ]
   },
   {
     "id": "TC002",
-    "title": "Dashboard displays a recent transactions list area",
-    "description": "Verifies the dashboard includes a visible recent transactions list section after login.",
-    "category": "Dashboard Overview",
+    "title": "Signup shows email verification prompt",
+    "description": "Verifies a new user signup attempt shows an email verification prompt after submitting the signup form.",
+    "category": "User Authentication",
     "priority": "Medium",
     "steps": [
       {
@@ -52,6 +48,241 @@
         "description": "Navigate to /login"
       },
       {
+        "type": "assertion",
+        "description": "Verify text \"Signup\" is visible"
+      },
+      {
+        "type": "action",
+        "description": "Type \"new.user+e2e@example.com\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"ValidPassw0rd!\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click on the \"Signup\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"verification\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"email\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC003",
+    "title": "Login with invalid email format shows validation/auth error",
+    "description": "Verifies an invalid email format prevents successful login and an error is shown to the user.",
+    "category": "User Authentication",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Login\" is visible"
+      },
+      {
+        "type": "action",
+        "description": "Type \"not-an-email\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"anypassword\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click on the \"Login\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"error\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/login\""
+      }
+    ]
+  },
+  {
+    "id": "TC004",
+    "title": "Login with wrong password shows authentication error and stays on login",
+    "description": "Verifies a user cannot log in with a valid-looking email but incorrect password and sees an authentication error.",
+    "category": "User Authentication",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Login\" is visible"
+      },
+      {
+        "type": "action",
+        "description": "Type \"wrong.password.user@example.com\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"WrongPassword123!\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click on the \"Login\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Invalid\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/login\""
+      }
+    ]
+  },
+  {
+    "id": "TC005",
+    "title": "Login with empty fields shows required-field error",
+    "description": "Verifies the login form prevents submission when email and password are empty and shows a visible error message.",
+    "category": "User Authentication",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Login\" is visible"
+      },
+      {
+        "type": "action",
+        "description": "Click on the \"Login\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"required\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/login\""
+      }
+    ]
+  },
+  {
+    "id": "TC006",
+    "title": "Signup with invalid email shows validation/auth error",
+    "description": "Verifies the signup flow rejects an invalid email format and shows a visible error message.",
+    "category": "User Authentication",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Signup\" is visible"
+      },
+      {
+        "type": "action",
+        "description": "Type \"bad-email\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"ValidPassw0rd!\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click on the \"Signup\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"error\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/login\""
+      }
+    ]
+  },
+  {
+    "id": "TC007",
+    "title": "Password field masks input on login form",
+    "description": "Verifies the password field behaves like a password input (masked) on the login page.",
+    "category": "User Authentication",
+    "priority": "Low",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"SomePassword123!\" into the password field"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify element \"password field\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"SomePassword123!\" is not visible"
+      }
+    ]
+  },
+  {
+    "id": "TC008",
+    "title": "Login button shows loading/disabled state during submission (if present)",
+    "description": "Verifies the UI indicates in-progress submission after clicking Login, reducing duplicate submissions.",
+    "category": "User Authentication",
+    "priority": "Low",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click on the \"Login\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Loading\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/\""
+      }
+    ]
+  },
+  {
+    "id": "TC009",
+    "title": "Dashboard shows core overview sections (balance, breakdown, recent transactions)",
+    "description": "Verifies the authenticated dashboard renders total balance, income/expense breakdown, and recent transactions sections.",
+    "category": "Dashboard Overview",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
         "type": "action",
         "description": "Type \"{{LOGIN_USER}}\" into the email field"
       },
@@ -69,20 +300,24 @@
       },
       {
         "type": "assertion",
-        "description": "Verify text \"Transações\" is visible"
+        "description": "Verify text \"Total\" is visible"
       },
       {
         "type": "assertion",
-        "description": "Verify element \"Recent transactions list\" is visible"
+        "description": "Verify text \"Receitas\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Transações recentes\" is visible"
       }
     ]
   },
   {
-    "id": "TC003",
-    "title": "Dashboard shows income and expense breakdown section",
-    "description": "Verifies the dashboard provides a visible income/expense breakdown area after login.",
+    "id": "TC010",
+    "title": "Dashboard displays income/expense breakdown values on load",
+    "description": "Verifies the dashboard income and expense breakdown area is visible and presents both categories.",
     "category": "Dashboard Overview",
-    "priority": "High",
+    "priority": "Medium",
     "steps": [
       {
         "type": "action",
@@ -111,17 +346,13 @@
       {
         "type": "assertion",
         "description": "Verify text \"Despesas\" is visible"
-      },
-      {
-        "type": "assertion",
-        "description": "Verify element \"Income vs expense breakdown\" is visible"
       }
     ]
   },
   {
-    "id": "TC004",
-    "title": "Dashboard shows total balance card",
-    "description": "Verifies the dashboard displays a visible total balance value/card after login.",
+    "id": "TC011",
+    "title": "Dashboard recent transactions list is visible and structured",
+    "description": "Verifies the recent transactions area is visible and shows a list/table-like structure for entries.",
     "category": "Dashboard Overview",
     "priority": "High",
     "steps": [
@@ -147,18 +378,18 @@
       },
       {
         "type": "assertion",
-        "description": "Verify text \"Saldo\" is visible"
+        "description": "Verify text \"Transações recentes\" is visible"
       },
       {
         "type": "assertion",
-        "description": "Verify element \"Total balance amount\" is visible"
+        "description": "Verify element \"Recent transactions list\" is visible"
       }
     ]
   },
   {
-    "id": "TC005",
-    "title": "Autonomy KPI detail modal opens from dashboard",
-    "description": "Verifies clicking the autonomy KPI card opens a detail modal with autonomy information.",
+    "id": "TC012",
+    "title": "Autonomy KPI card is visible on the dashboard",
+    "description": "Verifies the dashboard includes a KPI card related to autonomy calculation.",
     "category": "Dashboard Overview",
     "priority": "Medium",
     "steps": [
@@ -187,21 +418,17 @@
         "description": "Verify text \"Autonomia\" is visible"
       },
       {
-        "type": "action",
-        "description": "Click the \"Autonomia\" KPI card"
-      },
-      {
         "type": "assertion",
-        "description": "Verify element \"Autonomy detail modal\" is visible"
+        "description": "Verify element \"Autonomia KPI card\" is visible"
       }
     ]
   },
   {
-    "id": "TC006",
-    "title": "Autonomy detail modal can be dismissed",
-    "description": "Verifies the autonomy detail modal can be closed after opening from the dashboard.",
+    "id": "TC013",
+    "title": "Open autonomy KPI details modal from the dashboard",
+    "description": "Verifies clicking the autonomy KPI card opens a details modal.",
     "category": "Dashboard Overview",
-    "priority": "Low",
+    "priority": "High",
     "steps": [
       {
         "type": "action",
@@ -229,18 +456,55 @@
       },
       {
         "type": "assertion",
-        "description": "Verify element \"Autonomy detail modal\" is visible"
-      },
-      {
-        "type": "action",
-        "description": "Click the \"Close\" button in the autonomy detail modal"
+        "description": "Verify element \"Autonomia detail modal\" is visible"
       }
     ]
   },
   {
-    "id": "TC007",
-    "title": "Invalid login prevents reaching dashboard",
-    "description": "Verifies incorrect credentials do not log the user in and the dashboard is not shown.",
+    "id": "TC014",
+    "title": "Close autonomy details modal",
+    "description": "Verifies the autonomy KPI details modal can be dismissed and returns to the dashboard view.",
+    "category": "Dashboard Overview",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Login\" button"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Autonomia\" KPI card"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify element \"Autonomia detail modal\" is visible"
+      },
+      {
+        "type": "action",
+        "description": "Press Escape"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify element \"Autonomia detail modal\" is not visible"
+      }
+    ]
+  },
+  {
+    "id": "TC015",
+    "title": "Login with invalid credentials shows an error and stays on login page",
+    "description": "Verifies invalid login prevents access and shows a visible error message.",
     "category": "Dashboard Overview",
     "priority": "High",
     "steps": [
@@ -254,7 +518,7 @@
       },
       {
         "type": "action",
-        "description": "Type \"WrongPassword123!\" into the password field"
+        "description": "Type \"wrong-password\" into the password field"
       },
       {
         "type": "action",
@@ -266,14 +530,47 @@
       },
       {
         "type": "assertion",
-        "description": "Verify text \"Login\" is visible"
+        "description": "Verify text \"Invalid\" is visible"
       }
     ]
   },
   {
-    "id": "TC008",
-    "title": "Create an expense transaction and verify it appears in the transactions list",
-    "description": "Verifies a user can add a new transaction via the 'Nova Transação' dialog and see it listed afterward.",
+    "id": "TC016",
+    "title": "Login validation: missing password prevents successful login",
+    "description": "Verifies the login form shows a visible validation message when password is missing.",
+    "category": "Dashboard Overview",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Login\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/login\""
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Password\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"required\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC017",
+    "title": "Create an Expense transaction and verify it appears in the transactions list",
+    "description": "Verifies a user can add a new Expense transaction via the \"Nova Transação\" dialog and then see it in the list.",
     "category": "Transaction Management",
     "priority": "High",
     "steps": [
@@ -291,7 +588,7 @@
       },
       {
         "type": "action",
-        "description": "Click the \"Login\" button"
+        "description": "Click on the \"Entrar\" / \"Login\" button"
       },
       {
         "type": "assertion",
@@ -299,15 +596,11 @@
       },
       {
         "type": "action",
-        "description": "Click on \"Transações\" in the main navigation"
-      },
-      {
-        "type": "assertion",
-        "description": "Verify URL contains \"/transacoes\""
+        "description": "Click on \"Transações\" in the app navigation/menu"
       },
       {
         "type": "action",
-        "description": "Click to open the \"Nova Transação\" dialog"
+        "description": "Click on \"Nova Transação\" to open the dialog"
       },
       {
         "type": "assertion",
@@ -315,7 +608,7 @@
       },
       {
         "type": "action",
-        "description": "Type \"Mercado\" into the description field"
+        "description": "Type \"Groceries - E2E\" into the description field"
       },
       {
         "type": "action",
@@ -323,11 +616,11 @@
       },
       {
         "type": "action",
-        "description": "Select \"Expense\" from the transaction type options"
+        "description": "Select \"Expense\" from the transaction type control"
       },
       {
         "type": "action",
-        "description": "Select a category from the category dropdown"
+        "description": "Select \"Alimentação\" (or any available category) from the category dropdown"
       },
       {
         "type": "action",
@@ -335,18 +628,18 @@
       },
       {
         "type": "action",
-        "description": "Click the submit button in the dialog"
+        "description": "Click on the \"Salvar\" / \"Adicionar\" / \"Submit\" button in the dialog"
       },
       {
         "type": "assertion",
-        "description": "Verify text \"Mercado\" is visible"
+        "description": "Verify text \"Groceries - E2E\" is visible"
       }
     ]
   },
   {
-    "id": "TC009",
-    "title": "Create an income transaction and verify it appears in the transactions list",
-    "description": "Verifies a user can add a new Income transaction and see it listed afterward.",
+    "id": "TC018",
+    "title": "Create an Income transaction and verify it appears in the transactions list",
+    "description": "Verifies a user can add a new Income transaction and then see it in the list.",
     "category": "Transaction Management",
     "priority": "High",
     "steps": [
@@ -364,7 +657,7 @@
       },
       {
         "type": "action",
-        "description": "Click the \"Login\" button"
+        "description": "Click on the \"Entrar\" / \"Login\" button"
       },
       {
         "type": "assertion",
@@ -372,23 +665,15 @@
       },
       {
         "type": "action",
-        "description": "Click on \"Transações\" in the main navigation"
-      },
-      {
-        "type": "assertion",
-        "description": "Verify URL contains \"/transacoes\""
+        "description": "Click on \"Transações\" in the app navigation/menu"
       },
       {
         "type": "action",
-        "description": "Click to open the \"Nova Transação\" dialog"
-      },
-      {
-        "type": "assertion",
-        "description": "Verify text \"Nova Transação\" is visible"
+        "description": "Click on \"Nova Transação\" to open the dialog"
       },
       {
         "type": "action",
-        "description": "Type \"Salário\" into the description field"
+        "description": "Type \"Salary - E2E\" into the description field"
       },
       {
         "type": "action",
@@ -396,11 +681,11 @@
       },
       {
         "type": "action",
-        "description": "Select \"Income\" from the transaction type options"
+        "description": "Select \"Income\" from the transaction type control"
       },
       {
         "type": "action",
-        "description": "Select a category from the category dropdown"
+        "description": "Select any available category from the category dropdown"
       },
       {
         "type": "action",
@@ -408,18 +693,18 @@
       },
       {
         "type": "action",
-        "description": "Click the submit button in the dialog"
+        "description": "Click on the \"Salvar\" / \"Adicionar\" / \"Submit\" button in the dialog"
       },
       {
         "type": "assertion",
-        "description": "Verify text \"Salário\" is visible"
+        "description": "Verify text \"Salary - E2E\" is visible"
       }
     ]
   },
   {
-    "id": "TC010",
-    "title": "Required field validation blocks submission then allows successful submit after fixing",
-    "description": "Verifies validation errors show when required fields are missing and that the transaction can be saved after correction.",
+    "id": "TC019",
+    "title": "Form validation: submit with required field missing, then correct and successfully create transaction",
+    "description": "Verifies required-field validation appears and that the user can correct the form and submit successfully.",
     "category": "Transaction Management",
     "priority": "High",
     "steps": [
@@ -437,7 +722,7 @@
       },
       {
         "type": "action",
-        "description": "Click the \"Login\" button"
+        "description": "Click on the \"Entrar\" / \"Login\" button"
       },
       {
         "type": "assertion",
@@ -445,100 +730,27 @@
       },
       {
         "type": "action",
-        "description": "Click on \"Transações\" in the main navigation"
+        "description": "Click on \"Transações\" in the app navigation/menu"
+      },
+      {
+        "type": "action",
+        "description": "Click on \"Nova Transação\" to open the dialog"
+      },
+      {
+        "type": "action",
+        "description": "Type \"Validation - E2E\" into the description field"
+      },
+      {
+        "type": "action",
+        "description": "Select \"Expense\" from the transaction type control"
+      },
+      {
+        "type": "action",
+        "description": "Click on the \"Salvar\" / \"Adicionar\" / \"Submit\" button in the dialog"
       },
       {
         "type": "assertion",
-        "description": "Verify URL contains \"/transacoes\""
-      },
-      {
-        "type": "action",
-        "description": "Click to open the \"Nova Transação\" dialog"
-      },
-      {
-        "type": "assertion",
-        "description": "Verify text \"Nova Transação\" is visible"
-      },
-      {
-        "type": "action",
-        "description": "Type \"Conta de Luz\" into the description field"
-      },
-      {
-        "type": "action",
-        "description": "Select \"Expense\" from the transaction type options"
-      },
-      {
-        "type": "action",
-        "description": "Select a category from the category dropdown"
-      },
-      {
-        "type": "action",
-        "description": "Type \"2026-03-02\" into the date field"
-      },
-      {
-        "type": "action",
-        "description": "Click the submit button in the dialog"
-      },
-      {
-        "type": "assertion",
-        "description": "Verify text \"obrigatório\" is visible"
-      },
-      {
-        "type": "action",
-        "description": "Type \"210.99\" into the value field"
-      },
-      {
-        "type": "action",
-        "description": "Click the submit button in the dialog"
-      },
-      {
-        "type": "assertion",
-        "description": "Verify text \"Conta de Luz\" is visible"
-      }
-    ]
-  },
-  {
-    "id": "TC011",
-    "title": "Delete a transaction and verify it is removed from the list",
-    "description": "Verifies a user can delete an existing transaction and it no longer appears in the transaction list.",
-    "category": "Transaction Management",
-    "priority": "High",
-    "steps": [
-      {
-        "type": "action",
-        "description": "Navigate to /login"
-      },
-      {
-        "type": "action",
-        "description": "Type \"{{LOGIN_USER}}\" into the email/username field"
-      },
-      {
-        "type": "action",
-        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
-      },
-      {
-        "type": "action",
-        "description": "Click the \"Login\" button"
-      },
-      {
-        "type": "assertion",
-        "description": "Verify URL contains \"/\""
-      },
-      {
-        "type": "action",
-        "description": "Click on \"Transações\" in the main navigation"
-      },
-      {
-        "type": "assertion",
-        "description": "Verify URL contains \"/transacoes\""
-      },
-      {
-        "type": "action",
-        "description": "Click to open the \"Nova Transação\" dialog"
-      },
-      {
-        "type": "action",
-        "description": "Type \"Apagar - Teste\" into the description field"
+        "description": "Verify text \"obrigatório\" or \"required\" is visible"
       },
       {
         "type": "action",
@@ -546,42 +758,26 @@
       },
       {
         "type": "action",
-        "description": "Select \"Expense\" from the transaction type options"
+        "description": "Select any available category from the category dropdown"
       },
       {
         "type": "action",
-        "description": "Select a category from the category dropdown"
+        "description": "Type \"2026-03-02\" into the date field"
       },
       {
         "type": "action",
-        "description": "Type \"2026-03-03\" into the date field"
-      },
-      {
-        "type": "action",
-        "description": "Click the submit button in the dialog"
+        "description": "Click on the \"Salvar\" / \"Adicionar\" / \"Submit\" button in the dialog"
       },
       {
         "type": "assertion",
-        "description": "Verify text \"Apagar - Teste\" is visible"
-      },
-      {
-        "type": "action",
-        "description": "Click \"Delete\" for the transaction row containing \"Apagar - Teste\""
-      },
-      {
-        "type": "action",
-        "description": "Click \"Confirm\" in the deletion confirmation dialog"
-      },
-      {
-        "type": "assertion",
-        "description": "Verify text \"Apagar - Teste\" is not visible"
+        "description": "Verify text \"Validation - E2E\" is visible"
       }
     ]
   },
   {
-    "id": "TC012",
-    "title": "Cancel deletion from confirmation dialog keeps the transaction",
-    "description": "Verifies that canceling a delete confirmation does not remove the transaction from the list.",
+    "id": "TC020",
+    "title": "Close the \"Nova Transação\" dialog without submitting and verify no transaction is added",
+    "description": "Verifies a user can dismiss the add-transaction dialog and that no new transaction is created as a side effect.",
     "category": "Transaction Management",
     "priority": "Medium",
     "steps": [
@@ -599,7 +795,7 @@
       },
       {
         "type": "action",
-        "description": "Click the \"Login\" button"
+        "description": "Click on the \"Entrar\" / \"Login\" button"
       },
       {
         "type": "assertion",
@@ -607,64 +803,40 @@
       },
       {
         "type": "action",
-        "description": "Click on \"Transações\" in the main navigation"
+        "description": "Click on \"Transações\" in the app navigation/menu"
+      },
+      {
+        "type": "action",
+        "description": "Click on \"Nova Transação\" to open the dialog"
+      },
+      {
+        "type": "action",
+        "description": "Type \"Dismiss - E2E\" into the description field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"99\" into the value field"
+      },
+      {
+        "type": "action",
+        "description": "Click on the \"Cancelar\" / close (X) control to close the dialog"
       },
       {
         "type": "assertion",
-        "description": "Verify URL contains \"/transacoes\""
-      },
-      {
-        "type": "action",
-        "description": "Click to open the \"Nova Transação\" dialog"
-      },
-      {
-        "type": "action",
-        "description": "Type \"Não apagar - Teste\" into the description field"
-      },
-      {
-        "type": "action",
-        "description": "Type \"11\" into the value field"
-      },
-      {
-        "type": "action",
-        "description": "Select \"Expense\" from the transaction type options"
-      },
-      {
-        "type": "action",
-        "description": "Select a category from the category dropdown"
-      },
-      {
-        "type": "action",
-        "description": "Type \"2026-03-04\" into the date field"
-      },
-      {
-        "type": "action",
-        "description": "Click the submit button in the dialog"
+        "description": "Verify text \"Nova Transação\" is not visible"
       },
       {
         "type": "assertion",
-        "description": "Verify text \"Não apagar - Teste\" is visible"
-      },
-      {
-        "type": "action",
-        "description": "Click \"Delete\" for the transaction row containing \"Não apagar - Teste\""
-      },
-      {
-        "type": "action",
-        "description": "Click \"Cancel\" in the deletion confirmation dialog"
-      },
-      {
-        "type": "assertion",
-        "description": "Verify text \"Não apagar - Teste\" is visible"
+        "description": "Verify text \"Dismiss - E2E\" is not visible"
       }
     ]
   },
   {
-    "id": "TC013",
-    "title": "Form can be closed without saving and no transaction is created",
-    "description": "Verifies dismissing the 'Nova Transação' dialog does not add a transaction to the list.",
+    "id": "TC021",
+    "title": "Delete an existing transaction and confirm it is removed from the list",
+    "description": "Verifies a user can delete a transaction from the list and confirm it disappears after confirmation.",
     "category": "Transaction Management",
-    "priority": "Low",
+    "priority": "High",
     "steps": [
       {
         "type": "action",
@@ -680,7 +852,7 @@
       },
       {
         "type": "action",
-        "description": "Click the \"Login\" button"
+        "description": "Click on the \"Entrar\" / \"Login\" button"
       },
       {
         "type": "assertion",
@@ -688,46 +860,184 @@
       },
       {
         "type": "action",
-        "description": "Click on \"Transações\" in the main navigation"
+        "description": "Click on \"Transações\" in the app navigation/menu"
+      },
+      {
+        "type": "action",
+        "description": "Click on \"Nova Transação\" to open the dialog"
+      },
+      {
+        "type": "action",
+        "description": "Type \"DeleteMe - E2E\" into the description field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"1\" into the value field"
+      },
+      {
+        "type": "action",
+        "description": "Select \"Expense\" from the transaction type control"
+      },
+      {
+        "type": "action",
+        "description": "Select any available category from the category dropdown"
+      },
+      {
+        "type": "action",
+        "description": "Type \"2026-03-03\" into the date field"
+      },
+      {
+        "type": "action",
+        "description": "Click on the \"Salvar\" / \"Adicionar\" / \"Submit\" button in the dialog"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"DeleteMe - E2E\" is visible"
+      },
+      {
+        "type": "action",
+        "description": "Click on \"Delete\" / trash icon for the transaction row containing \"DeleteMe - E2E\""
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Confirmar\" or \"Tem certeza\" or \"Confirm\" is visible"
+      },
+      {
+        "type": "action",
+        "description": "Click on the \"Confirmar\" / \"Delete\" button in the confirmation dialog"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"DeleteMe - E2E\" is not visible"
+      }
+    ]
+  },
+  {
+    "id": "TC022",
+    "title": "Cancel deletion from confirmation dialog and verify transaction remains visible",
+    "description": "Verifies a user can initiate deletion but cancel in the confirmation dialog, leaving the transaction intact.",
+    "category": "Transaction Management",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email/username field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click on the \"Entrar\" / \"Login\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/\""
+      },
+      {
+        "type": "action",
+        "description": "Click on \"Transações\" in the app navigation/menu"
+      },
+      {
+        "type": "action",
+        "description": "Click on \"Nova Transação\" to open the dialog"
+      },
+      {
+        "type": "action",
+        "description": "Type \"KeepMe - E2E\" into the description field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"2\" into the value field"
+      },
+      {
+        "type": "action",
+        "description": "Select \"Expense\" from the transaction type control"
+      },
+      {
+        "type": "action",
+        "description": "Select any available category from the category dropdown"
+      },
+      {
+        "type": "action",
+        "description": "Type \"2026-03-04\" into the date field"
+      },
+      {
+        "type": "action",
+        "description": "Click on the \"Salvar\" / \"Adicionar\" / \"Submit\" button in the dialog"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"KeepMe - E2E\" is visible"
+      },
+      {
+        "type": "action",
+        "description": "Click on \"Delete\" / trash icon for the transaction row containing \"KeepMe - E2E\""
+      },
+      {
+        "type": "action",
+        "description": "Click on the \"Cancelar\" / \"Cancel\" button in the confirmation dialog"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"KeepMe - E2E\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC023",
+    "title": "Transactions list visibility: verify the page loads and key list UI is present",
+    "description": "Verifies the Transactions page renders successfully after login and shows the primary actions for transaction management.",
+    "category": "Transaction Management",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email/username field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click on the \"Entrar\" / \"Login\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/\""
+      },
+      {
+        "type": "action",
+        "description": "Click on \"Transações\" in the app navigation/menu"
       },
       {
         "type": "assertion",
         "description": "Verify URL contains \"/transacoes\""
       },
       {
-        "type": "action",
-        "description": "Click to open the \"Nova Transação\" dialog"
+        "type": "assertion",
+        "description": "Verify text \"Transações\" is visible"
       },
       {
         "type": "assertion",
-        "description": "Verify text \"Nova Transação\" is visible"
-      },
-      {
-        "type": "action",
-        "description": "Type \"Rascunho - Não salvar\" into the description field"
-      },
-      {
-        "type": "action",
-        "description": "Type \"99\" into the value field"
-      },
-      {
-        "type": "action",
-        "description": "Click the \"Close\" button on the dialog"
-      },
-      {
-        "type": "assertion",
-        "description": "Verify text \"Nova Transação\" is not visible"
-      },
-      {
-        "type": "assertion",
-        "description": "Verify text \"Rascunho - Não salvar\" is not visible"
+        "description": "Verify element \"Nova Transação\" is visible"
       }
     ]
   },
   {
-    "id": "TC014",
-    "title": "Add a new recurring expense and verify it appears in the list",
-    "description": "Verifies a user can create a recurring expense and see it listed on the Recurring Expenses page.",
+    "id": "TC024",
+    "title": "Add a new recurring expense successfully",
+    "description": "Verifies a user can create a recurring expense and see it listed.",
     "category": "Recurring Expenses",
     "priority": "High",
     "steps": [
@@ -745,7 +1055,7 @@
       },
       {
         "type": "action",
-        "description": "Click the \"Sign in\" / \"Login\" button"
+        "description": "Click the \"Sign in\" or \"Login\" button"
       },
       {
         "type": "assertion",
@@ -753,7 +1063,7 @@
       },
       {
         "type": "action",
-        "description": "Click on the \"Recorrentes\" / \"Recurring\" navigation item"
+        "description": "Click on \"Recorrentes\" in the main navigation menu"
       },
       {
         "type": "assertion",
@@ -766,9 +1076,9 @@
     ]
   },
   {
-    "id": "TC015",
-    "title": "Complete recurring expense creation form and save successfully",
-    "description": "Verifies saving a valid recurring expense shows the new entry in the recurring list.",
+    "id": "TC025",
+    "title": "Save a filled recurring expense and confirm it appears in the list",
+    "description": "Verifies saving a new recurring expense results in a visible list entry.",
     "category": "Recurring Expenses",
     "priority": "High",
     "steps": [
@@ -786,7 +1096,7 @@
       },
       {
         "type": "action",
-        "description": "Click the \"Sign in\" / \"Login\" button"
+        "description": "Click the \"Sign in\" or \"Login\" button"
       },
       {
         "type": "assertion",
@@ -794,7 +1104,7 @@
       },
       {
         "type": "action",
-        "description": "Click on the \"Recorrentes\" / \"Recurring\" navigation item"
+        "description": "Click on \"Recorrentes\" in the main navigation menu"
       },
       {
         "type": "action",
@@ -802,26 +1112,14 @@
       },
       {
         "type": "action",
-        "description": "Type \"Internet\" into the description/name field"
-      },
-      {
-        "type": "action",
-        "description": "Type \"150\" into the amount/value field"
-      },
-      {
-        "type": "action",
-        "description": "Click \"Save\""
-      },
-      {
-        "type": "assertion",
-        "description": "Verify text \"Internet\" is visible"
+        "description": "Type \"Internet\" into the recurring expense name/description field"
       }
     ]
   },
   {
-    "id": "TC016",
-    "title": "Attempt to save with invalid amount and verify validation error appears",
-    "description": "Verifies the form blocks saving when the amount is invalid and shows a visible validation message.",
+    "id": "TC026",
+    "title": "Create recurring expense with valid amount and verify list shows it",
+    "description": "Verifies completing required fields including amount creates a new recurring entry.",
     "category": "Recurring Expenses",
     "priority": "High",
     "steps": [
@@ -839,7 +1137,7 @@
       },
       {
         "type": "action",
-        "description": "Click the \"Sign in\" / \"Login\" button"
+        "description": "Click the \"Sign in\" or \"Login\" button"
       },
       {
         "type": "assertion",
@@ -847,7 +1145,7 @@
       },
       {
         "type": "action",
-        "description": "Click on the \"Recorrentes\" / \"Recurring\" navigation item"
+        "description": "Click on \"Recorrentes\" in the main navigation menu"
       },
       {
         "type": "action",
@@ -855,11 +1153,81 @@
       },
       {
         "type": "action",
-        "description": "Type \"Gym\" into the description/name field"
+        "description": "Type \"120.50\" into the amount/value field"
+      }
+    ]
+  },
+  {
+    "id": "TC027",
+    "title": "Invalid amount shows validation error, then corrected amount saves successfully",
+    "description": "Verifies amount validation prevents saving until the amount is corrected.",
+    "category": "Recurring Expenses",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email/username field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" or \"Login\" button"
+      },
+      {
+        "type": "action",
+        "description": "Click on \"Recorrentes\" in the main navigation menu"
+      },
+      {
+        "type": "action",
+        "description": "Click \"Add new recurring expense\""
       },
       {
         "type": "action",
         "description": "Type \"abc\" into the amount/value field"
+      },
+      {
+        "type": "action",
+        "description": "Click \"Save\""
+      }
+    ]
+  },
+  {
+    "id": "TC028",
+    "title": "Correct invalid amount and confirm recurring expense appears in list",
+    "description": "Verifies correcting a validation error allows saving and the entry is listed.",
+    "category": "Recurring Expenses",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email/username field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" or \"Login\" button"
+      },
+      {
+        "type": "action",
+        "description": "Click on \"Recorrentes\" in the main navigation menu"
+      },
+      {
+        "type": "action",
+        "description": "Click \"Add new recurring expense\""
       },
       {
         "type": "action",
@@ -872,74 +1240,9 @@
     ]
   },
   {
-    "id": "TC017",
-    "title": "Correct invalid amount and save successfully after validation error",
-    "description": "Verifies a user can fix an invalid amount and successfully create the recurring expense.",
-    "category": "Recurring Expenses",
-    "priority": "High",
-    "steps": [
-      {
-        "type": "action",
-        "description": "Navigate to /login"
-      },
-      {
-        "type": "action",
-        "description": "Type \"{{LOGIN_USER}}\" into the email/username field"
-      },
-      {
-        "type": "action",
-        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
-      },
-      {
-        "type": "action",
-        "description": "Click the \"Sign in\" / \"Login\" button"
-      },
-      {
-        "type": "assertion",
-        "description": "Verify URL contains \"/\""
-      },
-      {
-        "type": "action",
-        "description": "Click on the \"Recorrentes\" / \"Recurring\" navigation item"
-      },
-      {
-        "type": "action",
-        "description": "Click \"Add new recurring expense\""
-      },
-      {
-        "type": "action",
-        "description": "Type \"Gym\" into the description/name field"
-      },
-      {
-        "type": "action",
-        "description": "Type \"abc\" into the amount/value field"
-      },
-      {
-        "type": "action",
-        "description": "Click \"Save\""
-      },
-      {
-        "type": "assertion",
-        "description": "Verify text \"invalid\" is visible"
-      },
-      {
-        "type": "action",
-        "description": "Type \"90\" into the amount/value field"
-      },
-      {
-        "type": "action",
-        "description": "Click \"Save\""
-      },
-      {
-        "type": "assertion",
-        "description": "Verify text \"Gym\" is visible"
-      }
-    ]
-  },
-  {
-    "id": "TC018",
-    "title": "Create a new budget limit and verify it appears with a progress bar",
-    "description": "Verifies a user can add a budget limit for a category and see it listed with a visible progress indicator.",
+    "id": "TC029",
+    "title": "Create a new budget limit and see it listed with a progress bar",
+    "description": "Verifies that an authenticated user can add a new monthly budget limit and see it appear in the list with a visible progress indicator.",
     "category": "Budget Tracking",
     "priority": "High",
     "steps": [
@@ -957,42 +1260,30 @@
       },
       {
         "type": "action",
-        "description": "Click the \"Login\" button"
+        "description": "Click the \"Sign in\" or \"Login\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/\""
       },
       {
         "type": "action",
-        "description": "Click \"Orçamentos\" in the main navigation/menu"
+        "description": "Click on \"Orçamentos\" in the main navigation/menu"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/orcamentos\""
       },
       {
         "type": "action",
         "description": "Click \"Add new budget limit\""
-      },
-      {
-        "type": "action",
-        "description": "Type \"Groceries\" into the category field"
-      },
-      {
-        "type": "action",
-        "description": "Type \"1000\" into the amount field"
-      },
-      {
-        "type": "action",
-        "description": "Click \"Save\""
-      },
-      {
-        "type": "assertion",
-        "description": "Verify text \"Groceries\" is visible in the budgets list"
-      },
-      {
-        "type": "assertion",
-        "description": "Verify a progress bar is visible for the \"Groceries\" budget item"
       }
     ]
   },
   {
-    "id": "TC019",
-    "title": "Validate required amount when creating a budget limit",
-    "description": "Verifies the amount field is required and the user can correct the error and successfully save.",
+    "id": "TC030",
+    "title": "Save a new budget after filling category and amount",
+    "description": "Verifies that entering valid category and amount allows saving and shows the new budget row with a progress bar.",
     "category": "Budget Tracking",
     "priority": "High",
     "steps": [
@@ -1010,11 +1301,15 @@
       },
       {
         "type": "action",
-        "description": "Click the \"Login\" button"
+        "description": "Click the \"Sign in\" or \"Login\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/\""
       },
       {
         "type": "action",
-        "description": "Click \"Orçamentos\" in the main navigation/menu"
+        "description": "Click on \"Orçamentos\" in the main navigation/menu"
       },
       {
         "type": "action",
@@ -1022,34 +1317,137 @@
       },
       {
         "type": "action",
-        "description": "Type \"Transportation\" into the category field"
-      },
-      {
-        "type": "action",
-        "description": "Click \"Save\""
-      },
-      {
-        "type": "assertion",
-        "description": "Verify a validation error message is visible for the amount field"
-      },
-      {
-        "type": "action",
-        "description": "Type \"300\" into the amount field"
-      },
-      {
-        "type": "action",
-        "description": "Click \"Save\""
-      },
-      {
-        "type": "assertion",
-        "description": "Verify text \"Transportation\" is visible in the budgets list"
+        "description": "Fill \"Category\" with \"Groceries\""
       }
     ]
   },
   {
-    "id": "TC020",
-    "title": "Cancel out of the Add Budget dialog without creating a budget",
-    "description": "Verifies the user can dismiss the add budget workflow and no new budget is created.",
+    "id": "TC031",
+    "title": "Create budget with valid amount and verify it is listed",
+    "description": "Verifies that after providing category and amount and saving, the budget is visible in the budgets list.",
+    "category": "Budget Tracking",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email/username field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" or \"Login\" button"
+      },
+      {
+        "type": "action",
+        "description": "Click on \"Orçamentos\" in the main navigation/menu"
+      },
+      {
+        "type": "action",
+        "description": "Click \"Add new budget limit\""
+      },
+      {
+        "type": "action",
+        "description": "Fill \"Category\" with \"Utilities\""
+      },
+      {
+        "type": "action",
+        "description": "Fill \"Amount\" with \"500\""
+      }
+    ]
+  },
+  {
+    "id": "TC032",
+    "title": "Validation: amount is required when creating a budget",
+    "description": "Verifies the form shows a validation message when the amount is left empty and Save is clicked.",
+    "category": "Budget Tracking",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email/username field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" or \"Login\" button"
+      },
+      {
+        "type": "action",
+        "description": "Click on \"Orçamentos\" in the main navigation/menu"
+      },
+      {
+        "type": "action",
+        "description": "Click \"Add new budget limit\""
+      },
+      {
+        "type": "action",
+        "description": "Fill \"Category\" with \"Transport\""
+      },
+      {
+        "type": "action",
+        "description": "Click \"Save\""
+      }
+    ]
+  },
+  {
+    "id": "TC033",
+    "title": "Fix validation error and successfully save the budget",
+    "description": "Verifies that after a required-field validation error, entering an amount and saving succeeds and the budget appears in the list.",
+    "category": "Budget Tracking",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email/username field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" or \"Login\" button"
+      },
+      {
+        "type": "action",
+        "description": "Click on \"Orçamentos\" in the main navigation/menu"
+      },
+      {
+        "type": "action",
+        "description": "Click \"Add new budget limit\""
+      },
+      {
+        "type": "action",
+        "description": "Fill \"Category\" with \"Dining\""
+      },
+      {
+        "type": "action",
+        "description": "Click \"Save\""
+      }
+    ]
+  },
+  {
+    "id": "TC034",
+    "title": "View budgets page and ensure progress bars are visible for listed budgets",
+    "description": "Verifies the budgets page displays progress bars for existing budget limits.",
     "category": "Budget Tracking",
     "priority": "Medium",
     "steps": [
@@ -1067,38 +1465,26 @@
       },
       {
         "type": "action",
-        "description": "Click the \"Login\" button"
+        "description": "Click the \"Sign in\" or \"Login\" button"
       },
       {
         "type": "action",
-        "description": "Click \"Orçamentos\" in the main navigation/menu"
-      },
-      {
-        "type": "action",
-        "description": "Click \"Add new budget limit\""
-      },
-      {
-        "type": "action",
-        "description": "Type \"Dining\" into the category field"
-      },
-      {
-        "type": "action",
-        "description": "Type \"200\" into the amount field"
-      },
-      {
-        "type": "action",
-        "description": "Click \"Cancel\""
+        "description": "Click on \"Orçamentos\" in the main navigation/menu"
       },
       {
         "type": "assertion",
-        "description": "Verify text \"Dining\" is not visible in the budgets list"
+        "description": "Verify URL contains \"/orcamentos\""
+      },
+      {
+        "type": "assertion",
+        "description": "Verify element \"Progress bar\" is visible"
       }
     ]
   },
   {
-    "id": "TC021",
-    "title": "View budget details from a budget item",
-    "description": "Verifies a user can open a budget item and see the details/breakdown view.",
+    "id": "TC035",
+    "title": "Open a budget to view details and see spending breakdown",
+    "description": "Verifies that clicking a budget item navigates to or opens a details view showing a spending breakdown.",
     "category": "Budget Tracking",
     "priority": "Medium",
     "steps": [
@@ -1116,19 +1502,15 @@
       },
       {
         "type": "action",
-        "description": "Click the \"Login\" button"
+        "description": "Click the \"Sign in\" or \"Login\" button"
       },
       {
         "type": "action",
-        "description": "Click \"Orçamentos\" in the main navigation/menu"
-      },
-      {
-        "type": "assertion",
-        "description": "Verify at least one budget item is visible in the budgets list"
+        "description": "Click on \"Orçamentos\" in the main navigation/menu"
       },
       {
         "type": "action",
-        "description": "Click on a budget item in the list"
+        "description": "Click on a visible budget item in the list"
       },
       {
         "type": "assertion",
@@ -1136,59 +1518,14 @@
       },
       {
         "type": "assertion",
-        "description": "Verify a breakdown list/table of spending is visible"
+        "description": "Verify element \"Breakdown list or chart\" is visible"
       }
     ]
   },
   {
-    "id": "TC022",
-    "title": "Show alert when budget spending reaches the threshold (80%)",
-    "description": "Verifies an alert indicator is displayed when spending reaches 80% of the budget limit (when applicable for the account’s data).",
-    "category": "Budget Tracking",
-    "priority": "Low",
-    "steps": [
-      {
-        "type": "action",
-        "description": "Navigate to /login"
-      },
-      {
-        "type": "action",
-        "description": "Type \"{{LOGIN_USER}}\" into the email/username field"
-      },
-      {
-        "type": "action",
-        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
-      },
-      {
-        "type": "action",
-        "description": "Click the \"Login\" button"
-      },
-      {
-        "type": "action",
-        "description": "Click \"Orçamentos\" in the main navigation/menu"
-      },
-      {
-        "type": "action",
-        "description": "Scroll to the budgets list section"
-      },
-      {
-        "type": "assertion",
-        "description": "Verify an alert/warning indicator is visible on any budget item that is at or above 80% spent"
-      },
-      {
-        "type": "action",
-        "description": "Click the budget item showing the alert/warning indicator"
-      },
-      {
-        "type": "assertion",
-        "description": "Verify the budget details view is visible"
-      }
-    ]
-  },
-  {
-    "id": "TC023",
+    "id": "TC036",
     "title": "Delete a budget and confirm it is removed from the list",
-    "description": "Verifies a user can delete a budget item, confirm the deletion, and no longer see it in the list.",
+    "description": "Verifies that an authenticated user can delete a budget and, after confirming, the budget no longer appears.",
     "category": "Budget Tracking",
     "priority": "High",
     "steps": [
@@ -1206,284 +1543,32 @@
       },
       {
         "type": "action",
-        "description": "Click the \"Login\" button"
+        "description": "Click the \"Sign in\" or \"Login\" button"
       },
       {
         "type": "action",
-        "description": "Click \"Orçamentos\" in the main navigation/menu"
+        "description": "Click on \"Orçamentos\" in the main navigation/menu"
       },
       {
         "type": "action",
-        "description": "Click \"Add new budget limit\""
+        "description": "Locate a budget item in the list"
       },
       {
         "type": "action",
-        "description": "Type \"Temporary Delete Test\" into the category field"
+        "description": "Click \"Delete budget\" for that budget item"
       },
       {
         "type": "action",
-        "description": "Type \"50\" into the amount field"
-      },
-      {
-        "type": "action",
-        "description": "Click \"Save\""
-      },
-      {
-        "type": "assertion",
-        "description": "Verify text \"Temporary Delete Test\" is visible in the budgets list"
-      },
-      {
-        "type": "action",
-        "description": "Click \"Delete budget\" for the \"Temporary Delete Test\" budget item"
-      },
-      {
-        "type": "action",
-        "description": "Click \"Confirm\" in the deletion confirmation dialog"
-      },
-      {
-        "type": "assertion",
-        "description": "Verify text \"Temporary Delete Test\" is not visible in the budgets list"
+        "description": "Click \"Confirm\" to confirm deletion"
       }
     ]
   },
   {
-    "id": "TC024",
-    "title": "Cancel budget deletion from the confirmation dialog",
-    "description": "Verifies the user can cancel a delete action and the budget remains visible.",
-    "category": "Budget Tracking",
-    "priority": "Medium",
-    "steps": [
-      {
-        "type": "action",
-        "description": "Navigate to /login"
-      },
-      {
-        "type": "action",
-        "description": "Type \"{{LOGIN_USER}}\" into the email/username field"
-      },
-      {
-        "type": "action",
-        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
-      },
-      {
-        "type": "action",
-        "description": "Click the \"Login\" button"
-      },
-      {
-        "type": "action",
-        "description": "Click \"Orçamentos\" in the main navigation/menu"
-      },
-      {
-        "type": "action",
-        "description": "Click \"Add new budget limit\""
-      },
-      {
-        "type": "action",
-        "description": "Type \"Temporary Keep Test\" into the category field"
-      },
-      {
-        "type": "action",
-        "description": "Type \"60\" into the amount field"
-      },
-      {
-        "type": "action",
-        "description": "Click \"Save\""
-      },
-      {
-        "type": "assertion",
-        "description": "Verify text \"Temporary Keep Test\" is visible in the budgets list"
-      },
-      {
-        "type": "action",
-        "description": "Click \"Delete budget\" for the \"Temporary Keep Test\" budget item"
-      },
-      {
-        "type": "action",
-        "description": "Click \"Cancel\" in the deletion confirmation dialog"
-      },
-      {
-        "type": "assertion",
-        "description": "Verify text \"Temporary Keep Test\" is visible in the budgets list"
-      }
-    ]
-  },
-  {
-    "id": "TC025",
-    "title": "Amount field rejects non-numeric input (or shows validation error)",
-    "description": "Verifies entering a non-numeric amount results in a visible validation error and prevents saving until corrected.",
-    "category": "Budget Tracking",
-    "priority": "Medium",
-    "steps": [
-      {
-        "type": "action",
-        "description": "Navigate to /login"
-      },
-      {
-        "type": "action",
-        "description": "Type \"{{LOGIN_USER}}\" into the email/username field"
-      },
-      {
-        "type": "action",
-        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
-      },
-      {
-        "type": "action",
-        "description": "Click the \"Login\" button"
-      },
-      {
-        "type": "action",
-        "description": "Click \"Orçamentos\" in the main navigation/menu"
-      },
-      {
-        "type": "action",
-        "description": "Click \"Add new budget limit\""
-      },
-      {
-        "type": "action",
-        "description": "Type \"Utilities\" into the category field"
-      },
-      {
-        "type": "action",
-        "description": "Type \"abc\" into the amount field"
-      },
-      {
-        "type": "action",
-        "description": "Click \"Save\""
-      },
-      {
-        "type": "assertion",
-        "description": "Verify a validation error message is visible for the amount field"
-      },
-      {
-        "type": "action",
-        "description": "Type \"250\" into the amount field"
-      },
-      {
-        "type": "action",
-        "description": "Click \"Save\""
-      },
-      {
-        "type": "assertion",
-        "description": "Verify text \"Utilities\" is visible in the budgets list"
-      }
-    ]
-  },
-  {
-    "id": "TC026",
-    "title": "Add a new asset and verify it appears in the list and net worth updates",
-    "description": "Verifies a user can add an asset and the net worth summary reflects the new item.",
+    "id": "TC037",
+    "title": "Add a new asset and see it listed with net worth updated",
+    "description": "Verifies a user can add an asset item and the net worth section updates to reflect the new item.",
     "category": "Net Worth Tracking",
     "priority": "High",
-    "steps": [
-      {
-        "type": "action",
-        "description": "Navigate to /login"
-      },
-      {
-        "type": "action",
-        "description": "Type \"{{LOGIN_USER}}\" into the email/username field"
-      },
-      {
-        "type": "action",
-        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
-      },
-      {
-        "type": "action",
-        "description": "Click the \"Login\" button"
-      },
-      {
-        "type": "action",
-        "description": "Click \"Patrimônio\" in the main navigation/menu"
-      },
-      {
-        "type": "action",
-        "description": "Click \"Add new asset or liability\""
-      },
-      {
-        "type": "assertion",
-        "description": "Verify text \"Add\" is visible on the dialog or form"
-      },
-      {
-        "type": "action",
-        "description": "Select \"Asset\" (or equivalent) from the type dropdown"
-      },
-      {
-        "type": "action",
-        "description": "Type \"Car\" into the description field"
-      },
-      {
-        "type": "action",
-        "description": "Type \"10000\" into the value field"
-      },
-      {
-        "type": "action",
-        "description": "Click \"Save\""
-      },
-      {
-        "type": "assertion",
-        "description": "Verify text \"Car\" is visible in the items list"
-      }
-    ]
-  },
-  {
-    "id": "TC027",
-    "title": "Add a new liability and verify it appears in the list and net worth updates",
-    "description": "Verifies a user can add a liability and the net worth summary reflects the new item.",
-    "category": "Net Worth Tracking",
-    "priority": "High",
-    "steps": [
-      {
-        "type": "action",
-        "description": "Navigate to /login"
-      },
-      {
-        "type": "action",
-        "description": "Type \"{{LOGIN_USER}}\" into the email/username field"
-      },
-      {
-        "type": "action",
-        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
-      },
-      {
-        "type": "action",
-        "description": "Click the \"Login\" button"
-      },
-      {
-        "type": "action",
-        "description": "Click \"Patrimônio\" in the main navigation/menu"
-      },
-      {
-        "type": "action",
-        "description": "Click \"Add new asset or liability\""
-      },
-      {
-        "type": "action",
-        "description": "Select \"Liability\" (or equivalent) from the type dropdown"
-      },
-      {
-        "type": "action",
-        "description": "Type \"Credit Card\" into the description field"
-      },
-      {
-        "type": "action",
-        "description": "Type \"2500\" into the value field"
-      },
-      {
-        "type": "action",
-        "description": "Click \"Save\""
-      },
-      {
-        "type": "assertion",
-        "description": "Verify text \"Credit Card\" is visible in the items list"
-      }
-    ]
-  },
-  {
-    "id": "TC028",
-    "title": "Cancel/back-out from reconciliation before confirming import does not show success state",
-    "description": "Verifies that leaving the reconciliation flow before confirming does not show an import success message/state on the reconciliation page.",
-    "category": "Bank Reconciliation (CSV Import)",
-    "priority": "Medium",
     "steps": [
       {
         "type": "action",
@@ -1507,23 +1592,105 @@
       },
       {
         "type": "action",
-        "description": "Click on the \"Conciliação\" (Reconciliation) item in the main navigation/menu"
+        "description": "Click the navigation link or menu item for \"Patrimônio\""
       },
       {
         "type": "assertion",
-        "description": "Verify URL contains \"/conciliacao\""
+        "description": "Verify URL contains \"/patrimonio\""
       },
       {
-        "type": "assertion",
-        "description": "Verify text \"Confirm import\" or \"Confirmar\" is not visible"
+        "type": "action",
+        "description": "Click \"Add new asset or liability\""
       }
     ]
   },
   {
-    "id": "TC029",
-    "title": "Reconciliation page loads and shows CSV import entry points",
-    "description": "Verifies the reconciliation page is accessible after login and contains visible UI to start CSV import.",
-    "category": "Bank Reconciliation (CSV Import)",
+    "id": "TC038",
+    "title": "Create an asset item with valid details and verify it appears in the list",
+    "description": "Verifies the add-item dialog accepts valid asset data and shows the new item in the net worth list.",
+    "category": "Net Worth Tracking",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email/username field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Login\" or \"Sign in\" button"
+      },
+      {
+        "type": "action",
+        "description": "Click the navigation link or menu item for \"Patrimônio\""
+      },
+      {
+        "type": "action",
+        "description": "Click \"Add new asset or liability\""
+      },
+      {
+        "type": "action",
+        "description": "Select \"Asset\" (or equivalent) from the Type dropdown"
+      },
+      {
+        "type": "action",
+        "description": "Type \"1000\" into the Value field"
+      }
+    ]
+  },
+  {
+    "id": "TC039",
+    "title": "Save a new asset and verify it is listed and net worth is recalculated",
+    "description": "Verifies saving a new asset adds it to the list and the total net worth display changes accordingly.",
+    "category": "Net Worth Tracking",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email/username field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Login\" or \"Sign in\" button"
+      },
+      {
+        "type": "action",
+        "description": "Click the navigation link or menu item for \"Patrimônio\""
+      },
+      {
+        "type": "action",
+        "description": "Click \"Add new asset or liability\""
+      },
+      {
+        "type": "action",
+        "description": "Type \"Asset - Test Item\" into the Description field"
+      },
+      {
+        "type": "action",
+        "description": "Click \"Save\""
+      }
+    ]
+  },
+  {
+    "id": "TC040",
+    "title": "Add a liability and verify it appears in the list",
+    "description": "Verifies a user can add a liability item and see it listed on the net worth page.",
+    "category": "Net Worth Tracking",
     "priority": "Medium",
     "steps": [
       {
@@ -1543,20 +1710,102 @@
         "description": "Click the \"Login\" or \"Sign in\" button"
       },
       {
-        "type": "assertion",
-        "description": "Verify URL contains \"/\""
+        "type": "action",
+        "description": "Click the navigation link or menu item for \"Patrimônio\""
       },
       {
         "type": "action",
-        "description": "Click on the \"Conciliação\" (Reconciliation) item in the main navigation/menu"
+        "description": "Click \"Add new asset or liability\""
+      },
+      {
+        "type": "action",
+        "description": "Select \"Liability\" (or equivalent) from the Type dropdown"
       },
       {
         "type": "assertion",
-        "description": "Verify URL contains \"/conciliacao\""
+        "description": "Verify element \"Save\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC041",
+    "title": "Validate non-numeric value input shows an error message",
+    "description": "Verifies the value field rejects non-numeric input and displays a visible validation error.",
+    "category": "Net Worth Tracking",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email/username field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Login\" or \"Sign in\" button"
+      },
+      {
+        "type": "action",
+        "description": "Click the navigation link or menu item for \"Patrimônio\""
+      },
+      {
+        "type": "action",
+        "description": "Click \"Add new asset or liability\""
+      },
+      {
+        "type": "action",
+        "description": "Type \"abc\" into the Value field"
+      },
+      {
+        "type": "action",
+        "description": "Click \"Save\""
+      }
+    ]
+  },
+  {
+    "id": "TC042",
+    "title": "Correct invalid value and successfully save the item",
+    "description": "Verifies a user can fix a validation error by entering a numeric value and then save successfully.",
+    "category": "Net Worth Tracking",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email/username field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Login\" or \"Sign in\" button"
+      },
+      {
+        "type": "action",
+        "description": "Click the navigation link or menu item for \"Patrimônio\""
+      },
+      {
+        "type": "action",
+        "description": "Click \"Add new asset or liability\""
+      },
+      {
+        "type": "action",
+        "description": "Type \"abc\" into the Value field"
       },
       {
         "type": "assertion",
-        "description": "Verify text \"Upload CSV\" or \"Importar CSV\" is visible"
+        "description": "Verify text \"invalid\" or \"número\" or \"valor\" is visible"
       }
     ]
   }

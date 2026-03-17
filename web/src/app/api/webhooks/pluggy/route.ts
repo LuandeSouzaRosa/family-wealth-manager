@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/utils/supabase/admin";
 import { syncFromWebhook } from "@/actions/pluggy-sync";
 import { NextResponse } from "next/server";
+import crypto from "crypto";
 
 // ==========================================
 // PLUGGY WEBHOOK HANDLER
@@ -9,9 +10,62 @@ import { NextResponse } from "next/server";
 // item updates, or connection changes.
 // Docs: https://docs.pluggy.ai/docs/webhooks
 //
-// IMPORTANT: Must respond 200 within 5 seconds. Processing happens after.
+// SECURITY: Pluggy does NOT send a native signature header.
+// We validate via a secret query parameter appended to the webhook URL.
+// In the Pluggy Dashboard, configure the URL as:
+//   https://your-domain.com/api/webhooks/pluggy?secret=YOUR_SECRET
+//
+// Set PLUGGY_WEBHOOK_SECRET in your environment variables (Vercel).
+//
+// IMPORTANT: Must respond 200 within 5 seconds.
+
+const WEBHOOK_SECRET = process.env.PLUGGY_WEBHOOK_SECRET;
+
+// ---- Reject non-POST methods ----
+export function GET() {
+  return NextResponse.json(
+    { error: "Method not allowed" },
+    { status: 405 }
+  );
+}
+
+/**
+ * Validates the ?secret= query parameter against PLUGGY_WEBHOOK_SECRET.
+ * Uses timing-safe comparison to prevent timing attacks.
+ */
+function verifySecret(url: string): boolean {
+  if (!WEBHOOK_SECRET) {
+    console.warn(
+      "[Pluggy Webhook] PLUGGY_WEBHOOK_SECRET not set — skipping auth. " +
+        "Set this in production!"
+    );
+    return true;
+  }
+
+  const { searchParams } = new URL(url);
+  const secret = searchParams.get("secret");
+  if (!secret) return false;
+
+  try {
+    return crypto.timingSafeEqual(
+      Buffer.from(secret),
+      Buffer.from(WEBHOOK_SECRET)
+    );
+  } catch {
+    return false;
+  }
+}
 
 export async function POST(request: Request) {
+  // ---- Step 0: Validate secret before any DB access ----
+  if (!verifySecret(request.url)) {
+    console.error("[Pluggy Webhook] Unauthorized: invalid or missing secret");
+    return NextResponse.json(
+      { error: "Unauthorized" },
+      { status: 401 }
+    );
+  }
+
   const supabase = createAdminClient();
 
   try {
@@ -130,3 +184,4 @@ export async function POST(request: Request) {
     return NextResponse.json({ received: true, error: error.message });
   }
 }
+

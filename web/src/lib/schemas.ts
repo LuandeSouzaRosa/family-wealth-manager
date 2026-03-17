@@ -9,6 +9,11 @@ export const FREQUENCIAS = ["Mensal", "Semanal", "Anual", "Quinzenal"] as const;
 export const TIPOS_PATRIMONIO = ["Ativo", "Passivo"] as const;
 
 // ==========================================
+// VALIDATION HELPERS
+// ==========================================
+export const IdSchema = z.string().uuid("ID inválido");
+
+// ==========================================
 // SCHEMAS
 // ==========================================
 

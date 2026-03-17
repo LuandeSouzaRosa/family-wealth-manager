@@ -2,7 +2,7 @@
 
 import { createClient } from "@/utils/supabase/server";
 import { revalidatePath } from "next/cache";
-import { MetaSchema } from "@/lib/schemas";
+import { MetaSchema, IdSchema } from "@/lib/schemas";
 
 // ==========================================
 // METAS (Goals)
@@ -86,11 +86,17 @@ export async function updateMeta(id: string, formData: FormData) {
 }
 
 export async function deleteMeta(id: string) {
+  const parsed = IdSchema.safeParse(id);
+  if (!parsed.success) return { error: "ID inválido." };
+
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Sessão expirada." };
+
   const { error } = await supabase
     .from("metas")
     .delete()
-    .match({ id });
+    .match({ id, user_id: user.id });
 
   if (error) return { error: error.message };
   revalidatePath("/");

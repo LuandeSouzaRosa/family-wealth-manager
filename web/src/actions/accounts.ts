@@ -2,7 +2,7 @@
 
 import { createClient } from "@/utils/supabase/server";
 import { revalidatePath } from "next/cache";
-import { ContaSchema, CartaoSchema } from "@/lib/schemas";
+import { ContaSchema, CartaoSchema, IdSchema } from "@/lib/schemas";
 
 // ==========================================
 // CONTAS BANCÁRIAS (Múltiplas Contas)
@@ -173,11 +173,17 @@ export async function createCartaoCredito(formData: FormData) {
 }
 
 export async function deleteCartaoCredito(id: string) {
+  const parsed = IdSchema.safeParse(id);
+  if (!parsed.success) return { error: "ID inválido." };
+
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Sessão expirada." };
+
   const { error } = await supabase
     .from("cartoes_credito")
     .delete()
-    .match({ id });
+    .match({ id, user_id: user.id });
 
   if (error) return { error: error.message };
   revalidatePath("/cartoes");
