@@ -6,14 +6,11 @@ import { AddPatrimonioDialog } from '@/components/add-patrimonio-dialog'
 import { Trash2, Landmark, TrendingUp, TrendingDown, Building2, Car, CreditCard, PiggyBank, Briefcase } from 'lucide-react'
 import { useTransition } from 'react'
 import { deletePatrimonio } from "@/actions/assets";
+import type { Tables } from "@/types/database";
 
-interface Patrimonio {
-  id: string
-  item: string
-  valor: number
-  tipo: string
-  categoria: string
-  data_atualizacao: string
+type Patrimonio = Tables<"patrimonio"> & {
+  tipo?: string
+  categoria?: string
 }
 
 interface PatrimonioClientProps {

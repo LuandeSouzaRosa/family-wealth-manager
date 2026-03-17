@@ -27,14 +27,6 @@ export async function getDashboardMetrics() {
   let saldoTotal = 0;
   if (contas && contas.length > 0) {
      saldoTotal = contas.reduce((acc, conta) => acc + Number(conta.saldo_atual), 0);
-  } else {
-     // Fallback para o cálculo antigo se não houver contas
-     const { data: profile } = await supabase.from("profiles").select("saldo_inicial").single();
-     const saldoInicial = profile?.saldo_inicial || 0;
-     const { data: transacoes } = await supabase.from("transacoes").select("valor, tipo");
-     const totalEntradas = transacoes?.filter(t => t.tipo === "Entrada").reduce((acc, t) => acc + t.valor, 0) || 0;
-     const totalSaidas = transacoes?.filter(t => t.tipo === "Saída").reduce((acc, t) => acc + t.valor, 0) || 0;
-     saldoTotal = saldoInicial + totalEntradas - totalSaidas;
   }
 
   const metrics = metricsMonth || { renda: 0, despesas: 0, investido: 0 };

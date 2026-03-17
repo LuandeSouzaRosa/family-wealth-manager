@@ -44,8 +44,9 @@ export async function createTransaction(formData: FormData) {
     .insert([
       {
         ...parsed.data,
-        data: parsed.data.data?.toISOString(), // Garantir string ISO
-        origem: "Manual"
+        data: parsed.data.data?.toISOString(),
+        origem: "Manual",
+        user_id: user.id,
       }
     ]);
 
@@ -173,6 +174,7 @@ export async function createTransactionsBatch(transactions: any[]) {
     if (!parsed.success) return null;
     return {
       ...parsed.data,
+      data: parsed.data.data?.toISOString() || new Date().toISOString(),
       origem: t.descricao.includes("Saldo Inicial") ? "Sistema" : "Importação",
       user_id: user.id
     };

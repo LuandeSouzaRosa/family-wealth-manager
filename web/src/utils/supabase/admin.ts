@@ -1,5 +1,6 @@
 import "server-only";
 import { createClient } from "@supabase/supabase-js";
+import { type Database } from "@/types/database";
 
 /**
  * Admin Supabase client using SERVICE_ROLE_KEY.
@@ -14,7 +15,7 @@ export function createAdminClient() {
     throw new Error("Missing Supabase admin credentials");
   }
 
-  return createClient(url, serviceKey, {
+  return createClient<Database>(url, serviceKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 }

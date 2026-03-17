@@ -23,7 +23,7 @@ export async function getFinancialAdvice() {
   // 2. Buscar saldo atual (Contas Corrente)
   const { data: contas } = await supabase
     .from("contas_bancarias")
-    .select("saldo_atual, tipo_conta"); // Assumindo que possa ter um campo tipo, senão usamos nome
+    .select("saldo_atual");
 
   const saldoEmConta = contas?.reduce((acc, c) => acc + c.saldo_atual, 0) || 0;
 
