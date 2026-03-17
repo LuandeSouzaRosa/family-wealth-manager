@@ -28,10 +28,10 @@ export async function createPluggyConnectToken() {
 
       // Gera um token de conexão único para este usuário
       // O webhookUrl é onde a Pluggy vai avisar sobre novas transações
-      const connectToken = await client.createConnectToken({
+      const connectToken = await client.createConnectToken(undefined, {
           webhookUrl: `${process.env.NEXT_PUBLIC_APP_URL}/api/webhooks/pluggy`,
-          clientUserId: user.id, // Vincula o usuário da Pluggy ao nosso usuário do Supabase
-      });
+          clientUserId: user.id,
+      } as any);
 
       return { accessToken: connectToken.accessToken };
   } catch (error: any) {

@@ -20,7 +20,7 @@ const nextConfig: NextConfig = {
   compiler: {
     removeConsole: process.env.NODE_ENV === "production" ? { exclude: ["error"] } : false,
   },
-  // Desabilitar turbopack options que podem estar conflitando
+  turbopack: {},
   experimental: {
      workerThreads: false,
      cpus: 1
