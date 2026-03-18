@@ -330,7 +330,7 @@ export function TransacoesClientShell({ initialData, initialCartoes }: Transacoe
                     <div className="flex flex-col items-center justify-center opacity-80">
                       <FileText className="h-12 w-12 text-muted-foreground/30 mb-4" />
                       <p className="text-base font-medium text-foreground">Sua lista está vazia</p>
-                      <p className="text-sm text-muted-foreground mt-1 max-w-[300px]">Adicione um registro manualmente ou importe um extrato bancário para começar.</p>
+                      <p className="text-sm text-muted-foreground mt-1 max-w-[300px]">Adicione rapidamente pelo Quick Add ou importe uma planilha CSV para começar.</p>
                     </div>
                   </td>
                 </tr>
