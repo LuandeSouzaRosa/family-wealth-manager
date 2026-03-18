@@ -10,12 +10,14 @@ import { AddCardDialog } from "@/components/add-card-dialog"
 import { deleteCartaoCredito } from "@/actions/accounts";
 import { formatCurrency } from "@/lib/utils"
 import { toast } from "sonner"
+import { useFilter } from "@/contexts/filter-context"
 
 interface CartoesClientProps {
   initialCartoes: any[]
 }
 
 export function CartoesClient({ initialCartoes }: CartoesClientProps) {
+  const { responsavel } = useFilter()
   const [isPending, startTransition] = useTransition()
 
   const handleDelete = (id: string) => {
@@ -66,7 +68,9 @@ export function CartoesClient({ initialCartoes }: CartoesClientProps) {
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {initialCartoes.map((cartao, index) => {
+          {initialCartoes
+            .filter(c => responsavel === "Todos" || c.responsavel === responsavel || c.responsavel === "Casal")
+            .map((cartao, index) => {
             const fatura = cartao.fatura_atual || { valor: 0, status: "Aberta" }
             const percentualUso = cartao.limite > 0 ? (fatura.valor / cartao.limite) * 100 : 0
             const disponivel = cartao.limite - fatura.valor

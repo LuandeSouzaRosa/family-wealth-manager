@@ -42,8 +42,8 @@ export default async function DashboardPage() {
       userEmail={user.email || 'Usuário'} 
       metrics={metrics || { renda: 0, despesas: 0, investido: 0, saldoTotal: 0 }} 
       recentTx={recentTx} 
-      orcamentoStatus={orcamentoStatus || []}
-      breakdown503020={breakdown503020 || []}
+      orcamentoStatus={orcamentoStatus || { Todos: [], Luan: [], Luana: [], Casal: [] }}
+      breakdown503020={breakdown503020 || { Todos: [], Luan: [], Luana: [], Casal: [] }}
       financialEvolution={financialEvolution || []}
       financialHealth={financialHealth}
       cashFlowForecast={cashFlowForecast || []}

@@ -15,7 +15,7 @@ const getCachedDashboardMetrics = unstable_cache(
   async (userId: string) => {
     const supabase = createAdminClient();
 
-    // 1. Métricas do Mês Atual (View com user_id)
+    // 1. Métricas do Mês Atual (View com user_id para o total global)
     const { data: metricsMonth, error: errorMonth } = await supabase
       .from("vw_mes_atual_metricas")
       .select("*")
@@ -25,6 +25,32 @@ const getCachedDashboardMetrics = unstable_cache(
     if (errorMonth && errorMonth.code !== "PGRST116") {
       console.error("Erro ao ler métricas do mês:", errorMonth);
     }
+
+    const metrics = metricsMonth || { renda: 0, despesas: 0, investido: 0 };
+
+    // 1.1 Calcular a renda e despesa isolada do mês por responsável (Tornando o Dashboard fidedigno)
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+
+    const { data: monthTx } = await supabase
+      .from("transacoes")
+      .select("valor, tipo, responsavel")
+      .eq("user_id", userId)
+      .gte("data", startOfMonth);
+
+    const porResponsavel: Record<string, { renda: number, despesas: number }> = {
+       "Luan": { renda: 0, despesas: 0 },
+       "Luana": { renda: 0, despesas: 0 },
+       "Casal": { renda: 0, despesas: 0 }
+    };
+
+    monthTx?.forEach(tx => {
+       const resp = tx.responsavel;
+       if (resp && porResponsavel[resp]) {
+           if (tx.tipo === "Entrada") porResponsavel[resp].renda += Number(tx.valor);
+           if (tx.tipo === "Saída") porResponsavel[resp].despesas += Number(tx.valor);
+       }
+    });
 
     // 2. Saldo Total Acumulado e Lista de Contas
     const { data: contas } = await supabase
@@ -37,19 +63,18 @@ const getCachedDashboardMetrics = unstable_cache(
       saldoTotal = contas.reduce((acc, conta) => acc + Number(conta.saldo_atual), 0);
     }
 
-    const metrics = metricsMonth || { renda: 0, despesas: 0, investido: 0 };
-
-    // 3. Calcular Saldo Comprometido em Metas
+    // 3. Calcular Saldo Comprometido em Metas globais
     const { data: metas } = await supabase
       .from("metas")
       .select("valor_atual")
       .eq("user_id", userId);
 
-    const saldoComprometido = metas ? metas.reduce((acc, m) => acc + m.valor_atual, 0) : 0;
+    const saldoComprometido = metas ? metas.reduce((acc, m) => acc + (m.valor_atual || 0), 0) : 0;
     const saldoLivre = saldoTotal - saldoComprometido;
 
     return {
       ...metrics,
+      porResponsavel,
       saldoTotal,
       saldoComprometido,
       saldoLivre,

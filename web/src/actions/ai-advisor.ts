@@ -45,5 +45,5 @@ export async function getFinancialAdvice(responsavel: string = "Todos") {
 
   logInfo({ action: "getFinancialAdvice", userId: user.id }, `Advisor rodou com ${transactions?.length || 0} txs.`);
 
-  return generateInsights(transactions || [], orcamentos || [], saldoEmConta, currentMonthStart, previousMonthStart, responsavel);
+  return generateInsights(transactions || [], orcamentos[responsavel] || [], saldoEmConta, currentMonthStart, previousMonthStart, responsavel);
 }

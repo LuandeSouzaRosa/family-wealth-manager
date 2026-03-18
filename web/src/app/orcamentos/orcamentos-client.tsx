@@ -26,7 +26,7 @@ interface OrcamentoStatus {
 
 interface OrcamentosClientProps {
   orcamentos: Orcamento[]
-  statusData: OrcamentoStatus[]
+  statusData: Record<string, OrcamentoStatus[]>
 }
 
 const SPRING_TRANSITION = { type: "spring" as const, bounce: 0.4, duration: 0.8 }
@@ -50,7 +50,8 @@ export function OrcamentosClientShell({ orcamentos, statusData }: OrcamentosClie
 
   // Combinar dados estáticos com dados dinâmicos de gasto
   const data = orcamentos.map(orc => {
-      const status = statusData.find(s => s.categoria === orc.categoria)
+      const activeStatus = statusData[responsavel] || statusData["Todos"] || []
+      const status = activeStatus.find(s => s.categoria === orc.categoria)
       return {
           ...orc,
           gasto: status ? status.gasto_atual : 0,

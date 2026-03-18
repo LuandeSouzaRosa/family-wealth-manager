@@ -43,11 +43,12 @@ interface DashboardClientProps {
     saldoTotal?: number
     saldoComprometido?: number
     saldoLivre?: number
-    contas?: any[] // Adicionado para receber as contas
+    contas?: any[] 
+    porResponsavel?: Record<string, { renda: number, despesas: number }>
   }
   recentTx: any[]
-  orcamentoStatus: any[]
-  breakdown503020: any[]
+  orcamentoStatus: Record<string, any[]>
+  breakdown503020: Record<string, any[]>
   financialEvolution: any[]
   financialHealth: any
   cashFlowForecast: any[]
@@ -96,6 +97,15 @@ export function DashboardClientShell({
         ? saldoAtual - metrics.saldoComprometido 
         : undefined;
 
+  // Renda e Despesa Isoladas
+  let rendaAtual = metrics.renda;
+  let despesasAtual = metrics.despesas;
+
+  if (responsavel !== "Todos" && metrics.porResponsavel && metrics.porResponsavel[responsavel]) {
+      rendaAtual = metrics.porResponsavel[responsavel].renda;
+      despesasAtual = metrics.porResponsavel[responsavel].despesas;
+  }
+
   return (
     <motion.div 
       initial="hidden"
@@ -113,8 +123,8 @@ export function DashboardClientShell({
       <MobileDashboard 
         userEmail={userEmail}
         saldoAtual={saldoAtual}
-        renda={metrics.renda}
-        despesas={metrics.despesas}
+        renda={rendaAtual}
+        despesas={despesasAtual}
         recentTx={filteredRecentTx}
         responsavel={responsavel}
         financialEvolution={financialEvolution}
@@ -171,8 +181,8 @@ export function DashboardClientShell({
         <motion.div variants={fadeUpVariant}>
             <KpiSection 
                 saldoAtual={saldoAtual}
-                renda={metrics.renda}
-                despesas={metrics.despesas}
+                renda={rendaAtual}
+                despesas={despesasAtual}
                 saldoLivre={saldoLivreAtualizado}
                 saldoComprometido={metrics.saldoComprometido}
                 responsavel={responsavel}
@@ -209,7 +219,7 @@ export function DashboardClientShell({
                <CardDescription className="text-muted-foreground">Distribuição ideal: 50% Necessidades, 30% Desejos, 20% Investimentos</CardDescription>
              </CardHeader>
              <CardContent className="h-[350px]">
-                <NeedsWantsSavingsChart data={breakdown503020} />
+                <NeedsWantsSavingsChart data={breakdown503020[responsavel] || []} />
              </CardContent>
            </Card>
         </motion.div>
@@ -226,7 +236,7 @@ export function DashboardClientShell({
               <CardDescription className="text-muted-foreground">Distribuição de despesas por categoria de orçamento</CardDescription>
             </CardHeader>
             <CardContent className="h-[300px] flex items-center justify-center mx-6 mb-6 rounded-xl border border-border bg-muted/20 p-2 shadow-inner">
-               <ExpensePieChart data={orcamentoStatus} />
+               <ExpensePieChart data={orcamentoStatus[responsavel] || []} />
             </CardContent>
           </Card>
 

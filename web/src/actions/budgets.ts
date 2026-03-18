@@ -27,22 +27,50 @@ export async function getOrcamentos() {
 const getCachedOrcamentoStatus = unstable_cache(
   async (userId: string) => {
     const supabase = createAdminClient();
-    const { data, error } = await supabase
-      .from("vw_orcamento_status")
+    
+    // Buscar orçamentos definidos
+    const { data: orcamentos } = await supabase
+      .from("orcamentos")
       .select("*")
       .eq("user_id", userId);
 
-    if (error) {
-      console.error("Erro ao buscar status do orçamento:", error);
-      return [];
-    }
+    // Buscar transações do mês
+    const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
+    const { data: txs } = await supabase
+      .from("transacoes")
+      .select("valor, categoria, responsavel, tipo")
+      .eq("user_id", userId)
+      .eq("tipo", "Saída") // Apenas saídas afetam orçamento
+      .gte("data", startOfMonth);
 
-    return data.map((item: any) => ({
-      categoria: item.categoria,
-      gasto_atual: item.gasto_atual,
-      limite: item.limite,
-      percentual: item.limite > 0 ? (item.gasto_atual / item.limite) * 100 : 0,
-    }));
+    const calcForResponsavel = (filtro: string) => {
+      const validTxs = filtro === "Todos" 
+         ? txs 
+         : txs?.filter(t => t.responsavel === filtro);
+         
+      const validOrcamentos = filtro === "Todos" ? orcamentos : orcamentos?.filter(o => o.responsavel === filtro || o.responsavel === "Casal");
+
+      if (!validOrcamentos || validOrcamentos.length === 0) return [];
+
+      return validOrcamentos.map(o => {
+          const gastoAtual = validTxs
+              ?.filter(t => t.categoria === o.categoria)
+              .reduce((acc, t) => acc + Number(t.valor), 0) || 0;
+          return {
+              categoria: o.categoria,
+              gasto_atual: gastoAtual,
+              limite: o.valor_limite,
+              percentual: o.valor_limite > 0 ? (gastoAtual / o.valor_limite) * 100 : 0
+          };
+      });
+    };
+
+    return {
+       "Todos": calcForResponsavel("Todos"),
+       "Luan": calcForResponsavel("Luan"),
+       "Luana": calcForResponsavel("Luana"),
+       "Casal": calcForResponsavel("Casal")
+    };
   },
   ["orcamento-status"],
   { revalidate: 60, tags: [CACHE_TAGS.dashboard] }
@@ -51,7 +79,7 @@ const getCachedOrcamentoStatus = unstable_cache(
 export async function getOrcamentoStatus() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return [];
+  if (!user) return { Todos: [], Luan: [], Luana: [], Casal: [] };
 
   return getCachedOrcamentoStatus(user.id);
 }
@@ -59,16 +87,60 @@ export async function getOrcamentoStatus() {
 const getCached503020Metrics = unstable_cache(
   async (userId: string) => {
     const supabase = createAdminClient();
-    const { data, error } = await supabase
-      .from("vw_503020_analysis")
-      .select("*")
-      .eq("user_id", userId);
+    
+    // Categorias padrão usadas no agrupamento 50-30-20
+    const ruleMapping: Record<string, string> = {
+        "Moradia": "Necessidades (50%)",
+        "Alimentação": "Necessidades (50%)",
+        "Transporte": "Necessidades (50%)",
+        "Saúde": "Necessidades (50%)",
+        "Educação": "Necessidades (50%)",
+        "Assinaturas": "Desejos (30%)",
+        "Lazer": "Desejos (30%)",
+        "Compras": "Desejos (30%)",
+        "Cuidados Pessoais": "Desejos (30%)",
+        "Investimento": "Poupança e Metas (20%)",
+        "Reserva": "Poupança e Metas (20%)"
+    };
 
-    if (error) {
-      console.error("Erro ao buscar métricas 50/30/20:", error);
-      return [];
-    }
-    return data;
+    // Buscar transações
+    const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
+    const { data: txs } = await supabase
+      .from("transacoes")
+      .select("valor, categoria, responsavel, tipo")
+      .eq("user_id", userId)
+      .eq("tipo", "Saída")
+      .gte("data", startOfMonth);
+
+    const calc503020 = (filtro: string) => {
+        const validTxs = filtro === "Todos" ? txs : txs?.filter(t => t.responsavel === filtro);
+        
+        const buckets = {
+           "Necessidades (50%)": 0,
+           "Desejos (30%)": 0,
+           "Poupança e Metas (20%)": 0,
+           "Outros": 0
+        };
+
+        validTxs?.forEach(t => {
+            const bucket = ruleMapping[t.categoria] || "Outros";
+            const k = bucket as keyof typeof buckets;
+            buckets[k] += Number(t.valor);
+        });
+
+        return [
+           { bucket: "Necessidades (50%)", total: buckets["Necessidades (50%)"] },
+           { bucket: "Desejos (30%)", total: buckets["Desejos (30%)"] },
+           { bucket: "Poupança e Metas (20%)", total: buckets["Poupança e Metas (20%)"] }
+        ].filter(b => b.total > 0);
+    };
+
+    return {
+       "Todos": calc503020("Todos"),
+       "Luan": calc503020("Luan"),
+       "Luana": calc503020("Luana"),
+       "Casal": calc503020("Casal")
+    };
   },
   ["503020-metrics"],
   { revalidate: 60, tags: [CACHE_TAGS.dashboard] }
@@ -77,7 +149,7 @@ const getCached503020Metrics = unstable_cache(
 export async function get503020Metrics() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return [];
+  if (!user) return { Todos: [], Luan: [], Luana: [], Casal: [] };
 
   return getCached503020Metrics(user.id);
 }
