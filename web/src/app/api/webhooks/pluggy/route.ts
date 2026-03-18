@@ -124,9 +124,9 @@ export async function POST(request: Request) {
           payload.createdTransactionsLink
         );
 
-        if (result.error) {
+        if ('error' in result) {
           console.error("[Pluggy Webhook] Sync failed:", result.error);
-        } else {
+        } else if ('inserted' in result) {
           console.log(
             `[Pluggy Webhook] Synced: ${result.inserted} new, ${result.skipped} dupes`
           );

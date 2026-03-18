@@ -120,11 +120,24 @@ export function TransacoesClientShell({ initialData, initialCartoes }: Transacoe
   const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val)
   const formatDate = (isoStr: string) => new Date(isoStr).toLocaleDateString('pt-BR')
 
-  const handleDelete = (id: string) => {
-    if(confirm("Tem certeza que deseja excluir este lançamento?")) {
+  const handleDelete = (tx: Transaction) => {
+    const isSplit = !!tx.split_group_id
+    const msg = isSplit
+      ? "⚠️ ATENÇÃO: Esta é uma transação dividida (Split).\n\nAo excluir, TODAS as partes que pertencem a este grupo serão apagadas simultaneamente.\n\nTem certeza que deseja continuar?"
+      : "Tem certeza que deseja excluir este lançamento?"
+
+    if(confirm(msg)) {
       startTransition(() => {
-        deleteTransaction(id)
+        deleteTransaction(tx.id)
       })
+    }
+  }
+
+  const handleEditAttempt = (tx: Transaction) => {
+    if (tx.split_group_id) {
+       alert("Operação Não Suportada (V1)\n\nTransações divididas (Split) não podem ser editadas parcialmente. Para ajustar os valores, exclua o lançamento (o grupo inteiro será removido) e recrie.")
+    } else {
+       alert("Edição de transação será disponibilizada em breve nas próximas atualizações.")
     }
   }
 
@@ -313,8 +326,12 @@ export function TransacoesClientShell({ initialData, initialCartoes }: Transacoe
             <tbody>
               {filteredData.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center text-muted-foreground">
-                    Nenhuma transação encontrada para este período.
+                  <td colSpan={5} className="px-6 py-16 text-center">
+                    <div className="flex flex-col items-center justify-center opacity-80">
+                      <FileText className="h-12 w-12 text-muted-foreground/30 mb-4" />
+                      <p className="text-base font-medium text-foreground">Sua lista está vazia</p>
+                      <p className="text-sm text-muted-foreground mt-1 max-w-[300px]">Adicione um registro manualmente ou importe um extrato bancário para começar.</p>
+                    </div>
                   </td>
                 </tr>
               ) : (
@@ -333,14 +350,16 @@ export function TransacoesClientShell({ initialData, initialCartoes }: Transacoe
                         {formatDate(tx.data)}
                       </td>
                       <td className="px-6 py-4 font-medium text-foreground">
-                        <span className="flex items-center gap-2">
-                          {tx.descricao}
+                        <div className="flex flex-col gap-1">
+                          <span className="flex items-center gap-2">
+                            {tx.descricao}
+                          </span>
                           {tx.split_group_id && (
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-primary/10 text-primary text-[10px] font-semibold uppercase tracking-wider">
-                              <Split className="w-3 h-3" /> Split
+                            <span className="inline-flex w-fit items-center gap-1 px-1.5 py-0.5 rounded-md bg-indigo-500/10 text-indigo-500 border border-indigo-500/20 text-[10px] font-semibold uppercase tracking-wider">
+                              <Split className="w-3 h-3" /> Parte de Despesa Dividida (Split)
                             </span>
                           )}
-                        </span>
+                        </div>
                       </td>
                       <td className="px-6 py-4">
                         <span className="px-2.5 py-0.5 rounded-full bg-secondary text-xs font-medium text-secondary-foreground border border-border">
@@ -352,11 +371,21 @@ export function TransacoesClientShell({ initialData, initialCartoes }: Transacoe
                       </td>
                       <td className="px-6 py-4 text-center">
                         <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          
+                          <button
+                            disabled={isPending}
+                            onClick={() => handleEditAttempt(tx)}
+                            className={`p-1.5 rounded-md transition-colors ${tx.split_group_id ? "text-muted-foreground/40 cursor-not-allowed" : "text-muted-foreground hover:bg-muted"}`}
+                            title={tx.split_group_id ? "Edição não suportada para Split" : "Editar Lançamento"}
+                          >
+                            <Edit3 size={14} />
+                          </button>
+
                           <button 
                             disabled={isPending}
-                            onClick={() => handleDelete(tx.id)}
+                            onClick={() => handleDelete(tx)}
                             className="p-1.5 rounded-md bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-colors"
-                            title="Excluir Lançamento"
+                            title={tx.split_group_id ? "Excluir Grupo Split Inteiro" : "Excluir Lançamento"}
                             data-testid="btn-delete-transaction"
                           >
                             <Trash2 size={14} />

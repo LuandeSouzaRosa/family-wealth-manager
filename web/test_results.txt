@@ -1,0 +1,85 @@
+﻿npx : [33mThe CJS 
+build of Vite's Node 
+API is deprecated. See 
+https://vite.dev/guide/
+troubleshooting.html#vi
+te-cjs-node-api-depreca
+ted for more 
+details.[39m
+No linha:1 caractere:1
++ npx vitest run 2>&1 
+| Out-File -Encoding 
+utf8 C:\projetos\family
+_weal ...
++ ~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo     
+         : NotSpecifi  
+  ed: ([33mThe CJS    
+ bu...e details.[3    
+9m:String) [], Rem    
+oteException
+    + FullyQualifiedEr 
+   rorId : NativeComm  
+  andError
+ 
+
+[7m[1m[36m RUN [39m[22m[27m [36mv2.0.5[39m [90mC:/projetos/family_wealth_manager/web[39m
+
+ [32mÔ£ô[39m src/tests/logic.test.ts [2m ([22m[2m10 tests[22m[2m)[22m[90m 13[2mms[22m[39m
+ [32mÔ£ô[39m src/lib/quick-add-parser.test.ts [2m ([22m[2m5 tests[22m[2m)[22m[90m 17[2mms[22m[39m
+ [32mÔ£ô[39m src/lib/schemas.test.ts [2m ([22m[2m5 tests[22m[2m)[22m[90m 31[2mms[22m[39m
+ [31mÔØ»[39m src/actions/ai-advisor.test.ts [2m ([22m[2m0 test[22m[2m)[22m
+ [32mÔ£ô[39m src/actions/transactions.test.ts [2m ([22m[2m3 tests[22m[2m)[22m[90m 13[2mms[22m[39m
+
+[31mÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»
+[1m[7m Failed Suites 
+1 [27m[22mÔÄ»ÔÄ»ÔÄ»ÔÄ
+»ÔÄ»ÔÄ»ÔÄ»[39m
+
+[31m[1m[7m FAIL 
+[27m[22m[39m src/act
+ions/ai-advisor.test.ts
+ [2m[ src/actions/ai-a
+dvisor.test.ts ][22m
+[31m[1mError[22m: 
+This module cannot be 
+imported from a Client 
+Component module. It 
+should only be used 
+from a Server 
+Component.[39m
+[36m [2mÔØ»[22m node
+_modules/server-only/in
+dex.js:[2m1:7[22m[39
+m
+    [90m  1| 
+[39m[35mthrow[39m 
+[35mnew[39m 
+[33mError[39m(
+    [90m   | [39m    
+  [31m^[39m
+    [90m  2| [39m  
+[32m"This module 
+cannot be imported 
+from a Client 
+Component module. 
+"[39m [33m+[39m
+    [90m  3| [39m    
+[32m"It should only 
+be used from a Server 
+Component."[39m
+[90m [2mÔØ»[22m src/
+utils/supabase/admin.ts
+:[2m1:1[22m[39m
+
+[31m[2mÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ
+»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»Ô
+Ä»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»ÔÄ»
+ÔÄ»ÔÄ»ÔÄ»ÔÄ»[1/1]ÔÄ»[2
+2m[39m
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m4 passed[39m[22m[90m (5)[39m
+[2m      Tests [22m [1m[32m23 passed[39m[22m[90m (23)[39m
+[2m   Start at [22m 12:46:57
+[2m   Duration [22m 11.21s[2m (transform 1.50s, setup 0ms, collect 7.86s, tests 74ms, environment 3ms, prepare 2.47s)[22m
+

@@ -17,15 +17,16 @@ export function PluggyConnectButton() {
 
   const handleStartConnect = async () => {
     setIsLoading(true)
-    const result = await createPluggyConnectToken()
+    const origin = typeof window !== 'undefined' ? window.location.origin : undefined
+    const result = await createPluggyConnectToken(origin)
     
-    if (result.error) {
+    if ('error' in result) {
         toast.error("Erro ao iniciar conexão bancária: " + result.error)
         setIsLoading(false)
         return
     }
 
-    if (result.accessToken) {
+    if ('accessToken' in result && result.accessToken) {
         setConnectToken(result.accessToken)
         setIsOpen(true)
     }
@@ -45,7 +46,7 @@ export function PluggyConnectButton() {
 
       // 1. Save the connection to our DB
       const saveResult = await savePluggyConnection(itemId, connectorName)
-      if (saveResult.error) {
+      if ('error' in saveResult) {
         toast.error("Erro ao salvar conexão: " + saveResult.error, { id: toastId })
         setIsSyncing(false)
         return
@@ -53,14 +54,16 @@ export function PluggyConnectButton() {
 
       // 2. Sync initial transactions
       const syncResult = await syncPluggyTransactions(itemId)
-      if (syncResult.error) {
+      if ('error' in syncResult) {
         toast.error("Erro ao importar transações: " + syncResult.error, { id: toastId })
         setIsSyncing(false)
         return
       }
 
+      const inserted = 'inserted' in syncResult ? syncResult.inserted : 0;
+
       toast.success(
-        `${connectorName} conectado! ${syncResult.inserted} transações importadas.`,
+        `${connectorName} conectado! ${inserted} transações importadas.`,
         { id: toastId, duration: 5000 }
       )
 
@@ -74,8 +77,10 @@ export function PluggyConnectButton() {
   }
 
   const handleError = (error: any) => {
-    console.error("Pluggy Error:", error)
-    toast.error("Erro na conexão bancária.")
+    console.error("Pluggy Error Completo:", error)
+    // Extrai mensagem real da Pluggy (pode vir no message ou no response JSON)
+    const realMsg = error?.message || error?.response?.message || JSON.stringify(error)
+    toast.error(`Falha na API da Pluggy: ${realMsg}`)
     setIsOpen(false)
     setConnectToken(null)
   }

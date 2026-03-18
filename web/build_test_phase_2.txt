@@ -1,0 +1,86 @@
+﻿
+> web@0.1.0 build
+> next build --webpack
+
+Ôû▓ Next.js 16.1.6 (webpack)
+- Environments: .env.local
+- Experiments (use with caution):
+  ┬À cpus: 1
+
+npm : ÔÜá The 
+"middleware" file 
+convention is 
+deprecated. Please use 
+"proxy" instead. Learn 
+more: https://nextjs.or
+g/docs/messages/middlew
+are-to-proxy
+No linha:1 caractere:1
++ npm run build 2>&1 | 
+Out-File -Encoding 
+utf8 C:\projetos\family
+_wealt ...
++ ~~~~~~~~~~~~~~~~~~
+    + CategoryInfo     
+         : NotSpecifi  
+  ed: (ÔÜá The "midd   
+ le...leware-to-pro    
+xy:String) [], Rem    
+oteException
+    + FullyQualifiedEr 
+   rorId : NativeComm  
+  andError
+ 
+  Creating an optimized production build ...
+> [PWA] Compile server
+> [PWA] Compile server
+> [PWA] Compile client (static)
+> [PWA] Auto register service worker with: C:\projetos\family_wealth_manager\web\node_modules\next-pwa\register.js
+> [PWA] Service worker: C:\projetos\family_wealth_manager\web\public\sw.js
+> [PWA]   url: /sw.js
+> [PWA]   scope: /
+Ô£ô Compiled successfully in 35.5s
+  Running TypeScript ...
+Failed to compile.
+
+./src/components/dashbo
+ard/ai-advisor-widget.t
+sx:24:16
+Type error: Property 
+'error' does not exist 
+on type '{ success: 
+boolean; advice: 
+any[]; } | { error: 
+string; }'.
+  Property 'error' 
+does not exist on type 
+'{ success: boolean; 
+advice: any[]; }'.
+
+[0m [90m 22 |[39m   
+  
+ [90m 23 |[39m     
+[36mconst[39m result 
+[33m=[39m 
+[36mawait[39m 
+getFinancialAdvice()
+[31m[1m>[22m[39m[9
+0m 24 |[39m     
+[36mif[39m (result[3
+3m.[39merror) {
+ [90m    |[39m       
+         
+[31m[1m^[22m[39m
+ [90m 25 |[39m       
+  toast[33m.[39merror
+([32m"Erro ao 
+consultar Assessor 
+IA"[39m)
+ [90m 26 |[39m       
+  setIsOpen([36mfalse
+[39m)
+ [90m 27 |[39m     } 
+[36melse[39m {[0m
+Next.js build worker 
+exited with code: 1 
+and signal: null

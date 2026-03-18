@@ -263,10 +263,10 @@ export function MetasClient({ initialMetas }: { initialMetas: any[] }) {
 
       {/* Lista de Metas */}
       {metas.length === 0 ? (
-        <div className="text-center py-12 bg-muted/30 rounded-xl border border-dashed border-border">
-          <PiggyBank className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-          <h3 className="text-lg font-medium">Nenhuma meta criada</h3>
-          <p className="text-muted-foreground">Comece criando um pote para seus sonhos.</p>
+        <div className="text-center py-16 bg-muted/10 rounded-2xl border border-dashed border-border/50 flex flex-col items-center justify-center opacity-80">
+          <PiggyBank className="h-12 w-12 mx-auto text-muted-foreground/30 mb-4" />
+          <h3 className="text-base font-medium text-foreground">Sua lista de metas está vazia</h3>
+          <p className="text-sm text-muted-foreground mt-1">Comece criando um fundo de reserva ou planejando um novo objetivo.</p>
         </div>
       ) : (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">

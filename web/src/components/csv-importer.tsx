@@ -197,13 +197,13 @@ export function CsvImporter() {
     const result = await createTransactionsBatch(payload)
     setIsUploading(false)
 
-    if (result.success) {
+    if ('count' in result) {
       const skippedMsg = result.skipped && result.skipped > 0 ? ` (${result.skipped} duplicadas ignoradas)` : ""
       setSuccessMsg(`${result.count} transações importadas com sucesso!${skippedMsg}`)
       toast.success("Importação concluída com sucesso!")
       setData([])
       setFileName("")
-    } else {
+    } else if ('error' in result) {
       toast.error("Erro na importação: " + result.error)
     }
   }

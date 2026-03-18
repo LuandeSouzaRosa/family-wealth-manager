@@ -116,6 +116,11 @@ export function CategoriasClient() {
                 <div className="w-2 h-2 rounded-full bg-emerald-500" /> Entradas
             </h3>
             <div className="space-y-2">
+                {categorias.filter(c => c.tipo === 'Entrada' || c.tipo === 'Ambos').length === 0 && !isLoading && (
+                    <div className="text-sm text-muted-foreground text-center py-6 border border-dashed rounded-lg opacity-70">
+                        Nenhuma categoria de Entrada cadastrada.
+                    </div>
+                )}
                 <AnimatePresence>
                     {categorias.filter(c => c.tipo === 'Entrada' || c.tipo === 'Ambos').map(cat => (
                         <motion.div 
@@ -152,6 +157,11 @@ export function CategoriasClient() {
                 <div className="w-2 h-2 rounded-full bg-red-500" /> Saídas
             </h3>
             <div className="space-y-2">
+                {categorias.filter(c => c.tipo === 'Saída' || c.tipo === 'Ambos').length === 0 && !isLoading && (
+                    <div className="text-sm text-muted-foreground text-center py-6 border border-dashed rounded-lg opacity-70">
+                        Nenhuma categoria de Saída cadastrada.
+                    </div>
+                )}
                 <AnimatePresence>
                     {categorias.filter(c => c.tipo === 'Saída' || c.tipo === 'Ambos').map(cat => (
                         <motion.div 

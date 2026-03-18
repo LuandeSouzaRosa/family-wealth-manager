@@ -237,7 +237,7 @@ export function DashboardClientShell({
       </div>
       </div>
       {/* AI Advisor Widget Floating */}
-      <AiAdvisorWidget />
+      <AiAdvisorWidget responsavel={responsavel} />
       
       {/* Quick Add Widget (Mobile Only) */}
       <QuickAddWidget />

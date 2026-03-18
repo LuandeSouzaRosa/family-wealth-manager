@@ -1,0 +1,123 @@
+﻿
+> web@0.1.0 build
+> next build --webpack
+
+Ôû▓ Next.js 16.1.6 (webpack)
+- Environments: .env.local
+- Experiments (use with caution):
+  ┬À cpus: 1
+
+npm : ÔÜá The 
+"middleware" file 
+convention is 
+deprecated. Please use 
+"proxy" instead. Learn 
+more: https://nextjs.or
+g/docs/messages/middlew
+are-to-proxy
+No linha:1 caractere:1
++ npm run build 2>&1 | 
+Out-File -Encoding 
+utf8 C:\projetos\family
+_wealt ...
++ ~~~~~~~~~~~~~~~~~~
+    + CategoryInfo     
+         : NotSpecifi  
+  ed: (ÔÜá The "midd   
+ le...leware-to-pro    
+xy:String) [], Rem    
+oteException
+    + FullyQualifiedEr 
+   rorId : NativeComm  
+  andError
+ 
+  Creating an optimized production build ...
+> [PWA] Compile server
+> [PWA] Compile server
+> [PWA] Compile client (static)
+> [PWA] Auto register service worker with: C:\projetos\family_wealth_manager\web\node_modules\next-pwa\register.js
+> [PWA] Service worker: C:\projetos\family_wealth_manager\web\public\sw.js
+> [PWA]   url: /sw.js
+> [PWA]   scope: /
+Failed to compile.
+
+./src/actions/transacti
+ons.ts
+Error:   x Server 
+Actions must be async 
+functions.
+
+     ,-[C:\projetos\fam
+ily_wealth_manager\web\
+src\actions\transaction
+s.ts:130:1]
+ 127 |   return { 
+success: true };
+ 128 | }
+ 129 | 
+ 130 | export function 
+getDeleteMatchCriteria(
+tx: { split_group_id?: 
+string | null } | 
+null, id: string, 
+userId: string) {
+     :                 
+^^^^^^^^^^^^^^^^^^^^^^
+ 131 |   if 
+(tx?.split_group_id) {
+ 132 |     return { 
+type: 'grupo', match: 
+{ split_group_id: 
+tx.split_group_id, 
+user_id: userId } };
+ 133 |   }
+     `----
+
+Import trace for 
+requested module:
+./src/actions/transacti
+ons.ts
+./src/components/csv-im
+porter.tsx
+
+./src/actions/transacti
+ons.ts
+Error:   x Server 
+Actions must be async 
+functions.
+
+     ,-[C:\projetos\fam
+ily_wealth_manager\web\
+src\actions\transaction
+s.ts:130:1]
+ 127 |   return { 
+success: true };
+ 128 | }
+ 129 | 
+ 130 | export function 
+getDeleteMatchCriteria(
+tx: { split_group_id?: 
+string | null } | 
+null, id: string, 
+userId: string) {
+     :                 
+^^^^^^^^^^^^^^^^^^^^^^
+ 131 |   if 
+(tx?.split_group_id) {
+ 132 |     return { 
+type: 'grupo', match: 
+{ split_group_id: 
+tx.split_group_id, 
+user_id: userId } };
+ 133 |   }
+     `----
+
+Import trace for 
+requested module:
+./src/actions/transacti
+ons.ts
+./src/app/page.tsx
+
+
+> Build failed because 
+of webpack errors

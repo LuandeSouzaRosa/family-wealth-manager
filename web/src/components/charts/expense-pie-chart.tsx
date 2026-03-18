@@ -1,6 +1,7 @@
 "use client"
 
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
+import { PieChart as RechartsPieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
+import { PieChart } from 'lucide-react'
 import { cn } from "@/lib/utils"
 
 interface ExpensePieChartProps {
@@ -23,8 +24,10 @@ export function ExpensePieChart({ data }: ExpensePieChartProps) {
 
   if (validData.length === 0) {
     return (
-      <div className="flex h-full items-center justify-center text-muted-foreground text-sm font-mono p-6 text-center">
-        Nenhuma despesa registrada para análise.
+      <div className="flex flex-col h-full items-center justify-center text-muted-foreground text-center p-6 opacity-60">
+        <PieChart className="w-10 h-10 mb-2 opacity-20" />
+        <p className="text-sm font-medium text-foreground">Sem dados suficientes</p>
+        <p className="text-xs">Registre suas despesas para analisar a distribuição do fluxo.</p>
       </div>
     )
   }
@@ -39,7 +42,7 @@ export function ExpensePieChart({ data }: ExpensePieChartProps) {
       {/* Gráfico Donut */}
       <div className="w-full md:w-1/2 h-[250px] relative">
         <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
+          <RechartsPieChart>
             <Pie
               data={validData}
               cx="50%"
@@ -72,7 +75,7 @@ export function ExpensePieChart({ data }: ExpensePieChartProps) {
                itemStyle={{ color: '#fff', fontWeight: 500 }}
                cursor={{ fill: 'transparent' }}
             />
-          </PieChart>
+          </RechartsPieChart>
         </ResponsiveContainer>
          {/* Texto Central */}
          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">

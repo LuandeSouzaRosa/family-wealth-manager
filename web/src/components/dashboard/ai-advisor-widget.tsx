@@ -8,7 +8,7 @@ import { Sparkles, X, ChevronRight, TrendingUp, AlertTriangle, Lightbulb } from 
 import { getFinancialAdvice } from "@/actions/ai-advisor"
 import { toast } from "sonner"
 
-export function AiAdvisorWidget() {
+export function AiAdvisorWidget({ responsavel = "Todos" }: { responsavel?: string }) {
   const [isOpen, setIsOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [advice, setAdvice] = useState<any[]>([])
@@ -20,11 +20,11 @@ export function AiAdvisorWidget() {
     // Simular delay de pensamento da IA
     await new Promise(resolve => setTimeout(resolve, 1500))
     
-    const result = await getFinancialAdvice()
-    if (result.error) {
+    const result = await getFinancialAdvice(responsavel)
+    if ('error' in result) {
         toast.error("Erro ao consultar Assessor IA")
         setIsOpen(false)
-    } else {
+    } else if ('advice' in result) {
         setAdvice(result.advice || [])
     }
     setIsLoading(false)

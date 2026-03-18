@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { motion } from 'framer-motion'
 import { formatCurrency } from '@/lib/utils'
 import { TiltCard } from '@/components/ui/tilt-card'
+import { FileText } from 'lucide-react'
 
 interface Transaction {
   id: string
@@ -31,8 +32,10 @@ export function RecentTransactions({ transactions, responsavel }: RecentTransact
         </CardHeader>
         <CardContent>
           {transactions.length === 0 ? (
-            <div className="text-center py-12">
-               <p className="text-sm text-muted-foreground">Nenhuma transação registrada para este filtro.</p>
+            <div className="text-center py-12 flex flex-col items-center justify-center opacity-80">
+               <FileText className="h-10 w-10 text-muted-foreground/30 mb-3" />
+               <p className="text-sm font-medium text-foreground">Seu histórico está limpo</p>
+               <p className="text-xs text-muted-foreground mt-1 max-w-[200px]">Adicione sua primeira transação para alimentar os relatórios.</p>
             </div>
           ) : (
             <motion.div 

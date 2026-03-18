@@ -2,6 +2,7 @@
 
 import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
+import { handleError, logInfo } from "@/lib/logger";
 import { PluggyClient } from "pluggy-sdk";
 import { revalidatePath } from "next/cache";
 import { CACHE_TAGS, invalidateTag } from "@/lib/cache";
@@ -122,14 +123,13 @@ export async function savePluggyConnection(
     );
 
     if (error) {
-      console.error("Erro ao salvar conexão Pluggy:", error);
-      return { error: error.message };
+      return handleError({ action: "createPluggyItem", userId: user.id }, error);
     }
 
+    logInfo({ action: "createPluggyItem", userId: user.id }, "Conexão bancária criada com sucesso.");
     return { success: true, accountId: primaryAccount?.id };
   } catch (err: any) {
-    console.error("Erro ao buscar contas da Pluggy:", err);
-    return { error: err.message };
+    return handleError({ action: "createPluggyItem", userId: user.id }, err, "Erro ao buscar contas da Pluggy externa.");
   }
 }
 
@@ -194,7 +194,7 @@ export async function syncPluggyTransactions(pluggyItemId: string) {
             totalSkipped++;
             continue;
           }
-          console.error("Erro ao inserir transação Pluggy:", insertError);
+          handleError({ action: "syncPluggyTransactions_insert", userId: user.id }, insertError);
         } else {
           totalInserted++;
         }
@@ -225,10 +225,10 @@ export async function syncPluggyTransactions(pluggyItemId: string) {
     revalidatePath("/contas");
     invalidateTag(CACHE_TAGS.dashboard);
 
+    logInfo({ action: "syncPluggyTransactions", userId: user.id }, `Sincronização manual: ${totalInserted} inseridas, ${totalSkipped} puladas.`);
     return { success: true, inserted: totalInserted, skipped: totalSkipped };
   } catch (err: any) {
-    console.error("Erro ao sincronizar transações Pluggy:", err);
-    return { error: err.message };
+    return handleError({ action: "syncPluggyTransactions", userId: user.id }, err, "Falha na sincronização transacional Pluggy externa.");
   }
 }
 
@@ -252,7 +252,7 @@ export async function syncFromWebhook(
       .single();
 
     if (connError || !connection) {
-      console.error("[Pluggy Webhook] Connection not found for itemId:", pluggyItemId);
+      handleError({ action: "syncFromWebhook_connection" }, connError || new Error(`Connection not found for itemId: ${pluggyItemId}`));
       return { error: "Connection not found" };
     }
 
@@ -288,7 +288,7 @@ export async function syncFromWebhook(
         );
 
       if (insertError && insertError.code !== "23505") {
-        console.error("[Pluggy Webhook] Insert error:", insertError);
+        handleError({ action: "syncFromWebhook_insert", userId }, insertError);
       } else if (!insertError) {
         inserted++;
       } else {
@@ -315,11 +315,10 @@ export async function syncFromWebhook(
       .update({ last_sync_at: new Date().toISOString() })
       .eq("pluggy_item_id", pluggyItemId);
 
-    console.log(`[Pluggy Webhook] Synced: ${inserted} inserted, ${skipped} skipped`);
+    logInfo({ action: "syncFromWebhook", userId }, `[Pluggy Webhook] Synced: ${inserted} inserted, ${skipped} skipped`);
     return { success: true, inserted, skipped };
   } catch (err: any) {
-    console.error("[Pluggy Webhook] Sync error:", err);
-    return { error: err.message };
+    return handleError({ action: "syncFromWebhook" }, err, "Falha de processamento no Webhook da Pluggy.");
   }
 }
 
@@ -336,7 +335,7 @@ export async function getPluggyConnections() {
     .order("created_at", { ascending: false });
 
   if (error) {
-    console.error("Erro ao buscar conexões Pluggy:", error);
+    handleError({ action: "getPluggyConnections" }, error);
     return [];
   }
 
@@ -358,7 +357,7 @@ export async function linkPluggyToAccount(
     .update({ conta_bancaria_id: contaBancariaId })
     .eq("id", connectionId);
 
-  if (error) return { error: error.message };
+  if (error) return handleError({ action: "linkPluggyToAccount" }, error);
   return { success: true };
 }
 

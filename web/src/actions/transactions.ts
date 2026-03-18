@@ -1,5 +1,8 @@
 "use server";
 
+import { getDeleteMatchCriteria } from '@/lib/transactions-logic';
+import { handleError } from "@/lib/logger";
+
 import { createClient } from "@/utils/supabase/server";
 import { revalidatePath } from "next/cache";
 import { TransactionSchema, SplitTransactionSchema, IdSchema } from "@/lib/schemas";
@@ -34,8 +37,7 @@ export async function createTransaction(formData: FormData) {
   // 2. Validar
   const parsed = TransactionSchema.safeParse(data);
   if (!parsed.success) {
-    console.error("Erro de validação:", parsed.error.format());
-    return { error: "Campos inválidos. Verifique os dados inseridos." };
+    return handleError({ action: "createTransaction", userId: user.id }, parsed.error, "Campos inválidos. Verifique os dados inseridos.");
   }
 
   // 3. Inserir no Banco 
@@ -52,8 +54,7 @@ export async function createTransaction(formData: FormData) {
     ]);
 
   if (error) {
-    console.error("Erro ao inserir transação:", error);
-    return { error: error.message };
+    return handleError({ action: "createTransaction", userId: user.id }, error);
   }
 
   revalidatePath("/transacoes");
@@ -95,8 +96,7 @@ export async function createSplitTransaction(formData: FormData) {
 
   const parsed = SplitTransactionSchema.safeParse(data);
   if (!parsed.success) {
-    console.error("Erro de validação split:", parsed.error.format());
-    return { error: "Campos inválidos. Verifique os valores do split." };
+    return handleError({ action: "createSplitTransaction", userId: user.id }, parsed.error, "Campos inválidos. Verifique os valores do split.");
   }
 
   const splitGroupId = crypto.randomUUID();
@@ -118,8 +118,7 @@ export async function createSplitTransaction(formData: FormData) {
   const { error } = await supabase.from("transacoes").insert(rows);
 
   if (error) {
-    console.error("Erro ao inserir split:", error);
-    return { error: error.message };
+    return handleError({ action: "createSplitTransaction", userId: user.id }, error);
   }
 
   revalidatePath("/transacoes");
@@ -143,24 +142,14 @@ export async function deleteTransaction(id: string) {
     .eq("user_id", user.id)
     .single();
 
-  if (tx?.split_group_id) {
-    // Delete entire split group
-    const { error } = await supabase
-      .from("transacoes")
-      .delete()
-      .eq("split_group_id", tx.split_group_id)
-      .eq("user_id", user.id);
+  const criteria = getDeleteMatchCriteria(tx, id, user.id);
 
-    if (error) return { error: error.message };
-  } else {
-    // Normal single delete
-    const { error } = await supabase
-      .from("transacoes")
-      .delete()
-      .match({ id, user_id: user.id });
+  const { error } = await supabase
+    .from("transacoes")
+    .delete()
+    .match(criteria.match);
 
-    if (error) return { error: error.message };
-  }
+  if (error) return handleError({ action: "deleteTransaction", userId: user.id }, error);
 
   revalidatePath("/transacoes");
   invalidateTag(CACHE_TAGS.dashboard);
@@ -194,7 +183,7 @@ export async function updateTransaction(id: string, formData: FormData) {
     })
     .match({ id, user_id: user.id });
 
-  if (error) return { error: error.message };
+  if (error) return handleError({ action: "updateTransaction", userId: user.id }, error);
   revalidatePath("/transacoes");
   invalidateTag(CACHE_TAGS.dashboard);
   return { success: true };
@@ -210,7 +199,7 @@ export async function getRecentTransactions(limit = 5) {
     .limit(limit);
 
   if (error) {
-    console.error("Erro ao buscar transações recentes:", error);
+    handleError({ action: "getRecentTransactions" }, error);
     return [];
   }
 
@@ -237,7 +226,7 @@ export async function getTransactions(month?: number, year?: number) {
   const { data, error } = await query;
 
   if (error) {
-    console.error("Erro ao buscar transações:", error);
+    handleError({ action: "getTransactions" }, error);
     return [];
   }
 
@@ -359,7 +348,7 @@ export async function createTransactionsBatch(transactions: any[]) {
 
       if (toInsert.length > 0) {
           const { error } = await supabase.from("transacoes").insert(toInsert);
-          if (error) return { error: error.message };
+          if (error) return handleError({ action: "createTransactionsBatch", userId: user.id }, error);
           
           revalidatePath("/transacoes");
           invalidateTag(CACHE_TAGS.dashboard);
@@ -379,10 +368,7 @@ export async function createTransactionsBatch(transactions: any[]) {
     .from("transacoes")
     .insert(validTransactions);
 
-  if (error) {
-    console.error("Erro na importação em lote:", error);
-    return { error: error.message };
-  }
+  if (error) return handleError({ action: "createTransactionsBatch", userId: user.id }, error);
 
   revalidatePath("/transacoes");
   invalidateTag(CACHE_TAGS.dashboard);

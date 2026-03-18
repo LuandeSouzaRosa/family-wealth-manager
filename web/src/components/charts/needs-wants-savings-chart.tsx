@@ -1,6 +1,7 @@
 "use client"
 
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts"
+import { Target } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface Metric503020 {
@@ -74,8 +75,10 @@ export function NeedsWantsSavingsChart({ data }: NeedsWantsSavingsChartProps) {
 
   if (totalGeral === 0) {
      return (
-       <div className="flex h-full items-center justify-center text-muted-foreground text-sm font-mono p-6 text-center">
-         Nenhuma despesa categorizada este mês.
+       <div className="flex flex-col h-full items-center justify-center text-muted-foreground text-center p-6 opacity-60">
+         <Target className="w-10 h-10 mb-2 opacity-20" />
+         <p className="text-sm font-medium text-foreground">Aguardando dados</p>
+         <p className="text-xs">Classifique suas despesas para visualizar o progresso da regra 50/30/20.</p>
        </div>
      )
   }

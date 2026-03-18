@@ -38,7 +38,7 @@ export function QuickAddWidget() {
 
     const parsed = parseQuickAdd(inputValue)
     if (!parsed) {
-      toast.error("Não entendi. Digite ex: 'ifood 45' ou '50 almoço'")
+      toast.error("Ops, não consegui entender a frase. Tente assim: 'ifood 45' ou 'salário 3000'")
       return
     }
 
@@ -53,7 +53,7 @@ export function QuickAddWidget() {
 
       const result = await createTransaction(formData)
 
-      if (result.error) {
+      if ('error' in result) {
         toast.error(result.error)
       } else {
         const tipoLabel = parsed.tipo === "Entrada" ? "Receita" : "Despesa"
