@@ -29,6 +29,29 @@ export const TransactionSchema = z.object({
   status: z.enum(["Realizado", "Agendado", "Pendente"]).default("Realizado").optional(),
 });
 
+export const SplitItemSchema = z.object({
+  responsavel: z.string().min(1, "Responsável é obrigatório"),
+  valor: z.coerce.number().positive("O valor deve ser maior que zero"),
+});
+
+export const SplitTransactionSchema = z.object({
+  descricao: z.string().min(1, "A descrição é obrigatória").max(200, "Máximo de 200 caracteres"),
+  valor_total: z.coerce.number().positive("O valor total deve ser maior que zero"),
+  categoria: z.string().min(1, "A categoria é obrigatória"),
+  tipo: z.enum(TIPOS_TRANSACAO),
+  data: z.coerce.date().optional(),
+  conta_id: z.string().nullable().optional(),
+  cartao_id: z.string().nullable().optional(),
+  status: z.enum(["Realizado", "Agendado", "Pendente"]).default("Realizado").optional(),
+  splits: z.array(SplitItemSchema).min(2, "Split requer no mínimo 2 responsáveis"),
+}).refine(
+  (data) => {
+    const soma = data.splits.reduce((acc, s) => acc + s.valor, 0);
+    return Math.abs(soma - data.valor_total) < 0.01;
+  },
+  { message: "A soma dos splits deve ser igual ao valor total", path: ["splits"] }
+);
+
 export const RecorrenteSchema = z.object({
   descricao: z.string().min(1, "A descrição é obrigatória"),
   valor: z.coerce.number().positive("O valor deve ser maior que zero"),
@@ -93,6 +116,7 @@ export const MetaSchema = z.object({
 
 // Types inference
 export type Transaction = z.infer<typeof TransactionSchema>;
+export type SplitTransaction = z.infer<typeof SplitTransactionSchema>;
 export type Recorrente = z.infer<typeof RecorrenteSchema>;
 export type Orcamento = z.infer<typeof OrcamentoSchema>;
 export type Patrimonio = z.infer<typeof PatrimonioSchema>;

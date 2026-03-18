@@ -3,6 +3,7 @@
 import { createClient } from "@/utils/supabase/server";
 import { revalidatePath } from "next/cache";
 import { ContaSchema, CartaoSchema, IdSchema } from "@/lib/schemas";
+import { CACHE_TAGS, invalidateTag } from "@/lib/cache";
 
 // ==========================================
 // CONTAS BANCÁRIAS (Múltiplas Contas)
@@ -44,7 +45,8 @@ export async function createContaBancaria(formData: FormData) {
 
   if (error) return { error: error.message };
   
-  revalidatePath("/");
+  revalidatePath("/contas");
+  invalidateTag(CACHE_TAGS.dashboard);
   return { success: true };
 }
 
@@ -61,16 +63,19 @@ function getClampedDate(year: number, month: number, day: number) {
   return new Date(year, month, Math.min(day, lastDay));
 }
 
-async function calcularFaturaAtual(supabase: any, cartao: any) {
+/**
+ * Calcula o período de fatura aberta de um cartão (pure function, sem DB).
+ * Retorna { dataInicio, dataFim, dataVencimento }.
+ */
+function calcularPeriodoFatura(cartao: { dia_fechamento: number; dia_vencimento: number }) {
   const hoje = new Date();
   const diaAtual = hoje.getDate();
   const mesAtual = hoje.getMonth();
   const anoAtual = hoje.getFullYear();
 
-  let dataInicio, dataFim;
+  let dataInicio: Date, dataFim: Date;
 
   if (diaAtual < cartao.dia_fechamento) {
-    // Fatura aberta: fechou mês passado até dia de fechamento deste mês
     const dataFimAnterior = getClampedDate(anoAtual, mesAtual - 1, cartao.dia_fechamento);
     dataInicio = new Date(dataFimAnterior);
     dataInicio.setDate(dataInicio.getDate() + 1);
@@ -79,7 +84,6 @@ async function calcularFaturaAtual(supabase: any, cartao: any) {
     dataFim = getClampedDate(anoAtual, mesAtual, cartao.dia_fechamento);
     dataFim.setHours(23, 59, 59, 999);
   } else {
-    // Fatura aberta: fechou este mês até dia de fechamento do próximo
     const dataFimEsteMes = getClampedDate(anoAtual, mesAtual, cartao.dia_fechamento);
     dataInicio = new Date(dataFimEsteMes);
     dataInicio.setDate(dataInicio.getDate() + 1);
@@ -89,9 +93,8 @@ async function calcularFaturaAtual(supabase: any, cartao: any) {
     dataFim.setHours(23, 59, 59, 999);
   }
 
-  // Vencimento: se dia_vencimento < dia_fechamento, o vencimento é no mês seguinte ao fechamento
   let mesVencimento = dataFim.getMonth();
-  let anoVencimento = dataFim.getFullYear();
+  const anoVencimento = dataFim.getFullYear();
 
   if (cartao.dia_vencimento < cartao.dia_fechamento) {
     mesVencimento += 1;
@@ -100,46 +103,83 @@ async function calcularFaturaAtual(supabase: any, cartao: any) {
   const dataVencimento = getClampedDate(anoVencimento, mesVencimento, cartao.dia_vencimento);
   dataVencimento.setHours(23, 59, 59, 999);
 
-  // Buscar transações vinculadas a este cartão neste período
-  const { data: transacoes } = await supabase
-      .from("transacoes")
-      .select("valor")
-      .eq("cartao_id", cartao.id)
-      .eq("tipo", "Saída") // Apenas gastos
-      .gte("data", dataInicio.toISOString())
-      .lte("data", dataFim.toISOString());
-
-  const total = transacoes?.reduce((acc: number, t: any) => acc + t.valor, 0) || 0;
-  
-  return {
-      valor: total,
-      vencimento: dataVencimento.toISOString(),
-      fechamento: dataFim.toISOString(),
-      status: "Aberta"
-  };
+  return { dataInicio, dataFim, dataVencimento };
 }
 
 export async function getCartoesCredito() {
   const supabase = await createClient();
-  
-  // Buscar cartões
+
+  // Query 1: Buscar todos os cartões
   const { data: cartoes, error } = await supabase
     .from("cartoes_credito")
     .select("*")
     .order("created_at", { ascending: true });
 
   if (error) {
-    // Se a tabela não existir (ainda não migrada), retorna vazio sem erro
     if (error.code === '42P01') return [];
     console.error("Erro ao buscar cartões:", error);
     return [];
   }
 
-  // Para cada cartão, calcular fatura atual
-  const cartoesComFatura = await Promise.all(cartoes.map(async (cartao) => {
-      const fatura = await calcularFaturaAtual(supabase, cartao);
-      return { ...cartao, fatura_atual: fatura };
+  if (!cartoes || cartoes.length === 0) return [];
+
+  // Calcular período de fatura de cada cartão (puro, sem DB)
+  const periodos = cartoes.map((cartao) => ({
+    cartao,
+    ...calcularPeriodoFatura(cartao),
   }));
+
+  // Encontrar a janela de datas mais ampla para cobrir todos os cartões
+  const minDate = new Date(
+    Math.min(...periodos.map((p) => p.dataInicio.getTime()))
+  );
+  const maxDate = new Date(
+    Math.max(...periodos.map((p) => p.dataFim.getTime()))
+  );
+
+  // Query 2: Buscar TODAS as transações de TODOS os cartões em uma única query
+  const cartaoIds = cartoes.map((c) => c.id);
+  const { data: todasTransacoes } = await supabase
+    .from("transacoes")
+    .select("cartao_id, valor, data")
+    .in("cartao_id", cartaoIds)
+    .eq("tipo", "Saída")
+    .gte("data", minDate.toISOString())
+    .lte("data", maxDate.toISOString());
+
+  // Agrupar transações por cartao_id para lookup rápido
+  const txPorCartao = new Map<string, Array<{ valor: number; data: string }>>();
+  for (const tx of todasTransacoes || []) {
+    if (!tx.cartao_id) continue;
+    if (!txPorCartao.has(tx.cartao_id)) {
+      txPorCartao.set(tx.cartao_id, []);
+    }
+    txPorCartao.get(tx.cartao_id)!.push(tx);
+  }
+
+  // Calcular fatura de cada cartão filtrando pelo período específico em memória
+  const cartoesComFatura = periodos.map(({ cartao, dataInicio, dataFim, dataVencimento }) => {
+    const transacoesCartao = txPorCartao.get(cartao.id) || [];
+
+    // Filtrar transações dentro do período de fatura deste cartão específico
+    const inicioMs = dataInicio.getTime();
+    const fimMs = dataFim.getTime();
+
+    const total = transacoesCartao.reduce((acc, tx) => {
+      const txMs = new Date(tx.data).getTime();
+      return (txMs >= inicioMs && txMs <= fimMs) ? acc + tx.valor : acc;
+    }, 0);
+
+    return {
+      ...cartao,
+      fatura_atual: {
+        valor: total,
+        vencimento: dataVencimento.toISOString(),
+        fechamento: dataFim.toISOString(),
+        status: "Aberta" as const,
+      },
+    };
+  });
 
   return cartoesComFatura;
 }
@@ -167,8 +207,8 @@ export async function createCartaoCredito(formData: FormData) {
 
   if (error) return { error: error.message };
   
-  revalidatePath("/");
   revalidatePath("/cartoes");
+  invalidateTag(CACHE_TAGS.dashboard);
   return { success: true };
 }
 

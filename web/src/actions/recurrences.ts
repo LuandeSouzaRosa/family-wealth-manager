@@ -3,6 +3,7 @@
 import { createClient } from "@/utils/supabase/server";
 import { revalidatePath } from "next/cache";
 import { RecorrenteSchema, IdSchema } from "@/lib/schemas";
+import { CACHE_TAGS, invalidateTag } from "@/lib/cache";
 
 // ==========================================
 // RECORRENTES (Recurring Expenses)
@@ -177,7 +178,8 @@ export async function processarRecorrencias() {
     gerados++;
   }
 
-  revalidatePath("/");
   revalidatePath("/transacoes");
+  revalidatePath("/recorrentes");
+  invalidateTag(CACHE_TAGS.dashboard);
   return { success: true, message: `${gerados} transações geradas.` };
 }

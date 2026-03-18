@@ -3,6 +3,7 @@
 import { createClient } from "@/utils/supabase/server";
 import { revalidatePath } from "next/cache";
 import { InvestimentoSchema, IdSchema } from "@/lib/schemas";
+import { CACHE_TAGS, invalidateTag } from "@/lib/cache";
 
 // ==========================================
 // INVESTIMENTOS (XP, etc.)
@@ -56,8 +57,8 @@ export async function createInvestimento(formData: FormData) {
 
   if (error) return { error: error.message };
 
-  revalidatePath("/");
   revalidatePath("/investimentos");
+  invalidateTag(CACHE_TAGS.dashboard);
   return { success: true };
 }
 
@@ -79,8 +80,8 @@ export async function updateInvestimento(id: string, formData: FormData) {
 
   if (error) return { error: error.message };
 
-  revalidatePath("/");
   revalidatePath("/investimentos");
+  invalidateTag(CACHE_TAGS.dashboard);
   return { success: true };
 }
 
@@ -98,7 +99,7 @@ export async function deleteInvestimento(id: string) {
     .match({ id, user_id: user.id });
 
   if (error) return { error: error.message };
-  revalidatePath("/");
   revalidatePath("/investimentos");
+  invalidateTag(CACHE_TAGS.dashboard);
   return { success: true };
 }

@@ -3,6 +3,7 @@
 import { createClient } from "@/utils/supabase/server";
 import { revalidatePath } from "next/cache";
 import { MetaSchema, IdSchema } from "@/lib/schemas";
+import { CACHE_TAGS, invalidateTag } from "@/lib/cache";
 
 // ==========================================
 // METAS (Goals)
@@ -49,8 +50,8 @@ export async function createMeta(formData: FormData) {
 
   if (error) return { error: error.message };
 
-  revalidatePath("/");
   revalidatePath("/metas");
+  invalidateTag(CACHE_TAGS.dashboard);
   return { success: true };
 }
 
@@ -80,8 +81,8 @@ export async function updateMeta(id: string, formData: FormData) {
 
   if (error) return { error: error.message };
   
-  revalidatePath("/");
   revalidatePath("/metas");
+  invalidateTag(CACHE_TAGS.dashboard);
   return { success: true };
 }
 
@@ -99,7 +100,7 @@ export async function deleteMeta(id: string) {
     .match({ id, user_id: user.id });
 
   if (error) return { error: error.message };
-  revalidatePath("/");
   revalidatePath("/metas");
+  invalidateTag(CACHE_TAGS.dashboard);
   return { success: true };
 }

@@ -1,8 +1,10 @@
 "use server";
 
 import { createClient } from "@/utils/supabase/server";
-import { revalidatePath } from "next/cache";
+import { createAdminClient } from "@/utils/supabase/admin";
+import { revalidatePath, unstable_cache } from "next/cache";
 import { OrcamentoSchema } from "@/lib/schemas";
+import { CACHE_TAGS, invalidateTag } from "@/lib/cache";
 
 // ==========================================
 // ORÇAMENTOS (Budgets)
@@ -22,37 +24,62 @@ export async function getOrcamentos() {
   return data;
 }
 
+const getCachedOrcamentoStatus = unstable_cache(
+  async (userId: string) => {
+    const supabase = createAdminClient();
+    const { data, error } = await supabase
+      .from("vw_orcamento_status")
+      .select("*")
+      .eq("user_id", userId);
+
+    if (error) {
+      console.error("Erro ao buscar status do orçamento:", error);
+      return [];
+    }
+
+    return data.map((item: any) => ({
+      categoria: item.categoria,
+      gasto_atual: item.gasto_atual,
+      limite: item.limite,
+      percentual: item.limite > 0 ? (item.gasto_atual / item.limite) * 100 : 0,
+    }));
+  },
+  ["orcamento-status"],
+  { revalidate: 60, tags: [CACHE_TAGS.dashboard] }
+);
+
 export async function getOrcamentoStatus() {
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("vw_orcamento_status")
-    .select("*");
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
 
-  if (error) {
-    console.error("Erro ao buscar status do orçamento:", error);
-    return [];
-  }
-  
-  // Mapper para garantir compatibilidade com componentes de UI
-  return data.map((item: any) => ({
-    categoria: item.categoria,
-    gasto_atual: item.gasto_atual,
-    limite: item.limite,
-    percentual: item.limite > 0 ? (item.gasto_atual / item.limite) * 100 : 0
-  }));
+  return getCachedOrcamentoStatus(user.id);
 }
+
+const getCached503020Metrics = unstable_cache(
+  async (userId: string) => {
+    const supabase = createAdminClient();
+    const { data, error } = await supabase
+      .from("vw_503020_analysis")
+      .select("*")
+      .eq("user_id", userId);
+
+    if (error) {
+      console.error("Erro ao buscar métricas 50/30/20:", error);
+      return [];
+    }
+    return data;
+  },
+  ["503020-metrics"],
+  { revalidate: 60, tags: [CACHE_TAGS.dashboard] }
+);
 
 export async function get503020Metrics() {
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("vw_503020_analysis")
-    .select("*");
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
 
-  if (error) {
-    console.error("Erro ao buscar métricas 50/30/20:", error);
-    return [];
-  }
-  return data;
+  return getCached503020Metrics(user.id);
 }
 
 export async function createOrcamento(formData: FormData) {
@@ -82,6 +109,7 @@ export async function createOrcamento(formData: FormData) {
   }
 
   revalidatePath("/orcamentos");
+  invalidateTag(CACHE_TAGS.dashboard);
   return { success: true };
 }
 
@@ -94,5 +122,6 @@ export async function deleteOrcamento(id: string) {
 
   if (error) return { error: error.message };
   revalidatePath("/orcamentos");
+  invalidateTag(CACHE_TAGS.dashboard);
   return { success: true };
 }

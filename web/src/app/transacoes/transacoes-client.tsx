@@ -3,7 +3,7 @@
 import { useState, useTransition, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { Card, CardContent } from '@/components/ui/card'
-import { Trash2, Calendar, FileText, ArrowUpRight, ArrowDownRight, Edit3, Upload, Search, Filter, Download } from 'lucide-react'
+import { Trash2, Calendar, FileText, ArrowUpRight, ArrowDownRight, Edit3, Upload, Search, Filter, Download, Split } from 'lucide-react'
 import { deleteTransaction } from "@/actions/transactions";
 import { AddTransactionDialog } from '@/components/add-transaction-dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
@@ -20,6 +20,7 @@ interface Transaction {
   tipo: string
   data: string
   responsavel?: string
+  split_group_id?: string | null
 }
 
 interface TransacoesClientProps {
@@ -332,7 +333,14 @@ export function TransacoesClientShell({ initialData, initialCartoes }: Transacoe
                         {formatDate(tx.data)}
                       </td>
                       <td className="px-6 py-4 font-medium text-foreground">
-                        {tx.descricao}
+                        <span className="flex items-center gap-2">
+                          {tx.descricao}
+                          {tx.split_group_id && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-primary/10 text-primary text-[10px] font-semibold uppercase tracking-wider">
+                              <Split className="w-3 h-3" /> Split
+                            </span>
+                          )}
+                        </span>
                       </td>
                       <td className="px-6 py-4">
                         <span className="px-2.5 py-0.5 rounded-full bg-secondary text-xs font-medium text-secondary-foreground border border-border">

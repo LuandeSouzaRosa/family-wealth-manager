@@ -43,7 +43,7 @@ export async function createCategoria(formData: FormData) {
     return { error: error.message };
   }
 
-  revalidatePath("/");
+  revalidatePath("/categorias");
   return { success: true };
 }
 
@@ -61,7 +61,7 @@ export async function deleteCategoria(id: string) {
     .match({ id, user_id: user.id });
 
   if (error) return { error: error.message };
-  revalidatePath("/");
+  revalidatePath("/categorias");
   return { success: true };
 }
 

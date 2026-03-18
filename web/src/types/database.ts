@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -496,6 +496,7 @@ export type Database = {
           origem: string
           pluggy_transaction_id: string | null
           responsavel: string
+          split_group_id: string | null
           status: string | null
           tag: string | null
           tipo: string
@@ -514,6 +515,7 @@ export type Database = {
           origem?: string
           pluggy_transaction_id?: string | null
           responsavel: string
+          split_group_id?: string | null
           status?: string | null
           tag?: string | null
           tipo: string
@@ -532,6 +534,7 @@ export type Database = {
           origem?: string
           pluggy_transaction_id?: string | null
           responsavel?: string
+          split_group_id?: string | null
           status?: string | null
           tag?: string | null
           tipo?: string

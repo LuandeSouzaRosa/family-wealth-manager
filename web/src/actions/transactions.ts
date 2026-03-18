@@ -2,8 +2,9 @@
 
 import { createClient } from "@/utils/supabase/server";
 import { revalidatePath } from "next/cache";
-import { TransactionSchema, IdSchema } from "@/lib/schemas";
+import { TransactionSchema, SplitTransactionSchema, IdSchema } from "@/lib/schemas";
 import { z } from "zod";
+import { CACHE_TAGS, invalidateTag } from "@/lib/cache";
 
 // ==========================================
 // TRANSAÇÕES
@@ -55,9 +56,74 @@ export async function createTransaction(formData: FormData) {
     return { error: error.message };
   }
 
-  // 4. Revalidar cache do Next.js
-  revalidatePath("/");
   revalidatePath("/transacoes");
+  invalidateTag(CACHE_TAGS.dashboard);
+  return { success: true };
+}
+
+// ==========================================
+// SPLIT TRANSACTION (P3.12)
+// ==========================================
+
+export async function createSplitTransaction(formData: FormData) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Sessão expirada. Faça login novamente." };
+
+  // Parse splits from FormData
+  const splitsRaw: { responsavel: string; valor: number }[] = [];
+  let i = 0;
+  while (formData.get(`splits[${i}].responsavel`)) {
+    splitsRaw.push({
+      responsavel: formData.get(`splits[${i}].responsavel`) as string,
+      valor: parseFloat(formData.get(`splits[${i}].valor`) as string),
+    });
+    i++;
+  }
+
+  const data = {
+    descricao: formData.get("descricao") as string,
+    valor_total: parseFloat(formData.get("valor") as string),
+    categoria: formData.get("categoria") as string,
+    tipo: formData.get("tipo") as "Entrada" | "Saída" | "Transferência",
+    data: formData.get("data") as string || new Date().toISOString(),
+    conta_id: formData.get("conta_id") as string || null,
+    cartao_id: formData.get("cartao_id") as string || null,
+    status: (formData.get("status") as "Realizado" | "Agendado" | "Pendente") || "Realizado",
+    splits: splitsRaw,
+  };
+
+  const parsed = SplitTransactionSchema.safeParse(data);
+  if (!parsed.success) {
+    console.error("Erro de validação split:", parsed.error.format());
+    return { error: "Campos inválidos. Verifique os valores do split." };
+  }
+
+  const splitGroupId = crypto.randomUUID();
+  const rows = parsed.data.splits.map((split) => ({
+    descricao: parsed.data.descricao,
+    valor: split.valor,
+    categoria: parsed.data.categoria,
+    tipo: parsed.data.tipo,
+    data: parsed.data.data?.toISOString() || new Date().toISOString(),
+    conta_id: parsed.data.conta_id,
+    cartao_id: parsed.data.cartao_id,
+    status: parsed.data.status || "Realizado",
+    responsavel: split.responsavel,
+    origem: "Manual",
+    user_id: user.id,
+    split_group_id: splitGroupId,
+  }));
+
+  const { error } = await supabase.from("transacoes").insert(rows);
+
+  if (error) {
+    console.error("Erro ao inserir split:", error);
+    return { error: error.message };
+  }
+
+  revalidatePath("/transacoes");
+  invalidateTag(CACHE_TAGS.dashboard);
   return { success: true };
 }
 
@@ -69,14 +135,35 @@ export async function deleteTransaction(id: string) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Sessão expirada." };
 
-  const { error } = await supabase
+  // Check if this transaction is part of a split group
+  const { data: tx } = await supabase
     .from("transacoes")
-    .delete()
-    .match({ id, user_id: user.id });
+    .select("split_group_id")
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .single();
 
-  if (error) return { error: error.message };
-  revalidatePath("/");
+  if (tx?.split_group_id) {
+    // Delete entire split group
+    const { error } = await supabase
+      .from("transacoes")
+      .delete()
+      .eq("split_group_id", tx.split_group_id)
+      .eq("user_id", user.id);
+
+    if (error) return { error: error.message };
+  } else {
+    // Normal single delete
+    const { error } = await supabase
+      .from("transacoes")
+      .delete()
+      .match({ id, user_id: user.id });
+
+    if (error) return { error: error.message };
+  }
+
   revalidatePath("/transacoes");
+  invalidateTag(CACHE_TAGS.dashboard);
   return { success: true };
 }
 
@@ -108,8 +195,8 @@ export async function updateTransaction(id: string, formData: FormData) {
     .match({ id, user_id: user.id });
 
   if (error) return { error: error.message };
-  revalidatePath("/");
   revalidatePath("/transacoes");
+  invalidateTag(CACHE_TAGS.dashboard);
   return { success: true };
 }
 
@@ -274,8 +361,8 @@ export async function createTransactionsBatch(transactions: any[]) {
           const { error } = await supabase.from("transacoes").insert(toInsert);
           if (error) return { error: error.message };
           
-          revalidatePath("/");
           revalidatePath("/transacoes");
+          invalidateTag(CACHE_TAGS.dashboard);
           return { 
               success: true, 
               count: toInsert.length, 
@@ -297,7 +384,7 @@ export async function createTransactionsBatch(transactions: any[]) {
     return { error: error.message };
   }
 
-  revalidatePath("/");
   revalidatePath("/transacoes");
+  invalidateTag(CACHE_TAGS.dashboard);
   return { success: true, count: validTransactions.length, skipped: 0 };
 }

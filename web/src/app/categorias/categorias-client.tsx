@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useTransition } from "react"
 import { getCategorias, createCategoria, deleteCategoria } from "@/actions/categories"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -15,7 +15,8 @@ export function CategoriasClient() {
   const [isLoading, setIsLoading] = useState(true)
   const [newCatName, setNewCatName] = useState("")
   const [newCatType, setNewCatType] = useState("Saída")
-  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isPending, startTransition] = useTransition()
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const loadData = async () => {
     setIsLoading(true)
@@ -28,39 +29,42 @@ export function CategoriasClient() {
     loadData()
   }, [])
 
-  const handleCreate = async (e: React.FormEvent) => {
+  const handleCreate = (e: React.FormEvent) => {
     e.preventDefault()
     if (!newCatName) return
 
-    setIsSubmitting(true)
     const formData = new FormData()
     formData.append("nome", newCatName)
     formData.append("tipo", newCatType)
-    formData.append("cor", "#64748b") // Default color for now
-    formData.append("icone", "tag")   // Default icon
+    formData.append("cor", "#64748b")
+    formData.append("icone", "tag")
 
-    const result = await createCategoria(formData)
-    
-    if (result.error) {
+    startTransition(async () => {
+      const result = await createCategoria(formData)
+      if (result.error) {
         toast.error(result.error)
-    } else {
+      } else {
         toast.success("Categoria criada!")
         setNewCatName("")
         loadData()
-    }
-    setIsSubmitting(false)
+      }
+    })
   }
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = (id: string) => {
     if (!confirm("Tem certeza? Transações antigas com essa categoria manterão o nome histórico, mas ela não aparecerá mais para novas.")) return
 
-    const result = await deleteCategoria(id)
-    if (result.error) {
+    setDeletingId(id)
+    startTransition(async () => {
+      const result = await deleteCategoria(id)
+      if (result.error) {
         toast.error("Erro ao excluir: " + result.error)
-    } else {
+      } else {
         toast.success("Categoria removida")
         setCategorias(prev => prev.filter(c => c.id !== id))
-    }
+      }
+      setDeletingId(null)
+    })
   }
 
   return (
@@ -98,8 +102,8 @@ export function CategoriasClient() {
                         </SelectContent>
                     </Select>
                 </div>
-                <Button type="submit" disabled={isSubmitting}>
-                    {isSubmitting ? "Salvando..." : <><Plus className="w-4 h-4 mr-2" /> Adicionar</>}
+                <Button type="submit" disabled={isPending}>
+                    {isPending ? "Salvando..." : <><Plus className="w-4 h-4 mr-2" /> Adicionar</>}
                 </Button>
             </form>
         </CardContent>
@@ -131,6 +135,7 @@ export function CategoriasClient() {
                                 variant="ghost" 
                                 size="icon" 
                                 onClick={() => handleDelete(cat.id)}
+                                disabled={deletingId === cat.id}
                                 className="opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive hover:bg-destructive/10 transition-all"
                             >
                                 <Trash2 className="w-4 h-4" />
@@ -166,6 +171,7 @@ export function CategoriasClient() {
                                 variant="ghost" 
                                 size="icon" 
                                 onClick={() => handleDelete(cat.id)}
+                                disabled={deletingId === cat.id}
                                 className="opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive hover:bg-destructive/10 transition-all"
                             >
                                 <Trash2 className="w-4 h-4" />

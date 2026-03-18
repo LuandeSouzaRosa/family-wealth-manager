@@ -4,6 +4,7 @@ import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { PluggyClient } from "pluggy-sdk";
 import { revalidatePath } from "next/cache";
+import { CACHE_TAGS, invalidateTag } from "@/lib/cache";
 
 // ==========================================
 // PLUGGY SYNC SERVER ACTIONS
@@ -220,9 +221,9 @@ export async function syncPluggyTransactions(pluggyItemId: string) {
       .update({ last_sync_at: new Date().toISOString() })
       .eq("pluggy_item_id", pluggyItemId);
 
-    revalidatePath("/");
     revalidatePath("/transacoes");
     revalidatePath("/contas");
+    invalidateTag(CACHE_TAGS.dashboard);
 
     return { success: true, inserted: totalInserted, skipped: totalSkipped };
   } catch (err: any) {

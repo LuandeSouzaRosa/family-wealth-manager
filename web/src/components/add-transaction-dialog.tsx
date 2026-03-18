@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { CalendarIcon, Plus } from "lucide-react"
+import { CalendarIcon, Plus, Split } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -43,7 +43,7 @@ import {
 } from "@/components/ui/select"
 
 import { getContasBancarias } from "@/actions/accounts"
-import { createTransaction } from "@/actions/transactions"
+import { createTransaction, createSplitTransaction } from "@/actions/transactions"
 import { getCategorias } from "@/actions/categories"
 // CATEGORIAS_ENTRADA e CATEGORIAS_SAIDA removidos como fallback estático, usaremos dinâmico
 
@@ -54,6 +54,9 @@ export function AddTransactionDialog({ children, cartoes = [] }: { children?: Re
   const [isPending, startTransition] = React.useTransition()
   const [contas, setContas] = React.useState<any[]>([])
   const [categoriasDB, setCategoriasDB] = React.useState<any[]>([])
+  const [isSplit, setIsSplit] = React.useState(false)
+  const [splitLuan, setSplitLuan] = React.useState("")
+  const [splitLuana, setSplitLuana] = React.useState("")
 
   React.useEffect(() => {
     if (open) {
@@ -85,7 +88,6 @@ export function AddTransactionDialog({ children, cartoes = [] }: { children?: Re
 
   function onSubmit(values: z.infer<typeof TransactionSchema>) {
     startTransition(async () => {
-      // Usar FormData para enviar para a Server Action
       const formData = new FormData()
       formData.append("descricao", values.descricao)
       formData.append("valor", String(values.valor))
@@ -95,8 +97,6 @@ export function AddTransactionDialog({ children, cartoes = [] }: { children?: Re
           formData.append("data", values.data.toISOString())
       }
       
-      // Lógica de seleção de conta/cartão simplificada
-      // O schema centralizado já tem os campos opcionais
       if (values.conta_id && values.conta_id !== "none") {
         formData.append("conta_id", values.conta_id)
       }
@@ -104,13 +104,26 @@ export function AddTransactionDialog({ children, cartoes = [] }: { children?: Re
         formData.append("cartao_id", values.cartao_id)
       }
 
-      const result = await createTransaction(formData)
+      let result: { error?: string; success?: boolean }
+
+      if (isSplit) {
+        formData.append("splits[0].responsavel", "Luan")
+        formData.append("splits[0].valor", splitLuan)
+        formData.append("splits[1].responsavel", "Luana")
+        formData.append("splits[1].valor", splitLuana)
+        result = await createSplitTransaction(formData)
+      } else {
+        result = await createTransaction(formData)
+      }
 
       if (result.error) {
         form.setError("root", { message: result.error })
       } else {
         setOpen(false)
         form.reset()
+        setIsSplit(false)
+        setSplitLuan("")
+        setSplitLuana("")
       }
     })
   }
@@ -336,9 +349,88 @@ export function AddTransactionDialog({ children, cartoes = [] }: { children?: Re
                 />
             </div>
 
+            {/* Split Toggle (P3.12) */}
+            <div className="border border-border rounded-lg p-3 space-y-3">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isSplit}
+                  onChange={(e) => {
+                    setIsSplit(e.target.checked)
+                    if (!e.target.checked) {
+                      setSplitLuan("")
+                      setSplitLuana("")
+                    }
+                  }}
+                  className="rounded border-input"
+                />
+                <Split className="w-4 h-4 text-muted-foreground" />
+                <span className="text-sm font-medium">Dividir entre responsáveis</span>
+              </label>
+
+              {isSplit && (() => {
+                const valorTotal = form.watch("valor") || 0
+                const somaAtual = (parseFloat(splitLuan) || 0) + (parseFloat(splitLuana) || 0)
+                const somaCorreta = valorTotal > 0 && Math.abs(somaAtual - valorTotal) < 0.01
+
+                return (
+                  <div className="space-y-3 pl-6">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const metade = (valorTotal / 2).toFixed(2)
+                        setSplitLuan(metade)
+                        setSplitLuana(metade)
+                      }}
+                      className="text-xs text-primary hover:underline font-medium"
+                    >
+                      ⚡ Dividir 50/50
+                    </button>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium text-muted-foreground">Luan</label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          placeholder="0.00"
+                          value={splitLuan}
+                          onChange={(e) => setSplitLuan(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium text-muted-foreground">Luana</label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          placeholder="0.00"
+                          value={splitLuana}
+                          onChange={(e) => setSplitLuana(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <div className={cn(
+                      "text-xs font-medium",
+                      somaCorreta ? "text-emerald-500" : "text-red-500"
+                    )}>
+                      Soma: R$ {somaAtual.toFixed(2)} / R$ {valorTotal.toFixed(2)}
+                      {!somaCorreta && valorTotal > 0 && " — valores não conferem"}
+                    </div>
+                  </div>
+                )
+              })()}
+            </div>
+
             <DialogFooter>
-              <Button type="submit" disabled={isPending} data-testid="btn-salvar-transacao">
-                {isPending ? "Salvando..." : "Salvar Transação"}
+              <Button 
+                type="submit" 
+                disabled={isPending || (isSplit && (() => {
+                  const v = form.watch("valor") || 0
+                  const s = (parseFloat(splitLuan) || 0) + (parseFloat(splitLuana) || 0)
+                  return v <= 0 || Math.abs(s - v) >= 0.01
+                })())} 
+                data-testid="btn-salvar-transacao"
+              >
+                {isPending ? "Salvando..." : isSplit ? "Salvar Split" : "Salvar Transação"}
               </Button>
             </DialogFooter>
           </form>

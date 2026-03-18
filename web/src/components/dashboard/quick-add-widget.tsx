@@ -1,68 +1,86 @@
 "use client"
 
-import { useState } from "react"
+import { useTransition, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Plus, X, ArrowUpRight, ArrowDownRight, Zap } from "lucide-react"
+import { Plus, ArrowUpRight, ArrowDownRight, Zap, Sparkles } from "lucide-react"
 import { createTransaction } from "@/actions/transactions"
+import { parseQuickAdd } from "@/lib/quick-add-parser"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 
 export function QuickAddWidget() {
   const [isOpen, setIsOpen] = useState(false)
   const [inputValue, setInputValue] = useState("")
-  const [isPending, setIsPending] = useState(false)
-  const [type, setType] = useState<"Saída" | "Entrada">("Saída")
+  const [isPending, startTransition] = useTransition()
+  const [preview, setPreview] = useState<{
+    descricao: string
+    valor: number
+    tipo: "Entrada" | "Saída"
+    categoria: string
+    data: Date
+  } | null>(null)
 
-  // Parser inteligente de texto natural
-  // Ex: "50 almoço" -> { valor: 50, descricao: "almoço" }
-  const parseInput = (text: string) => {
-    // Regex para capturar o primeiro número (inteiro ou decimal)
-    const valueMatch = text.match(/(\d+([.,]\d+)?)/)
-    
-    if (!valueMatch) return null
-
-    const valorStr = valueMatch[0].replace(',', '.')
-    const valor = parseFloat(valorStr)
-    
-    // O resto é descrição
-    const descricao = text.replace(valueMatch[0], '').trim() || "Gasto Rápido"
-
-    return { valor, descricao }
+  const handleInputChange = (value: string) => {
+    setInputValue(value)
+    if (value.trim().length > 1) {
+      const parsed = parseQuickAdd(value)
+      setPreview(parsed)
+    } else {
+      setPreview(null)
+    }
   }
 
-  const handleSubmit = async (e?: React.FormEvent) => {
+  const handleSubmit = (e?: React.FormEvent) => {
     e?.preventDefault()
     if (!inputValue) return
 
-    const parsed = parseInput(inputValue)
+    const parsed = parseQuickAdd(inputValue)
     if (!parsed) {
-        toast.error("Não entendi o valor. Digite ex: '50 almoço'")
-        return
+      toast.error("Não entendi. Digite ex: 'ifood 45' ou '50 almoço'")
+      return
     }
 
-    setIsPending(true)
-    
-    const formData = new FormData()
-    formData.append("descricao", parsed.descricao)
-    formData.append("valor", String(parsed.valor))
-    formData.append("tipo", type)
-    formData.append("categoria", "Outros") // Categoria padrão
-    formData.append("data", new Date().toISOString())
-    formData.append("responsavel", "Casal") // Padrão
-    formData.append("status", "Realizado")
+    startTransition(async () => {
+      const formData = new FormData()
+      formData.append("descricao", parsed.descricao)
+      formData.append("valor", String(parsed.valor))
+      formData.append("tipo", parsed.tipo)
+      formData.append("categoria", parsed.categoria)
+      formData.append("data", parsed.data.toISOString())
+      formData.append("status", "Realizado")
 
-    const result = await createTransaction(formData)
+      const result = await createTransaction(formData)
 
-    if (result.error) {
+      if (result.error) {
         toast.error(result.error)
-    } else {
-        toast.success(`Transação de R$ ${parsed.valor} adicionada!`)
+      } else {
+        const tipoLabel = parsed.tipo === "Entrada" ? "Receita" : "Despesa"
+        toast.success(
+          `${tipoLabel}: ${parsed.descricao} — R$ ${parsed.valor.toFixed(2)}`,
+          { description: `Categoria: ${parsed.categoria}` }
+        )
         setInputValue("")
+        setPreview(null)
         setIsOpen(false)
-    }
-    setIsPending(false)
+      }
+    })
+  }
+
+  const isToday = (d: Date) => {
+    const today = new Date()
+    return d.getDate() === today.getDate() &&
+      d.getMonth() === today.getMonth() &&
+      d.getFullYear() === today.getFullYear()
+  }
+
+  const formatPreviewDate = (d: Date) => {
+    if (isToday(d)) return "Hoje"
+    const yesterday = new Date()
+    yesterday.setDate(yesterday.getDate() - 1)
+    if (d.getDate() === yesterday.getDate() && d.getMonth() === yesterday.getMonth()) return "Ontem"
+    return d.toLocaleDateString("pt-BR")
   }
 
   return (
@@ -75,59 +93,82 @@ export function QuickAddWidget() {
             exit={{ opacity: 0, y: 20, scale: 0.9 }}
             className="mb-4 w-[calc(100vw-3rem)] max-w-sm bg-background/95 backdrop-blur-xl border border-border shadow-2xl rounded-2xl p-4"
           >
-            <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-semibold flex items-center gap-2">
-                    <Zap className="w-4 h-4 text-amber-500" /> Adição Rápida
-                </h3>
-                <div className="flex bg-muted rounded-lg p-1">
-                    <button 
-                        onClick={() => setType("Saída")}
-                        className={cn(
-                            "px-3 py-1 text-xs font-medium rounded-md transition-all",
-                            type === "Saída" ? "bg-red-500 text-white shadow-sm" : "text-muted-foreground hover:text-foreground"
-                        )}
-                    >
-                        Saída
-                    </button>
-                    <button 
-                        onClick={() => setType("Entrada")}
-                        className={cn(
-                            "px-3 py-1 text-xs font-medium rounded-md transition-all",
-                            type === "Entrada" ? "bg-emerald-500 text-white shadow-sm" : "text-muted-foreground hover:text-foreground"
-                        )}
-                    >
-                        Entrada
-                    </button>
-                </div>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold flex items-center gap-2">
+                <Zap className="w-4 h-4 text-amber-500" /> Adição Rápida
+              </h3>
+              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                <Sparkles className="w-3 h-3" /> Smart Parse
+              </div>
             </div>
 
             <form onSubmit={handleSubmit} className="flex gap-2">
-                <Input 
-                    autoFocus
-                    placeholder="Ex: 25.90 Padaria"
-                    value={inputValue}
-                    onChange={(e) => setInputValue(e.target.value)}
-                    className="flex-1 h-12 text-lg"
-                />
-                <Button 
-                    type="submit" 
-                    disabled={isPending}
-                    size="icon" 
-                    className={cn(
-                        "h-12 w-12 rounded-xl shrink-0",
-                        type === "Saída" ? "bg-red-500 hover:bg-red-600" : "bg-emerald-500 hover:bg-emerald-600"
-                    )}
-                >
-                    {isPending ? (
-                        <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    ) : (
-                        type === "Saída" ? <ArrowDownRight className="w-6 h-6" /> : <ArrowUpRight className="w-6 h-6" />
-                    )}
-                </Button>
+              <Input
+                autoFocus
+                placeholder={`Ex: "ifood 45 ontem" ou "salário 3000"`}
+                value={inputValue}
+                onChange={(e) => handleInputChange(e.target.value)}
+                className="flex-1 h-12 text-base"
+              />
+              <Button
+                type="submit"
+                disabled={isPending || !preview}
+                size="icon"
+                className={cn(
+                  "h-12 w-12 rounded-xl shrink-0",
+                  preview?.tipo === "Entrada"
+                    ? "bg-emerald-500 hover:bg-emerald-600"
+                    : "bg-red-500 hover:bg-red-600"
+                )}
+              >
+                {isPending ? (
+                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : preview?.tipo === "Entrada" ? (
+                  <ArrowUpRight className="w-6 h-6" />
+                ) : (
+                  <ArrowDownRight className="w-6 h-6" />
+                )}
+              </Button>
             </form>
-            <p className="text-xs text-muted-foreground mt-2 text-center">
-                Dica: Digite o valor e o nome (ex: "50 Gasolina")
-            </p>
+
+            {/* Live Preview */}
+            <AnimatePresence mode="wait">
+              {preview ? (
+                <motion.div
+                  key="preview"
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="mt-3 p-3 rounded-xl bg-muted/50 border border-border text-xs space-y-1"
+                >
+                  <div className="flex justify-between items-center">
+                    <span className="font-semibold text-foreground">{preview.descricao}</span>
+                    <span className={cn(
+                      "font-bold tabular-nums",
+                      preview.tipo === "Entrada" ? "text-emerald-500" : "text-red-500"
+                    )}>
+                      {preview.tipo === "Entrada" ? "+" : "-"}R$ {preview.valor.toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="flex gap-3 text-muted-foreground">
+                    <span>{preview.categoria}</span>
+                    <span>•</span>
+                    <span>{formatPreviewDate(preview.data)}</span>
+                    <span>•</span>
+                    <span>{preview.tipo}</span>
+                  </div>
+                </motion.div>
+              ) : (
+                <motion.p
+                  key="hint"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="text-xs text-muted-foreground mt-2 text-center"
+                >
+                  Dica: "uber 23 ontem" • "salário 3000" • "mercado 120"
+                </motion.p>
+              )}
+            </AnimatePresence>
           </motion.div>
         )}
       </AnimatePresence>
@@ -137,8 +178,8 @@ export function QuickAddWidget() {
         whileTap={{ scale: 0.95 }}
         onClick={() => setIsOpen(!isOpen)}
         className={cn(
-            "h-14 w-14 rounded-full shadow-lg flex items-center justify-center transition-all duration-300",
-            isOpen ? "bg-muted text-foreground rotate-45" : "bg-primary text-primary-foreground"
+          "h-14 w-14 rounded-full shadow-lg flex items-center justify-center transition-all duration-300",
+          isOpen ? "bg-muted text-foreground rotate-45" : "bg-primary text-primary-foreground"
         )}
       >
         <Plus className="w-7 h-7" />
