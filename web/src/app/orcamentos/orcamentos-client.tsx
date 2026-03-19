@@ -93,7 +93,7 @@ export function OrcamentosClientShell({ orcamentos, statusData }: OrcamentosClie
         className="grid grid-cols-1 md:grid-cols-2 gap-6"
       >
         {data.length === 0 ? (
-           <div className="col-span-full text-center py-16 border border-dashed border-muted-foreground/20 rounded-2xl bg-card/50 flex flex-col items-center justify-center opacity-80">
+           <div className="col-span-full text-center py-10 md:py-16 border border-dashed border-muted-foreground/20 rounded-2xl bg-card/50 flex flex-col items-center justify-center opacity-80">
              <PiggyBank className="h-12 w-12 text-muted-foreground/30 mb-4" />
              <p className="text-base font-medium text-foreground">
                {responsavel === "Todos" ? "Nenhum orçamento definido" : `Nenhum orçamento encontrado para ${responsavel}`}

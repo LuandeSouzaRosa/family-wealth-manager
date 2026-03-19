@@ -318,11 +318,11 @@ export function TransacoesClientShell({ initialData, initialCartoes }: Transacoe
           <table className="w-full text-sm text-left">
             <thead className="text-xs uppercase bg-muted text-muted-foreground tracking-wider">
               <tr>
-                <th scope="col" className="px-6 py-4 font-medium">Data</th>
-                <th scope="col" className="px-6 py-4 font-medium">Descrição</th>
-                <th scope="col" className="px-6 py-4 font-medium">Categoria</th>
-                <th scope="col" className="px-6 py-4 font-medium text-right">Valor</th>
-                <th scope="col" className="px-6 py-4 font-medium text-center">Ações</th>
+                <th scope="col" className="px-3 py-3 md:px-6 md:py-4 font-medium">Data</th>
+                <th scope="col" className="px-3 py-3 md:px-6 md:py-4 font-medium">Descrição</th>
+                <th scope="col" className="px-3 py-3 md:px-6 md:py-4 font-medium">Categoria</th>
+                <th scope="col" className="px-3 py-3 md:px-6 md:py-4 font-medium text-right">Valor</th>
+                <th scope="col" className="px-3 py-3 md:px-6 md:py-4 font-medium text-center">Ações</th>
               </tr>
             </thead>
             <tbody>
@@ -359,10 +359,10 @@ export function TransacoesClientShell({ initialData, initialCartoes }: Transacoe
                       className="border-b border-border hover:bg-muted/50 transition-colors group"
                       data-testid="transaction-row"
                     >
-                      <td className="px-6 py-4 whitespace-nowrap text-muted-foreground font-mono">
+                      <td className="px-3 py-3 md:px-6 md:py-4 whitespace-nowrap text-muted-foreground font-mono">
                         {formatDate(tx.data)}
                       </td>
-                      <td className="px-6 py-4 font-medium text-foreground">
+                      <td className="px-3 py-3 md:px-6 md:py-4 font-medium text-foreground">
                         <div className="flex flex-col gap-1">
                           <span className="flex items-center gap-2">
                             {tx.descricao}
@@ -374,16 +374,16 @@ export function TransacoesClientShell({ initialData, initialCartoes }: Transacoe
                           )}
                         </div>
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="px-3 py-3 md:px-6 md:py-4">
                         <span className="px-2.5 py-0.5 rounded-full bg-secondary text-xs font-medium text-secondary-foreground border border-border">
                           {tx.categoria}
                         </span>
                       </td>
-                      <td className={`px-6 py-4 text-right font-medium tabular-nums ${isIncome ? 'text-emerald-400' : 'text-foreground/90'}`}>
+                      <td className={`px-3 py-3 md:px-6 md:py-4 text-right font-medium tabular-nums ${isIncome ? 'text-emerald-400' : 'text-foreground/90'}`}>
                         {isIncome ? '+' : '-'}{formatCurrency(tx.valor)}
                       </td>
-                      <td className="px-6 py-4 text-center">
-                        <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <td className="px-3 py-3 md:px-6 md:py-4 text-center">
+                        <div className="flex items-center justify-center gap-4 md:gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                           
                           <QuickEditTransactionDialog 
                             transaction={{

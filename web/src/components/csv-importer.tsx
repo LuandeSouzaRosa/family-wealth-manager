@@ -389,8 +389,8 @@ export function CsvImporter() {
              </div>
           </div>
 
-          <div className="rounded-md border bg-card overflow-hidden">
-            <Table>
+          <div className="rounded-md border bg-card overflow-hidden overflow-x-auto">
+            <Table className="min-w-[900px]">
               <TableHeader>
                 <TableRow className="bg-muted/50">
                   <TableHead>Status / Ação</TableHead>
