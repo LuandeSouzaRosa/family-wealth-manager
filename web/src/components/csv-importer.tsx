@@ -272,15 +272,15 @@ export function CsvImporter() {
           animate={{ opacity: 1, y: 0 }}
           className="space-y-4"
         >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <FileSpreadsheet className="h-5 w-5" />
-              <span className="font-medium text-foreground">{fileName}</span>
-              <span className="text-sm">({data.length} linhas)</span>
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center gap-2 text-muted-foreground overflow-hidden">
+              <FileSpreadsheet className="h-5 w-5 shrink-0" />
+              <span className="font-medium text-foreground truncate">{fileName}</span>
+              <span className="text-sm shrink-0">({data.length} linhas)</span>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
                <Select value={contaSelecionada} onValueChange={setContaSelecionada}>
-                  <SelectTrigger className="w-[250px]">
+                  <SelectTrigger className="w-full sm:w-[250px]">
                     <SelectValue placeholder="Vincular a uma conta..." />
                   </SelectTrigger>
                   <SelectContent>
@@ -293,7 +293,7 @@ export function CsvImporter() {
                   </SelectContent>
                 </Select>
 
-                <Button variant="ghost" size="sm" onClick={() => { setData([]); setSaldoInicialInfo(null); }} className="text-destructive hover:text-destructive hover:bg-destructive/10">
+                <Button variant="ghost" size="sm" onClick={() => { setData([]); setSaldoInicialInfo(null); }} className="w-full sm:w-auto text-destructive hover:text-destructive hover:bg-destructive/10">
                   Cancelar
                 </Button>
             </div>
