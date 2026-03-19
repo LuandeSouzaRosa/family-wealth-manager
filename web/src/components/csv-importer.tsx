@@ -207,7 +207,7 @@ export function CsvImporter() {
             
             inserts.push({
                 data: primeiraData.toISOString(),
-                descricao: "Saldo Inicial Acumulado (Ajuste Automático)",
+                descricao: "Ajuste de saldo inicial",
                 valor: Math.abs(saldoAnterior),
                 categoria: "Outros", 
                 responsavel: "Casal",
@@ -367,10 +367,17 @@ export function CsvImporter() {
                     <li>Conta de Destino: <strong>{contaAtual ? contaAtual.nome : 'Geral'}</strong></li>
                     <li>Movimento deste CSV: <strong>{((data.filter(t => t.tipo === 'Entrada').reduce((acc, t) => acc + t.valor, 0)) - (data.filter(t => t.tipo === 'Saída').reduce((acc, t) => acc + t.valor, 0))).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong></li>
                     <li>Saldo Final Informado: <strong>{saldoInicialInfo.calculado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong></li>
-                    <li className="text-foreground font-medium">
-                        O sistema criará um ajuste automático de <u>{Math.abs(saldoInicialInfo.diferenca).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</u> ({saldoInicialInfo.diferenca > 0 ? 'Entrada' : 'Saída'}) na conta {contaAtual ? contaAtual.nome : 'Geral'} para equalizar o saldo anterior.
-                    </li>
                 </ul>
+                {Math.abs(saldoInicialInfo.diferenca) > 0.01 && (
+                    <div className="mt-2 p-3 bg-background/50 rounded-md border border-blue-500/10 text-foreground">
+                        <p className="font-medium text-blue-600 dark:text-blue-400 mb-1 flex items-center gap-2 text-sm">
+                            <Info className="h-4 w-4" /> Ajuste de saldo
+                        </p>
+                        <p className="text-muted-foreground text-xs leading-relaxed">
+                            Para que os valores fechem exatamente com o saldo informado, será criado um lançamento automático de <strong>{Math.abs(saldoInicialInfo.diferenca).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong> antes da primeira transação deste arquivo.
+                        </p>
+                    </div>
+                )}
             </motion.div>
           )}
 
