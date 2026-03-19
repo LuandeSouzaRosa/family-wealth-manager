@@ -314,7 +314,9 @@ export function TransacoesClientShell({ initialData, initialCartoes }: Transacoe
 
       {/* Transactions List */}
       <Card className="border border-border shadow-sm bg-card overflow-hidden">
-        <div className="overflow-x-auto">
+        
+        {/* Desktop View (Table) */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm text-left">
             <thead className="text-xs uppercase bg-muted text-muted-foreground tracking-wider">
               <tr>
@@ -412,6 +414,83 @@ export function TransacoesClientShell({ initialData, initialCartoes }: Transacoe
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile View (Cards) */}
+        <div className="md:hidden flex flex-col divide-y divide-border">
+          {filteredData.length === 0 ? (
+            <div className="p-10 flex flex-col items-center justify-center text-center space-y-4">
+              <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-2">
+                <FileText className="w-8 h-8 text-primary" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-xl font-medium tracking-tight">Comece importando seu extrato</h3>
+                <p className="text-muted-foreground w-full max-w-[250px] mx-auto text-sm">
+                  Suba seu extrato CSV do banco para conciliar tudo de vez.
+                </p>
+              </div>
+              <Link href="/conciliacao" className="mt-2">
+                  <Button className="gap-2 shadow-sm text-xs h-9">
+                    <Upload size={14} /> Importar Extrato
+                  </Button>
+              </Link>
+            </div>
+          ) : (
+            filteredData.map((tx, idx) => {
+              const isIncome = tx.tipo === 'Entrada'
+              return (
+                <motion.div 
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: idx * 0.02, duration: 0.3 }}
+                  key={`mob-${tx.id}`}
+                  className="p-4 flex flex-col gap-3 hover:bg-muted/50 transition-colors"
+                >
+                  <div className="flex justify-between items-start gap-4">
+                    <div className="flex flex-col gap-1 overflow-hidden">
+                      <span className="font-medium text-foreground leading-tight">{tx.descricao}</span>
+                      {tx.split_group_id && (
+                        <span className="inline-flex w-fit items-center gap-1 px-1.5 py-0.5 rounded-md bg-indigo-500/10 text-indigo-500 border border-indigo-500/20 text-[10px] font-semibold uppercase tracking-wider">
+                          <Split className="w-3 h-3" /> Split
+                        </span>
+                      )}
+                    </div>
+                    <span className={`font-semibold shrink-0 tabular-nums ${isIncome ? 'text-emerald-500' : 'text-foreground'}`}>
+                      {isIncome ? '+' : '-'}{formatCurrency(tx.valor)}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center flex-wrap gap-2 mt-1">
+                    <span className="text-xs text-muted-foreground font-mono bg-muted/50 px-2 py-0.5 rounded-md">{formatDate(tx.data)}</span>
+                    <span className="px-2 py-0.5 rounded-md bg-secondary text-[10px] font-medium text-secondary-foreground border border-border truncate max-w-[120px]">{tx.categoria}</span>
+                    <span className="px-2 py-0.5 rounded-md border border-border/50 text-[10px] text-muted-foreground">{tx.responsavel || "Casal"}</span>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2 mt-1 pt-3 border-t border-border/30">
+                    <QuickEditTransactionDialog 
+                      transaction={{
+                        id: tx.id,
+                        categoria: tx.categoria,
+                        responsavel: tx.responsavel || "Casal",
+                        split_group_id: tx.split_group_id
+                      }} 
+                      categoriasValidas={uniqueCategories} 
+                    />
+
+                    <button 
+                      disabled={isPending}
+                      onClick={() => handleDelete(tx)}
+                      className="p-1.5 rounded-md bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-colors flex items-center gap-1.5 text-xs px-2.5 font-medium"
+                      title={tx.split_group_id ? "Excluir Grupo Split Inteiro" : "Excluir Lançamento"}
+                    >
+                      <Trash2 size={13} />
+                      Excluir
+                    </button>
+                  </div>
+                </motion.div>
+              )
+            })
+          )}
         </div>
       </Card>
 
