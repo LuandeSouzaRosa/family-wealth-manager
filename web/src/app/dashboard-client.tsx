@@ -11,6 +11,7 @@ import { motion, type Variants } from 'framer-motion'
 import { useFilter } from '@/contexts/filter-context'
 import { useMemo, useState, useEffect } from 'react'
 import Link from 'next/link'
+import { isResponsibleMatch } from '@/lib/filter-utils'
 import { KpiSection } from '@/components/dashboard/kpi-section'
 import { RecentTransactions } from '@/components/dashboard/recent-transactions'
 import { MobileDashboard } from '@/components/dashboard/mobile-dashboard'
@@ -66,10 +67,7 @@ export function DashboardClientShell({
 }: DashboardClientProps) {
   const { responsavel } = useFilter()
 
-  const shouldShow = (itemResponsavel: string) => {
-    if (responsavel === "Todos") return true
-    return itemResponsavel?.toLowerCase() === responsavel.toLowerCase()
-  }
+  const shouldShow = (itemResponsavel: string) => isResponsibleMatch(itemResponsavel, responsavel)
 
   const filteredRecentTx = recentTx.filter(tx => shouldShow(tx.responsavel))
 

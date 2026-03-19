@@ -5,6 +5,7 @@ import { createAdminClient } from "@/utils/supabase/admin";
 import { revalidatePath, unstable_cache } from "next/cache";
 import { OrcamentoSchema } from "@/lib/schemas";
 import { CACHE_TAGS, invalidateTag } from "@/lib/cache";
+import { isResponsibleMatch } from "@/lib/filter-utils";
 
 // ==========================================
 // ORÇAMENTOS (Budgets)
@@ -44,11 +45,8 @@ const getCachedOrcamentoStatus = unstable_cache(
       .gte("data", startOfMonth);
 
     const calcForResponsavel = (filtro: string) => {
-      const validTxs = filtro === "Todos" 
-         ? txs 
-         : txs?.filter(t => t.responsavel === filtro);
-         
-      const validOrcamentos = filtro === "Todos" ? orcamentos : orcamentos?.filter(o => o.responsavel === filtro || o.responsavel === "Casal");
+      const validTxs = txs?.filter(t => isResponsibleMatch(t.responsavel, filtro));
+      const validOrcamentos = orcamentos?.filter(o => isResponsibleMatch(o.responsavel, filtro));
 
       if (!validOrcamentos || validOrcamentos.length === 0) return [];
 
@@ -113,7 +111,7 @@ const getCached503020Metrics = unstable_cache(
       .gte("data", startOfMonth);
 
     const calc503020 = (filtro: string) => {
-        const validTxs = filtro === "Todos" ? txs : txs?.filter(t => t.responsavel === filtro);
+        const validTxs = txs?.filter(t => isResponsibleMatch(t.responsavel, filtro));
         
         const buckets = {
            "Necessidades (50%)": 0,

@@ -37,9 +37,12 @@ describe('Reconciliation Logic', () => {
       const match = findBestMatch(csvRow, candidates);
       expect(match.level).toBe('Exato');
       expect(match.candidateId).toBe('1');
+      expect(match.reasons).toContain('Valor exato');
+      expect(match.reasons).toContain('Data próxima');
+      expect(match.reasons).toContain('Descrição parecida'); // apenas 1 token bateu ('ifood')
     });
 
-    it('deve identificar a transação como Split Group corretamente', () => {
+    it('deve identificar a transação como Split Group corretamente com suas razões', () => {
       const csvRow: CsvRow = {
         descricao: 'CLARO S/A',
         valor: 150.00,
@@ -64,6 +67,8 @@ describe('Reconciliation Logic', () => {
       expect(match.level).toBe('Possível');
       expect(match.candidateId).toBe('split-123');
       expect(match.isSplitGroup).toBe(true);
+      expect(match.reasons).toContain('Valor exato');
+      expect(match.reasons).toContain('Data próxima');
     });
 
     it('deve falhar se a diferença de valor for maior que 0.05', () => {
@@ -86,7 +91,7 @@ describe('Reconciliation Logic', () => {
       expect(match.level).toBe('Sem_Match');
     });
 
-    it('deve priorizar o Match Exato sobre Possível quando há conflito de dias', () => {
+    it('deve priorizar o Match Exato sobre Possível quando há conflito de dias preservando os motivos', () => {
       const csvRow: CsvRow = { descricao: 'Uber', valor: 25.00, data: '2023-10-05', tipo: 'Saída' };
       const candidates: CandidateTransaction[] = [
         { id: '1', descricao: 'Viagem', valor: 25.00, data: '2023-10-01', tipo: 'Saída' }, // 4 days, 0 tokens = Possível
@@ -96,6 +101,9 @@ describe('Reconciliation Logic', () => {
       const match = findBestMatch(csvRow, candidates);
       expect(match.level).toBe('Exato');
       expect(match.candidateId).toBe('2');
+      expect(match.reasons).toContain('Data próxima');
+      expect(match.reasons).toContain('Valor exato');
+      expect(match.reasons).toContain('Descrição parecida');
     });
   });
 });

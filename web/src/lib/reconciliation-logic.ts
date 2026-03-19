@@ -23,6 +23,7 @@ export interface MatchResult {
   candidateId?: string;
   score: number;
   isSplitGroup?: boolean;
+  reasons?: string[];
 }
 
 // Normalização básica: minúsculas, remove pontuação e palavras de ligação
@@ -48,7 +49,7 @@ export function calculateSimilarTokens(desc1: string, desc2: string): number {
 }
 
 export function findBestMatch(csvRow: CsvRow, candidates: CandidateTransaction[]): MatchResult {
-  let bestMatch: MatchResult = { level: "Sem_Match", score: 0 };
+  let bestMatch: MatchResult = { level: "Sem_Match", score: 0, reasons: [] };
   
   const csvDate = new Date(csvRow.data).getTime();
 
@@ -56,9 +57,14 @@ export function findBestMatch(csvRow: CsvRow, candidates: CandidateTransaction[]
     // 1. Tipos devem bater (ou ignorar transferências que o CSV não entende)
     if (candidate.tipo !== csvRow.tipo) continue;
 
+    const reasons: string[] = [];
+
     // 2. Valor deve ser muito próximo (tolerância de centavos por arredondamento de IOF)
     const valDiff = Math.abs(candidate.valor - csvRow.valor);
     if (valDiff > 0.05) continue;
+    
+    if (valDiff === 0) reasons.push("Valor exato");
+    else reasons.push("Valor muito próximo");
 
     // 3. Proximidade de Datas
     const candDate = new Date(candidate.data).getTime();
@@ -67,8 +73,15 @@ export function findBestMatch(csvRow: CsvRow, candidates: CandidateTransaction[]
     // Se a diferença for gigante, ignora
     if (daysDiff > 7) continue;
 
+    if (daysDiff === 0) reasons.push("Mesmo dia");
+    else if (daysDiff <= 3) reasons.push("Data próxima");
+    else reasons.push(`Diferença de ${Math.floor(daysDiff)} dias`);
+
     // 4. Score de Descrição
     const tokenMatches = calculateSimilarTokens(csvRow.descricao, candidate.descricao);
+    
+    if (tokenMatches >= 2) reasons.push("Descrição quase idêntica");
+    else if (tokenMatches === 1) reasons.push("Descrição parecida");
 
     // Regras de Decisão Pura
     let level: MatchLevel = "Sem_Match";
@@ -91,7 +104,8 @@ export function findBestMatch(csvRow: CsvRow, candidates: CandidateTransaction[]
         level,
         score,
         candidateId: candidate.is_split_group ? candidate.split_group_id! : candidate.id,
-        isSplitGroup: !!candidate.is_split_group
+        isSplitGroup: !!candidate.is_split_group,
+        reasons
       };
     }
   }

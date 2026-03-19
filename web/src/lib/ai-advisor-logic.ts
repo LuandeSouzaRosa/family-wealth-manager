@@ -1,3 +1,5 @@
+import { isResponsibleMatch } from "@/lib/filter-utils";
+
 export function generateInsights(
   transactions: any[],
   orcamentos: any[],
@@ -18,7 +20,7 @@ export function generateInsights(
 
   transactions?.forEach(t => {
       const tDate = new Date(t.data);
-      const isTargetResponsavel = responsavelFiltro === "Todos" || t.responsavel === responsavelFiltro;
+      const isTargetResponsavel = isResponsibleMatch(t.responsavel, responsavelFiltro);
 
       if (tDate >= currentMonthStart) {
           if (isTargetResponsavel) {

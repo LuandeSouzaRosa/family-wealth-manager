@@ -9,6 +9,7 @@ import { deleteOrcamento } from "@/actions/budgets";
 import { Progress } from '@/components/ui/progress'
 import { cn } from '@/lib/utils'
 import { useFilter } from '@/contexts/filter-context'
+import { isResponsibleMatch } from '@/lib/filter-utils'
 
 interface Orcamento {
   id: string
@@ -57,10 +58,7 @@ export function OrcamentosClientShell({ orcamentos, statusData }: OrcamentosClie
           gasto: status ? status.gasto_atual : 0,
           percentual: status ? (status.gasto_atual / orc.valor_limite) * 100 : 0
       }
-  }).filter(item => {
-      if (responsavel === "Todos") return true
-      return item.responsavel === responsavel || item.responsavel === "Casal"
-  })
+  }).filter(item => isResponsibleMatch(item.responsavel, responsavel))
 
   return (
     <motion.div 
@@ -75,8 +73,11 @@ export function OrcamentosClientShell({ orcamentos, statusData }: OrcamentosClie
             <PiggyBank className="h-8 w-8 text-primary opacity-80" />
             Metas de <span className="font-semibold text-primary">Gastos</span>
           </h1>
-          <p className="text-muted-foreground font-mono text-sm uppercase tracking-wider">
+          <p className="text-muted-foreground font-mono text-sm uppercase tracking-wider flex items-center gap-2">
             CONTROLE DE ORÇAMENTO MENSAL
+            <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] normal-case tracking-normal font-semibold">
+              Visualizando: {responsavel}
+            </span>
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -94,8 +95,14 @@ export function OrcamentosClientShell({ orcamentos, statusData }: OrcamentosClie
         {data.length === 0 ? (
            <div className="col-span-full text-center py-16 border border-dashed border-muted-foreground/20 rounded-2xl bg-card/50 flex flex-col items-center justify-center opacity-80">
              <PiggyBank className="h-12 w-12 text-muted-foreground/30 mb-4" />
-             <p className="text-base font-medium text-foreground">Nenhum orçamento definido</p>
-             <p className="text-sm text-muted-foreground mt-1">Crie um limite de gastos para acompanhar suas metas financeiras.</p>
+             <p className="text-base font-medium text-foreground">
+               {responsavel === "Todos" ? "Nenhum orçamento definido" : `Nenhum orçamento encontrado para ${responsavel}`}
+             </p>
+             <p className="text-sm text-muted-foreground mt-1">
+               {responsavel === "Todos" 
+                 ? "Crie um limite de gastos para acompanhar suas metas financeiras." 
+                 : "Para gerenciar gastos nesta visão, clique em Adicionar Orçamento."}
+             </p>
            </div>
         ) : (
            data.map(item => {

@@ -10,6 +10,7 @@ import { QuickEditTransactionDialog } from '@/components/quick-edit-dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
 import { Input } from '@/components/ui/input'
 import { useFilter } from '@/contexts/filter-context'
+import { isResponsibleMatch } from '@/lib/filter-utils'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 
@@ -81,7 +82,7 @@ export function TransacoesClientShell({ initialData, initialCartoes }: Transacoe
 
     // 1. Filtrar por Responsável
     if (responsavel !== "Todos") {
-        result = result.filter(tx => tx.responsavel?.toLowerCase() === responsavel.toLowerCase())
+        result = result.filter(tx => isResponsibleMatch(tx.responsavel, responsavel))
     }
 
     // 2. Filtrar por Ano

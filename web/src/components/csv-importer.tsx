@@ -142,7 +142,7 @@ export function CsvImporter() {
                   const match = findBestMatch(row, candidates);
                   let acao: "Novo" | "Conciliar" | "Duplicado" = "Novo";
                   if (match.level === "Exato") acao = "Duplicado"; // Ignore by default
-                  else if (match.level === "Forte" || match.level === "Possível") acao = "Conciliar";
+                  else if (match.level === "Forte") acao = "Conciliar"; // Apenas Forte e Exato se auto-determinam
                   
                   return {
                       ...row,
@@ -150,7 +150,8 @@ export function CsvImporter() {
                       matchLevel: match.level,
                       matchCandidateId: match.candidateId,
                       isSplitGroup: match.isSplitGroup,
-                      matchScore: match.score
+                      matchScore: match.score,
+                      matchReasons: match.reasons
                   };
               });
               setData(reconciledData);
@@ -430,8 +431,22 @@ export function CsvImporter() {
                           <SelectItem value="Duplicado">Ignorar</SelectItem>
                         </SelectContent>
                       </Select>
-                      {row.acao === "Conciliar" && row.isSplitGroup && (
-                          <div className="mt-1 text-[10px] text-blue-500 font-medium">✨ Match: Grupo Split</div>
+                      {row.acao === "Conciliar" && (
+                          <div className="mt-1 flex flex-col gap-0.5">
+                             {row.matchReasons?.length > 0 && (
+                                 <span className="text-[9px] text-muted-foreground leading-tight">
+                                   Motivo: {row.matchReasons.join(" • ")}
+                                 </span>
+                             )}
+                             {row.isSplitGroup && (
+                                 <span className="text-[10px] text-blue-500 font-medium">✨ Match: Grupo Split</span>
+                             )}
+                          </div>
+                      )}
+                      {row.acao === "Novo" && row.matchLevel === "Possível" && (
+                          <div className="mt-1 text-[10px] text-amber-600 font-medium flex items-center gap-1 leading-tight">
+                            <AlertCircle className="w-3 h-3" /> Match possível não selecionado. Revisão recomendada.
+                          </div>
                       )}
                     </TableCell>
                     <TableCell className="font-mono text-xs text-muted-foreground">{row.data}</TableCell>
