@@ -374,3 +374,101 @@ export async function createTransactionsBatch(transactions: any[]) {
   invalidateTag(CACHE_TAGS.dashboard);
   return { success: true, count: validTransactions.length, skipped: 0 };
 }
+
+export interface ReconciliationPayload {
+  inserts: any[];
+  conciliations: { candidateId: string; conta_id: string | null; isSplitGroup?: boolean }[];
+}
+
+export async function processReconciliationBatch(payload: ReconciliationPayload) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Sessão expirada." };
+
+  // 1. Inserir "Novos" usando a lógica validada
+  let insertedCount = 0;
+  if (payload.inserts.length > 0) {
+    const validTransactions = payload.inserts.map(t => {
+      const schema = t.descricao.includes("Saldo Inicial") 
+          ? TransactionSchema.extend({ descricao: z.string() }) 
+          : TransactionSchema;
+      const parsed = schema.safeParse(t);
+      if (!parsed.success) return null;
+      return {
+        ...parsed.data,
+        data: parsed.data.data?.toISOString() || new Date().toISOString(),
+        origem: t.descricao.includes("Saldo Inicial") ? "Sistema" : "Importação",
+        user_id: user.id
+      };
+    }).filter(Boolean);
+
+    if (validTransactions.length > 0) {
+      // Deletar Ajuste de Saldo Antigo se existir novo
+      const novoAjuste = validTransactions.find(t => t.descricao.includes("Saldo Inicial Acumulado"));
+      if (novoAjuste) {
+          await supabase
+              .from("transacoes")
+              .delete()
+              .ilike("descricao", "%Saldo Inicial Acumulado%")
+              .eq("user_id", user.id);
+      }
+
+      const { error } = await supabase.from("transacoes").insert(validTransactions);
+      if (error) return handleError({ action: "processReconciliationBatch_insert", userId: user.id }, error);
+      insertedCount = validTransactions.length;
+    }
+  }
+
+  // 2. Efetivar Conciliações
+  let conciliatedCount = 0;
+  for (const conc of payload.conciliations) {
+    if (!conc.conta_id) continue;
+
+    const matchCondition = conc.isSplitGroup 
+        ? { split_group_id: conc.candidateId, user_id: user.id } 
+        : { id: conc.candidateId, user_id: user.id };
+
+    // ATENÇÃO: Conforme regra estrita do usuário, NÃO alteramos a "origem" de Manual para Importado.
+    // O mero preenchimento/sobreposição do conta_id garante que a despesa Manual encontrou suas costas no Banco, sem quebrar os relatórios.
+    // O status muda para "Realizado" para consolidar transações que estavam como "Agendadas" projetando budget no futuro.
+    const { error } = await supabase
+      .from("transacoes")
+      .update({ conta_id: conc.conta_id, status: "Realizado" })
+      .match(matchCondition);
+
+    if (!error) {
+      conciliatedCount++;
+    } else {
+      console.error("Erro na conciliação do Candidato:", conc.candidateId, error);
+    }
+  }
+
+  revalidatePath("/transacoes");
+  invalidateTag(CACHE_TAGS.dashboard);
+  
+  return { success: true, count: insertedCount, conciliated: conciliatedCount };
+}
+
+// ==========================================
+// MÓDULO RÁPIDO (REVISÃO CSV)
+// ==========================================
+
+export async function quickEditTransaction(id: string, categoria: string, responsavel: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: "Sem sessão." }
+
+  const { error } = await supabase
+    .from("transacoes")
+    .update({ categoria, responsavel })
+    .eq("id", id)
+
+  if (error) {
+    handleError({ action: "quickEditTransaction", userId: user.id }, error)
+    return { error: "Erro ao atualizar metadados da transação." }
+  }
+  
+  revalidatePath("/transacoes")
+  invalidateTag(CACHE_TAGS.dashboard)
+  return { success: true }
+}

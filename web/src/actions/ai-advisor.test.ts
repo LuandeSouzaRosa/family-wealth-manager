@@ -1,3 +1,4 @@
+/// <reference types="vitest/globals" />
 import { generateInsights } from '../lib/ai-advisor-logic';
 
 describe('AI Advisor Logic (generateInsights)', () => {

@@ -1,0 +1,18 @@
+src/actions/ai-advisor.test.ts(3,1): error TS2582: Cannot find name 'describe'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+src/actions/ai-advisor.test.ts(11,3): error TS2582: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+src/actions/ai-advisor.test.ts(38,5): error TS2304: Cannot find name 'expect'.
+src/actions/ai-advisor.test.ts(39,5): error TS2304: Cannot find name 'expect'.
+src/actions/ai-advisor.test.ts(43,7): error TS2304: Cannot find name 'expect'.
+src/actions/ai-advisor.test.ts(47,3): error TS2582: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+src/actions/ai-advisor.test.ts(50,5): error TS2304: Cannot find name 'expect'.
+src/actions/ai-advisor.test.ts(51,5): error TS2304: Cannot find name 'expect'.
+src/actions/ai-advisor.test.ts(52,5): error TS2304: Cannot find name 'expect'.
+src/actions/ai-advisor.test.ts(55,3): error TS2582: Cannot find name 'it'. Do you need to install type definitions for a test runner? Try `npm i --save-dev @types/jest` or `npm i --save-dev @types/mocha`.
+src/actions/ai-advisor.test.ts(64,5): error TS2304: Cannot find name 'expect'.
+src/actions/ai-advisor.test.ts(68,5): error TS2304: Cannot find name 'expect'.
+src/actions/ai-advisor.test.ts(69,5): error TS2304: Cannot find name 'expect'.
+src/actions/reconciliation.ts(3,30): error TS2307: Cannot find module '@/lib/supabase/server' or its corresponding type declarations.
+src/actions/reconciliation.ts(5,29): error TS2307: Cannot find module '@/lib/error-handler' or its corresponding type declarations.
+src/components/csv-importer.tsx(141,47): error TS2345: Argument of type '{ valor: number; tipo: string; id: number; data: string; descricao: any; categoria: any; responsavel: string; }' is not assignable to parameter of type 'CsvRow'.
+  Types of property 'tipo' are incompatible.
+    Type 'string' is not assignable to type '"Entrada" | "Saída"'.

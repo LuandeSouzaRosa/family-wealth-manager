@@ -6,6 +6,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Trash2, Calendar, FileText, ArrowUpRight, ArrowDownRight, Edit3, Upload, Search, Filter, Download, Split } from 'lucide-react'
 import { deleteTransaction } from "@/actions/transactions";
 import { AddTransactionDialog } from '@/components/add-transaction-dialog'
+import { QuickEditTransactionDialog } from '@/components/quick-edit-dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
 import { Input } from '@/components/ui/input'
 import { useFilter } from '@/contexts/filter-context'
@@ -187,16 +188,16 @@ export function TransacoesClientShell({ initialData, initialCartoes }: Transacoe
           </p>
         </div>
         
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row items-center gap-3">
           <Button variant="outline" className="gap-2 hidden md:flex" onClick={handleExportCSV}>
               <Download size={16} /> Exportar
           </Button>
           <Link href="/conciliacao">
-            <Button variant="outline" className="gap-2">
-                <Upload size={16} /> Importar CSV
+            <Button className="gap-2">
+                <Upload size={16} /> Importar Extrato
             </Button>
           </Link>
-          <AddTransactionDialog cartoes={initialCartoes} />
+          <AddTransactionDialog cartoes={initialCartoes} variant="secondary" />
         </div>
       </motion.div>
 
@@ -326,11 +327,22 @@ export function TransacoesClientShell({ initialData, initialCartoes }: Transacoe
             <tbody>
               {filteredData.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-16 text-center">
-                    <div className="flex flex-col items-center justify-center opacity-80">
-                      <FileText className="h-12 w-12 text-muted-foreground/30 mb-4" />
-                      <p className="text-base font-medium text-foreground">Sua lista está vazia</p>
-                      <p className="text-sm text-muted-foreground mt-1 max-w-[300px]">Adicione rapidamente pelo Quick Add ou importe uma planilha CSV para começar.</p>
+                  <td colSpan={5}>
+                    <div className="p-10 flex flex-col items-center justify-center text-center space-y-4">
+                      <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-2">
+                        <FileText className="w-8 h-8 text-primary" />
+                      </div>
+                      <div className="space-y-1">
+                        <h3 className="text-xl font-medium tracking-tight">Comece importando seu extrato</h3>
+                        <p className="text-muted-foreground max-w-sm mx-auto">
+                          O Family Wealth Manager é pensado para poupar seu tempo. Faça upload do arquivo CSV do seu banco para conciliar o mês de uma só vez.
+                        </p>
+                      </div>
+                      <Link href="/conciliacao" className="mt-4">
+                          <Button className="gap-2 shadow-sm">
+                            <Upload size={16} /> Importar Extrato CSV
+                          </Button>
+                      </Link>
                     </div>
                   </td>
                 </tr>
@@ -372,14 +384,15 @@ export function TransacoesClientShell({ initialData, initialCartoes }: Transacoe
                       <td className="px-6 py-4 text-center">
                         <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                           
-                          <button
-                            disabled={isPending}
-                            onClick={() => handleEditAttempt(tx)}
-                            className={`p-1.5 rounded-md transition-colors ${tx.split_group_id ? "text-muted-foreground/40 cursor-not-allowed" : "text-muted-foreground hover:bg-muted"}`}
-                            title={tx.split_group_id ? "Edição não suportada para Split" : "Editar Lançamento"}
-                          >
-                            <Edit3 size={14} />
-                          </button>
+                          <QuickEditTransactionDialog 
+                            transaction={{
+                              id: tx.id,
+                              categoria: tx.categoria,
+                              responsavel: tx.responsavel || "Casal",
+                              split_group_id: tx.split_group_id
+                            }} 
+                            categoriasValidas={uniqueCategories} 
+                          />
 
                           <button 
                             disabled={isPending}

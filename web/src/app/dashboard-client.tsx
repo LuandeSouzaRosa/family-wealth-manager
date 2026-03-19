@@ -1,7 +1,8 @@
 'use client'
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { ArrowUpRight, ArrowDownRight, TrendingUp, Wallet, ArrowRightLeft, Target, PieChart, Activity, Eye, EyeOff, Plus, ListFilter } from 'lucide-react'
+import { Plus, ArrowUpRight, ArrowDownRight, Wallet, Activity, Target, PieChart, Info, ShieldCheck, Download, CalendarRange, Upload } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { AddTransactionDialog } from '@/components/add-transaction-dialog'
 import { ExpensePieChart } from '@/components/charts/expense-pie-chart'
 import { NeedsWantsSavingsChart } from '@/components/charts/needs-wants-savings-chart'
@@ -15,7 +16,6 @@ import { RecentTransactions } from '@/components/dashboard/recent-transactions'
 import { MobileDashboard } from '@/components/dashboard/mobile-dashboard'
 import { FinancialHealthWidget } from '@/components/dashboard/financial-health'
 import { ResponsavelSelector } from '@/components/responsavel-selector'
-import { CalendarRange } from 'lucide-react'
 
 // Constants for orchestration
 const STAGGER_DELAY = 0.1
@@ -163,13 +163,16 @@ export function DashboardClientShell({
                 <ResponsavelSelector />
             </div>
             <div className="h-px sm:h-10 w-full sm:w-px bg-border/50" />
-            <motion.div 
-                whileHover={{ scale: 1.02 }} 
-                whileTap={{ scale: 0.98 }}
-                className="flex-1 sm:flex-none"
-            >
-                <AddTransactionDialog />
-            </motion.div>
+            <div className="flex flex-col sm:flex-row gap-2 flex-1 sm:flex-none">
+              <Link href="/conciliacao" className="w-full sm:w-auto">
+                <Button className="w-full sm:w-auto gap-2 bg-primary text-primary-foreground shadow-[0_0_20px_rgba(var(--primary),0.3)] hover:shadow-[0_0_30px_rgba(var(--primary),0.5)] transition-all h-12 px-6 rounded-xl font-semibold tracking-wide" data-testid="btn-importar-csv">
+                  <Upload className="w-4 h-4" /> Importar Extrato
+                </Button>
+              </Link>
+              <div className="w-full sm:w-auto">
+                  <AddTransactionDialog variant="secondary" />
+              </div>
+            </div>
           </motion.div>
         </div>
       </motion.section>

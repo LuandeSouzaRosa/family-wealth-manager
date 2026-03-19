@@ -6,10 +6,13 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { createTransactionsBatch } from '@/actions/transactions'
+import { processReconciliationBatch } from '@/actions/transactions'
 import { getCategorizationRules, createCategorizationRule } from '@/actions/categories'
 import { getContasBancarias } from '@/actions/accounts'
-import { Upload, Check, AlertCircle, Loader2, FileSpreadsheet, PlusCircle } from 'lucide-react'
+import { getReconciliationCandidates } from '@/actions/reconciliation'
+import { findBestMatch } from '@/lib/reconciliation-logic'
+import { Upload, Check, AlertCircle, Loader2, FileSpreadsheet, PlusCircle, Info } from 'lucide-react'
+import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import { Checkbox } from "@/components/ui/checkbox"
@@ -104,34 +107,58 @@ export function CsvImporter() {
     
     Papa.parse(file, {
       header: true,
-      skipEmptyLines: true,
-      complete: (results) => {
-        const normalized = results.data.map((row: any, index) => {
-          const desc = row['descricao'] || row['Descrição'] || row['description'] || "Sem descrição"
-          return {
-            id: index,
-            data: parseDate(row['data'] || row['Data'] || row['date']),
-            descricao: desc,
-            valor: parseMoney(row['valor'] || row['Valor'] || row['value'] || "0"),
-            categoria: aplicarRegras(desc),
-            responsavel: "Casal",
-            tipo: parseMoney(row['valor'] || row['Valor'] || row['value'] || "0") < 0 ? "Saída" : "Entrada"
-          }
-        })
-        
-        const cleanData = normalized.map(item => {
-           let val = item.valor
-           let tipo = item.tipo
-           if (val < 0) {
-             val = Math.abs(val)
-             tipo = "Saída"
-           }
-           return { ...item, valor: val, tipo }
-        })
+             complete: async (results) => {
+          const normalized = results.data.map((row: any, index) => {
+            const desc = row['descricao'] || row['Descrição'] || row['description'] || "Sem descrição"
+            return {
+              id: index,
+              data: parseDate(row['data'] || row['Data'] || row['date']),
+              descricao: desc,
+              valor: parseMoney(row['valor'] || row['Valor'] || row['value'] || "0"),
+              categoria: aplicarRegras(desc),
+              responsavel: "Casal",
+              tipo: (parseMoney(row['valor'] || row['Valor'] || row['value'] || "0") < 0 ? "Saída" : "Entrada") as "Entrada" | "Saída"
+            }
+          })
+          
+          const cleanData = normalized.map(item => {
+             let val = item.valor
+             let tipo = item.tipo
+             if (val < 0) {
+               val = Math.abs(val)
+               tipo = "Saída"
+             }
+             return { ...item, valor: val, tipo: tipo as "Entrada" | "Saída" }
+          }).filter(item => item.valor > 0); // Ignore rows with 0 values
 
-        setData(cleanData)
-      },
-      error: (error) => {
+          if (cleanData.length > 0) {
+              const datas = cleanData.map(t => new Date(t.data).getTime());
+              const minStr = new Date(Math.min(...datas)).toISOString();
+              const maxStr = new Date(Math.max(...datas)).toISOString();
+
+              const candidates = await getReconciliationCandidates(minStr, maxStr);
+
+              const reconciledData = cleanData.map(row => {
+                  const match = findBestMatch(row, candidates);
+                  let acao: "Novo" | "Conciliar" | "Duplicado" = "Novo";
+                  if (match.level === "Exato") acao = "Duplicado"; // Ignore by default
+                  else if (match.level === "Forte" || match.level === "Possível") acao = "Conciliar";
+                  
+                  return {
+                      ...row,
+                      acao,
+                      matchLevel: match.level,
+                      matchCandidateId: match.candidateId,
+                      isSplitGroup: match.isSplitGroup,
+                      matchScore: match.score
+                  };
+              });
+              setData(reconciledData);
+          } else {
+              setData([]);
+          }
+        },
+        error: (error) => {
         console.error(error)
         toast.error("Erro ao ler CSV: " + error.message)
       }
@@ -146,39 +173,45 @@ export function CsvImporter() {
 
   const handleImport = async () => {
     setIsUploading(true)
-    const payload = data.map(({ id, ...rest }) => ({
+    
+    // Ignora explicitamente os que ficaram na UI como "Duplicado"
+    const valids = data.filter(r => r.acao !== "Duplicado")
+    
+    const payload = valids.map(({ id, acao, matchLevel, matchCandidateId, isSplitGroup, matchScore, ...rest }) => ({
         ...rest,
-        conta_id: contaSelecionada !== "none" ? contaSelecionada : null
+        conta_id: contaSelecionada !== "none" ? contaSelecionada : null,
+        _acao: acao,
+        _matchCandidateId: matchCandidateId,
+        _isSplitGroup: isSplitGroup
     }))
     
-    // Adicionar transação de Saldo Inicial se o usuário informou um valor
+    const inserts = payload.filter(p => p._acao === "Novo" || !p._matchCandidateId).map(({_acao, _matchCandidateId, _isSplitGroup, ...t}) => t);
+    
+    // Adicionar transação de Saldo Inicial se o usuário informou um valor (somente nos INSERTS)
     const saldoInicial = (document.getElementById('saldo-inicial') as HTMLInputElement)?.value
     if (saldoInicial) {
         const saldoAtual = parseFloat(saldoInicial.replace(/\./g, '').replace(',', '.'))
         
-        // Calcular quanto foi o movimento do CSV
-        const totalEntradas = payload.filter(t => t.tipo === 'Entrada').reduce((acc, t) => acc + t.valor, 0)
-        const totalSaidas = payload.filter(t => t.tipo === 'Saída').reduce((acc, t) => acc + t.valor, 0)
+        // O Saldo Inicial deve abater também as conciliações, pois pertencem ao escopo do extrato!
+        const totalEntradas = valids.filter(t => t.tipo === 'Entrada').reduce((acc, t) => acc + t.valor, 0)
+        const totalSaidas = valids.filter(t => t.tipo === 'Saída').reduce((acc, t) => acc + t.valor, 0)
         const resultadoCSV = totalEntradas - totalSaidas
         
-        // Saldo Inicial Real = Saldo Hoje (informado) - Resultado do CSV
-        // Ex: Hoje tenho 210. CSV deu +189. Então comecei com 21.
         const saldoAnterior = saldoAtual - resultadoCSV
         
-        // Adicionar transação de ajuste no dia anterior ao início do CSV
-        if (Math.abs(saldoAnterior) > 0.01) { // Evita criar ajuste por erro de centavos de ponto flutuante
-            // Pegar a data mais antiga do CSV e subtrair 1 dia
-            const datas = payload.map(t => new Date(t.data).getTime())
-            const primeiraData = new Date(Math.min(...datas))
+        if (Math.abs(saldoAnterior) > 0.01) { 
+            const datas = valids.map(t => new Date(t.data).getTime())
+            const primeiraData = datas.length > 0 ? new Date(Math.min(...datas)) : new Date()
             primeiraData.setDate(primeiraData.getDate() - 1)
             
-            payload.push({
+            inserts.push({
                 data: primeiraData.toISOString(),
                 descricao: "Saldo Inicial Acumulado (Ajuste Automático)",
                 valor: Math.abs(saldoAnterior),
-                categoria: "Outros", // Ou criar uma categoria "Saldo Inicial"
+                categoria: "Outros", 
                 responsavel: "Casal",
-                tipo: saldoAnterior > 0 ? "Entrada" : "Saída"
+                tipo: saldoAnterior > 0 ? "Entrada" : "Saída",
+                conta_id: contaSelecionada !== "none" ? contaSelecionada : null
             })
         }
     }
@@ -187,23 +220,27 @@ export function CsvImporter() {
     if (novasRegras.size > 0) {
       const promises = Array.from(novasRegras).map(index => {
         const item = data[index]
-        // Regra simples: Palavra chave = Categoria
-        // Melhoria futura: Permitir usuário editar a "palavra chave"
         return createCategorizationRule(item.descricao, item.categoria)
       })
       await Promise.all(promises)
     }
 
-    const result = await createTransactionsBatch(payload)
+    const conciliations = payload.filter(p => p._acao === "Conciliar" && p._matchCandidateId).map(p => ({
+        candidateId: p._matchCandidateId,
+        conta_id: p.conta_id,
+        isSplitGroup: p._isSplitGroup
+    }));
+
+    const result = await processReconciliationBatch({ inserts, conciliations })
     setIsUploading(false)
 
-    if ('count' in result) {
-      const skippedMsg = result.skipped && result.skipped > 0 ? ` (${result.skipped} duplicadas ignoradas)` : ""
-      setSuccessMsg(`${result.count} transações importadas com sucesso!${skippedMsg}`)
+    if (result && 'count' in result) {
+      const concMsg = result.conciliated && result.conciliated > 0 ? ` e ${result.conciliated} conciliações realizadas` : ""
+      setSuccessMsg(`${result.count} novas importadas${concMsg} com sucesso!`)
       toast.success("Importação concluída com sucesso!")
       setData([])
       setFileName("")
-    } else if ('error' in result) {
+    } else if (result && 'error' in result) {
       toast.error("Erro na importação: " + result.error)
     }
   }
@@ -336,24 +373,69 @@ export function CsvImporter() {
             </motion.div>
           )}
 
+          {/* Dica CSV-First */}
+          <div className="bg-muted/30 p-4 rounded-lg border border-border/50 mb-4 flex items-start gap-3">
+             <div className="mt-0.5 w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+               <Info className="w-4 h-4 text-primary" />
+             </div>
+             <div className="text-sm">
+               <p className="font-medium text-foreground">Dica de Revisão Rápida</p>
+               <p className="text-muted-foreground mt-1">
+                 Ao alterar a Categoria de uma linha, a opção <strong>"Salvar Regra"</strong> é marcada automaticamente. 
+                 Isso ensina o sistema a automatizar o preenchimento para compras com este mesmo nome no futuro. 
+                 Você pode excluir ou revisar essas memorizações a qualquer momento no menu <Link href="/categorias" className="text-primary hover:underline font-medium">Categorias</Link>.
+               </p>
+             </div>
+          </div>
+
           <div className="rounded-md border bg-card overflow-hidden">
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/50">
+                  <TableHead>Status / Ação</TableHead>
                   <TableHead>Data</TableHead>
-                  <TableHead>Descrição</TableHead>
+                  <TableHead>Descrição do Banco</TableHead>
                   <TableHead>Valor</TableHead>
                   <TableHead>Tipo</TableHead>
                   <TableHead>Categoria</TableHead>
-                  <TableHead>Salvar Regra?</TableHead>
+                  <TableHead>
+                    <div className="flex flex-col">
+                       <span>Salvar Regra?</span>
+                       <span className="text-[10px] text-muted-foreground font-normal">(Aprender)</span>
+                    </div>
+                  </TableHead>
                   <TableHead>Responsável</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {data.map((row, index) => (
-                  <TableRow key={index}>
+                  <TableRow key={index} className={row.acao === "Duplicado" ? "opacity-50" : ""}>
+                    <TableCell>
+                       <Select value={row.acao} onValueChange={(val) => updateRow(index, 'acao', val)}>
+                        <SelectTrigger className={cn(
+                          "h-8 w-[160px] text-xs font-semibold border",
+                          row.acao === "Conciliar" ? "bg-blue-500/10 text-blue-600 border-blue-500/20" : 
+                          row.acao === "Novo" ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" : 
+                          "bg-muted text-muted-foreground border-border"
+                        )}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Novo">Importar Novo</SelectItem>
+                          <SelectItem value="Conciliar">
+                             {row.matchLevel === "Exato" || row.matchLevel === "Forte" || row.matchLevel === "Possível" 
+                                ? `Conciliar (${row.matchLevel})` 
+                                : "Conciliar (Forçar)"}
+                          </SelectItem>
+                          <SelectItem value="Duplicado">Ignorar</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {row.acao === "Conciliar" && row.isSplitGroup && (
+                          <div className="mt-1 text-[10px] text-blue-500 font-medium">✨ Match: Grupo Split</div>
+                      )}
+                    </TableCell>
                     <TableCell className="font-mono text-xs text-muted-foreground">{row.data}</TableCell>
-                    <TableCell className="font-medium">{row.descricao}</TableCell>
+                    <TableCell className="font-medium text-xs">{row.descricao}</TableCell>
                     <TableCell className={cn(
                       "font-semibold",
                       row.tipo === 'Saída' ? 'text-red-500 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'
@@ -372,7 +454,12 @@ export function CsvImporter() {
                       </Select>
                     </TableCell>
                     <TableCell>
-                      <Select value={row.categoria} onValueChange={(val) => updateRow(index, 'categoria', val)}>
+                      <Select value={row.categoria} onValueChange={(val) => {
+                          updateRow(index, 'categoria', val)
+                          const newRules = new Set(novasRegras)
+                          newRules.add(index)
+                          setNovasRegras(newRules)
+                      }}>
                         <SelectTrigger className="h-8 w-[160px]">
                           <SelectValue />
                         </SelectTrigger>
@@ -394,6 +481,7 @@ export function CsvImporter() {
                             }}
                         />
                     </TableCell>
+
                     <TableCell>
                       <Select value={row.responsavel} onValueChange={(val) => updateRow(index, 'responsavel', val)}>
                         <SelectTrigger className="h-8 w-[130px] border-primary/20 bg-primary/5 text-primary-foreground dark:text-primary">

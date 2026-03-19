@@ -49,7 +49,7 @@ import { getCategorias } from "@/actions/categories"
 
 import { TransactionSchema } from "@/lib/schemas"
 
-export function AddTransactionDialog({ children, cartoes = [] }: { children?: React.ReactNode, cartoes?: any[] }) {
+export function AddTransactionDialog({ children, cartoes = [], variant = "primary" }: { children?: React.ReactNode, cartoes?: any[], variant?: "primary" | "secondary" }) {
   const [open, setOpen] = React.useState(false)
   const [isPending, startTransition] = React.useTransition()
   const [contas, setContas] = React.useState<any[]>([])
@@ -131,13 +131,19 @@ export function AddTransactionDialog({ children, cartoes = [] }: { children?: Re
   const triggerButton = (
     <Button 
       data-testid="btn-nova-transacao"
-      className="h-12 px-6 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 shadow-[0_0_20px_rgba(var(--primary),0.3)] hover:shadow-[0_0_30px_rgba(var(--primary),0.5)] transition-all duration-300 font-semibold tracking-wide"
+      variant={variant === "secondary" ? "outline" : "default"}
+      className={cn(
+        "h-12 px-6 rounded-xl font-semibold tracking-wide transition-all duration-300 w-full md:w-auto",
+        variant === "primary" 
+          ? "bg-primary text-primary-foreground hover:bg-primary/90 shadow-[0_0_20px_rgba(var(--primary),0.3)] hover:shadow-[0_0_30px_rgba(var(--primary),0.5)]" 
+          : "border-border text-muted-foreground hover:text-foreground hover:bg-muted/50"
+      )}
     >
       <div className="flex items-center gap-2">
-        <div className="p-1 bg-white/20 rounded-full">
-            <Plus className="w-4 h-4" />
+        <div className={cn("p-1 rounded-full", variant === "primary" ? "bg-white/20" : "bg-primary/10")}>
+            <Plus className={cn("w-4 h-4", variant === "secondary" && "text-primary")} />
         </div>
-        <span>Nova Transação</span>
+        <span>Lançamento Manual</span>
       </div>
     </Button>
   );
