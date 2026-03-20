@@ -14,52 +14,55 @@ import { CACHE_TAGS, invalidateTag } from "@/lib/cache";
 // ==========================================
 
 export async function createTransaction(formData: FormData) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  
-  if (!user) {
-    return { error: "Sessão expirada. Faça login novamente." };
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      return { error: "Sessão expirada. Faça login novamente." };
+    }
+
+    // 1. Extrair
+    const data = {
+      descricao: formData.get("descricao") as string,
+      valor: parseFloat(formData.get("valor") as string),
+      categoria: formData.get("categoria") as string,
+      tipo: formData.get("tipo") as "Entrada" | "Saída" | "Transferência",
+      data: formData.get("data") as string || new Date().toISOString(),
+      responsavel: formData.get("responsavel") as string || "Casal",
+      conta_id: formData.get("conta_id") as string || null,
+      cartao_id: formData.get("cartao_id") as string || null,
+      status: (formData.get("status") as "Realizado" | "Agendado" | "Pendente") || "Realizado",
+    };
+
+    // 2. Validar
+    const parsed = TransactionSchema.safeParse(data);
+    if (!parsed.success) {
+      return handleError({ action: "createTransaction", userId: user.id }, parsed.error, "Campos inválidos. Verifique os dados inseridos.");
+    }
+
+    // 3. Inserir no Banco 
+    const { error } = await supabase
+      .from("transacoes")
+      .insert([
+        {
+          ...parsed.data,
+          data: parsed.data.data?.toISOString(),
+          origem: "Manual",
+          user_id: user.id,
+        }
+      ]);
+
+    if (error) {
+      return handleError({ action: "createTransaction", userId: user.id }, error);
+    }
+
+    revalidatePath("/transacoes");
+    invalidateTag(CACHE_TAGS.dashboard);
+    return { success: true };
+  } catch (err) {
+    return handleError({ action: "createTransaction" }, err, "Ocorreu uma falha no servidor ao processar a criação manual.");
   }
-
-  // 1. Extrair
-  const data = {
-    descricao: formData.get("descricao") as string,
-    valor: parseFloat(formData.get("valor") as string),
-    categoria: formData.get("categoria") as string,
-    tipo: formData.get("tipo") as "Entrada" | "Saída" | "Transferência",
-    data: formData.get("data") as string || new Date().toISOString(),
-    responsavel: formData.get("responsavel") as string || "Casal",
-    conta_id: formData.get("conta_id") as string || null,
-    cartao_id: formData.get("cartao_id") as string || null,
-    status: (formData.get("status") as "Realizado" | "Agendado" | "Pendente") || "Realizado",
-  };
-
-  // 2. Validar
-  const parsed = TransactionSchema.safeParse(data);
-  if (!parsed.success) {
-    return handleError({ action: "createTransaction", userId: user.id }, parsed.error, "Campos inválidos. Verifique os dados inseridos.");
-  }
-
-  // 3. Inserir no Banco 
-  // O Supabase preenche automaticamente o user_id baseado na sessão SSR ativa.
-  const { error } = await supabase
-    .from("transacoes")
-    .insert([
-      {
-        ...parsed.data,
-        data: parsed.data.data?.toISOString(),
-        origem: "Manual",
-        user_id: user.id,
-      }
-    ]);
-
-  if (error) {
-    return handleError({ action: "createTransaction", userId: user.id }, error);
-  }
-
-  revalidatePath("/transacoes");
-  invalidateTag(CACHE_TAGS.dashboard);
-  return { success: true };
 }
 
 // ==========================================
@@ -67,63 +70,67 @@ export async function createTransaction(formData: FormData) {
 // ==========================================
 
 export async function createSplitTransaction(formData: FormData) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Sessão expirada. Faça login novamente." };
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: "Sessão expirada. Faça login novamente." };
 
-  // Parse splits from FormData
-  const splitsRaw: { responsavel: string; valor: number }[] = [];
-  let i = 0;
-  while (formData.get(`splits[${i}].responsavel`)) {
-    splitsRaw.push({
-      responsavel: formData.get(`splits[${i}].responsavel`) as string,
-      valor: parseFloat(formData.get(`splits[${i}].valor`) as string),
-    });
-    i++;
+    // Parse splits from FormData
+    const splitsRaw: { responsavel: string; valor: number }[] = [];
+    let i = 0;
+    while (formData.get(`splits[${i}].responsavel`)) {
+      splitsRaw.push({
+        responsavel: formData.get(`splits[${i}].responsavel`) as string,
+        valor: parseFloat(formData.get(`splits[${i}].valor`) as string),
+      });
+      i++;
+    }
+
+    const data = {
+      descricao: formData.get("descricao") as string,
+      valor_total: parseFloat(formData.get("valor") as string),
+      categoria: formData.get("categoria") as string,
+      tipo: formData.get("tipo") as "Entrada" | "Saída" | "Transferência",
+      data: formData.get("data") as string || new Date().toISOString(),
+      conta_id: formData.get("conta_id") as string || null,
+      cartao_id: formData.get("cartao_id") as string || null,
+      status: (formData.get("status") as "Realizado" | "Agendado" | "Pendente") || "Realizado",
+      splits: splitsRaw,
+    };
+
+    const parsed = SplitTransactionSchema.safeParse(data);
+    if (!parsed.success) {
+      return handleError({ action: "createSplitTransaction", userId: user.id }, parsed.error, "Campos inválidos. Verifique os valores do split.");
+    }
+
+    const splitGroupId = crypto.randomUUID();
+    const rows = parsed.data.splits.map((split) => ({
+      descricao: parsed.data.descricao,
+      valor: split.valor,
+      categoria: parsed.data.categoria,
+      tipo: parsed.data.tipo,
+      data: parsed.data.data?.toISOString() || new Date().toISOString(),
+      conta_id: parsed.data.conta_id,
+      cartao_id: parsed.data.cartao_id,
+      status: parsed.data.status || "Realizado",
+      responsavel: split.responsavel,
+      origem: "Manual",
+      user_id: user.id,
+      split_group_id: splitGroupId,
+    }));
+
+    const { error } = await supabase.from("transacoes").insert(rows);
+
+    if (error) {
+      return handleError({ action: "createSplitTransaction", userId: user.id }, error);
+    }
+
+    revalidatePath("/transacoes");
+    invalidateTag(CACHE_TAGS.dashboard);
+    return { success: true };
+  } catch (err) {
+    return handleError({ action: "createSplitTransaction" }, err, "Ocorreu uma falha no servidor ao processar o split manual.");
   }
-
-  const data = {
-    descricao: formData.get("descricao") as string,
-    valor_total: parseFloat(formData.get("valor") as string),
-    categoria: formData.get("categoria") as string,
-    tipo: formData.get("tipo") as "Entrada" | "Saída" | "Transferência",
-    data: formData.get("data") as string || new Date().toISOString(),
-    conta_id: formData.get("conta_id") as string || null,
-    cartao_id: formData.get("cartao_id") as string || null,
-    status: (formData.get("status") as "Realizado" | "Agendado" | "Pendente") || "Realizado",
-    splits: splitsRaw,
-  };
-
-  const parsed = SplitTransactionSchema.safeParse(data);
-  if (!parsed.success) {
-    return handleError({ action: "createSplitTransaction", userId: user.id }, parsed.error, "Campos inválidos. Verifique os valores do split.");
-  }
-
-  const splitGroupId = crypto.randomUUID();
-  const rows = parsed.data.splits.map((split) => ({
-    descricao: parsed.data.descricao,
-    valor: split.valor,
-    categoria: parsed.data.categoria,
-    tipo: parsed.data.tipo,
-    data: parsed.data.data?.toISOString() || new Date().toISOString(),
-    conta_id: parsed.data.conta_id,
-    cartao_id: parsed.data.cartao_id,
-    status: parsed.data.status || "Realizado",
-    responsavel: split.responsavel,
-    origem: "Manual",
-    user_id: user.id,
-    split_group_id: splitGroupId,
-  }));
-
-  const { error } = await supabase.from("transacoes").insert(rows);
-
-  if (error) {
-    return handleError({ action: "createSplitTransaction", userId: user.id }, error);
-  }
-
-  revalidatePath("/transacoes");
-  invalidateTag(CACHE_TAGS.dashboard);
-  return { success: true };
 }
 
 export async function deleteTransaction(id: string) {
