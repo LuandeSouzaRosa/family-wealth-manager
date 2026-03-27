@@ -1,6 +1,6 @@
 "use client"
 
-import { useTransition, useState, useRef } from "react"
+import { useTransition, useState, useRef, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -15,6 +15,30 @@ export function QuickAddWidget() {
   const [inputValue, setInputValue] = useState("")
   const [isPending, startTransition] = useTransition()
   const isSubmittingRef = useRef(false)
+  const [status, setStatus] = useState<"idle" | "saving" | "syncing">("idle")
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+  // Fail-safe cleanup memory leak
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current)
+    }
+  }, [])
+
+  // Hook nativo de sincronia RSC (Prova Real)
+  useEffect(() => {
+    if (!isPending && status === "syncing") {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current)
+      
+      setStatus("idle")
+      setInputValue("")
+      setPreview(null)
+      setIsOpen(false)
+      isSubmittingRef.current = false
+      toast.success("Salvo e sincronizado!")
+    }
+  }, [isPending, status])
+
   const [preview, setPreview] = useState<{
     descricao: string
     valor: number
@@ -43,18 +67,34 @@ export function QuickAddWidget() {
 
   const handleSubmit = (e?: React.FormEvent) => {
     e?.preventDefault()
-    if (isSubmittingRef.current || !inputValue) return
+    // Trava de guarda síncrona
+    if (isSubmittingRef.current || !inputValue || !preview) return
     isSubmittingRef.current = true
+    
+    setStatus("saving")
 
     const parsed = parseQuickAdd(inputValue)
     if (!parsed.success) {
       toast.error((parsed as any).error || "Inválido")
+      setStatus("idle")
       isSubmittingRef.current = false
       return
     }
+    
+    // Fail-safe timeout
+    if (timeoutRef.current) clearTimeout(timeoutRef.current)
+    timeoutRef.current = setTimeout(() => {
+      if (isSubmittingRef.current) {
+        setStatus("idle")
+        setInputValue("")
+        setPreview(null)
+        setIsOpen(false)
+        isSubmittingRef.current = false
+        toast.info("Transação registrada. O painel deve atualizar em breve.")
+      }
+    }, 8000)
 
     startTransition(async () => {
-      console.log("[DEBUG] QuickAdd: Iniciando formData...");
       const formData = new FormData()
       formData.append("descricao", parsed.data.descricao)
       formData.append("valor", String(parsed.data.valor))
@@ -64,37 +104,33 @@ export function QuickAddWidget() {
       try {
         formData.append("data", parsed.data.data.toISOString())
       } catch (err) {
-        console.error("[DEBUG] Erro local no toISOString (Quick Add):", err)
+        if (timeoutRef.current) clearTimeout(timeoutRef.current)
         toast.error("Erro interno ao processar a data.")
+        setStatus("idle")
         isSubmittingRef.current = false
         return
       }
-      
       formData.append("status", "Realizado")
 
-      console.log("[DEBUG] QuickAdd: Chamando createTransaction...");
       try {
         const result = await createTransaction(formData)
-        console.log("[DEBUG] QuickAdd: Retorno de createTransaction:", result);
 
-        if ('error' in result) {
+        if (result && 'error' in result) {
+          // Erro ex: Regra de banco violada
+          if (timeoutRef.current) clearTimeout(timeoutRef.current)
+          setStatus("idle")
+          isSubmittingRef.current = false
           toast.error(result.error)
         } else {
-          const tipoLabel = parsed.data.tipo === "Entrada" ? "Receita" : "Despesa"
-          toast.success(
-            `${tipoLabel}: ${parsed.data.descricao} — R$ ${parsed.data.valor.toFixed(2)}`,
-            { description: `Categoria: ${parsed.data.categoria}` }
-          )
-          setInputValue("")
-          setPreview(null)
-          setIsOpen(false)
+          // Sucesso do Banco (gravação OK). Entra na segunda fase da UI.
+          setStatus("syncing")
+          // O input NÃO é limpo aqui. O useEffect fechará o ciclo assistindo o isPending.
         }
       } catch (fatalError: any) {
-        console.error("[FATAL DEBUG] QuickAdd Crashou completamente o client during/after Server Action:", fatalError);
-        // Exibimos o stack exato no browser
-        toast.error(`[FATAL] ${fatalError.message || fatalError}`);
-      } finally {
-        isSubmittingRef.current = false;
+        if (timeoutRef.current) clearTimeout(timeoutRef.current)
+        setStatus("idle")
+        isSubmittingRef.current = false
+        toast.error(`[FATAL] ${fatalError.message || fatalError}`)
       }
     })
   }
@@ -136,6 +172,7 @@ export function QuickAddWidget() {
             <form onSubmit={handleSubmit} className="flex gap-2">
               <Input
                 autoFocus
+                disabled={status !== "idle"}
                 placeholder={`Ex: "ifood 45 ontem" ou "salário 3000"`}
                 value={inputValue}
                 onChange={(e) => handleInputChange(e.target.value)}
@@ -143,17 +180,21 @@ export function QuickAddWidget() {
               />
               <Button
                 type="submit"
-                disabled={isPending || !preview}
+                disabled={status !== "idle" || !preview}
                 size="icon"
                 className={cn(
-                  "h-12 w-12 rounded-xl shrink-0",
+                  "h-12 w-12 rounded-xl shrink-0 transition-all",
+                  status === "saving" ? "bg-primary/80" : 
+                  status === "syncing" ? "bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.5)]" :
                   preview?.tipo === "Entrada"
                     ? "bg-emerald-500 hover:bg-emerald-600"
                     : "bg-red-500 hover:bg-red-600"
                 )}
               >
-                {isPending ? (
-                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                {status === "saving" ? (
+                  <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : status === "syncing" ? (
+                  <Sparkles className="w-5 h-5 animate-pulse text-white" />
                 ) : preview?.tipo === "Entrada" ? (
                   <ArrowUpRight className="w-6 h-6" />
                 ) : (
@@ -173,7 +214,10 @@ export function QuickAddWidget() {
                   className="mt-3 p-3 rounded-xl bg-muted/50 border border-border text-xs space-y-1"
                 >
                   <div className="flex justify-between items-center">
-                    <span className="font-semibold text-foreground">{preview.descricao}</span>
+                    <span className="font-semibold text-foreground flex items-center gap-2">
+                       {preview.descricao}
+                       {status === "syncing" && <span className="text-[10px] text-amber-500 uppercase tracking-wider animate-pulse">Sincronizando...</span>}
+                    </span>
                     <span className={cn(
                       "font-bold tabular-nums",
                       preview.tipo === "Entrada" ? "text-emerald-500" : "text-red-500"
