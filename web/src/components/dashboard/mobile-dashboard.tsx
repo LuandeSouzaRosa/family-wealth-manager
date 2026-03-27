@@ -14,6 +14,10 @@ interface MobileDashboardProps {
   saldoAtual: number
   renda: number
   despesas: number
+  rendaRealizada?: number
+  rendaAgendada?: number
+  despesasRealizadas?: number
+  despesasAgendadas?: number
   recentTx: any[]
   responsavel: string
   financialEvolution: any[]
@@ -26,6 +30,10 @@ export function MobileDashboard({
   saldoAtual, 
   renda, 
   despesas, 
+  rendaRealizada,
+  rendaAgendada,
+  despesasRealizadas,
+  despesasAgendadas,
   recentTx,
   responsavel,
   financialEvolution,
@@ -88,6 +96,12 @@ export function MobileDashboard({
               <span className="text-lg font-semibold text-foreground">
                   {hideValues ? "•••••" : formatCurrency(renda)}
               </span>
+              {(rendaAgendada || 0) > 0 && (
+                 <div className="mt-1 flex flex-col gap-0 text-[10px] text-muted-foreground font-medium">
+                     <span className="text-emerald-500/80">Real. {hideValues ? "•••" : formatCurrency(rendaRealizada || 0)}</span>
+                     <span>Agend. {hideValues ? "•••" : formatCurrency(rendaAgendada || 0)}</span>
+                 </div>
+              )}
           </div>
           <div className="bg-card border border-border/50 p-4 rounded-xl flex flex-col gap-1 shadow-sm">
               <div className="flex items-center gap-2 text-red-500 text-xs font-medium uppercase tracking-wider">
@@ -96,6 +110,12 @@ export function MobileDashboard({
               <span className="text-lg font-semibold text-foreground">
                   {hideValues ? "•••••" : formatCurrency(despesas)}
               </span>
+              {(despesasAgendadas || 0) > 0 && (
+                 <div className="mt-1 flex flex-col gap-0 text-[10px] text-muted-foreground font-medium">
+                     <span className="text-red-500/80">Real. {hideValues ? "•••" : formatCurrency(despesasRealizadas || 0)}</span>
+                     <span>Agend. {hideValues ? "•••" : formatCurrency(despesasAgendadas || 0)}</span>
+                 </div>
+              )}
           </div>
       </div>
 

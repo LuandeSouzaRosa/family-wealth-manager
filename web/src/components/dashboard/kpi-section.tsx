@@ -11,6 +11,10 @@ interface KpiSectionProps {
   saldoAtual: number
   renda: number
   despesas: number
+  rendaRealizada?: number
+  rendaAgendada?: number
+  despesasRealizadas?: number
+  despesasAgendadas?: number
   saldoLivre?: number
   saldoComprometido?: number
   responsavel: string
@@ -20,6 +24,10 @@ export function KpiSection({
   saldoAtual, 
   renda, 
   despesas, 
+  rendaRealizada,
+  rendaAgendada,
+  despesasRealizadas,
+  despesasAgendadas,
   saldoLivre, 
   saldoComprometido, 
   responsavel 
@@ -57,9 +65,16 @@ export function KpiSection({
             <div className="text-4xl font-light tracking-tight tabular-nums text-foreground">
               {formatCurrency(renda)}
             </div>
-            <p className="text-xs text-muted-foreground mt-2 opacity-70">
-                {responsavel !== 'Todos' ? 'Visão Consolidada' : 'Total Familiar'}
-            </p>
+            {rendaAgendada !== undefined && rendaAgendada > 0 ? (
+                 <div className="mt-2 text-[11px] flex items-center justify-between font-medium">
+                     <span className="text-emerald-500/80">Realizado: {formatCurrency(rendaRealizada || 0)}</span>
+                     <span className="text-muted-foreground/80">Agendado: {formatCurrency(rendaAgendada)}</span>
+                 </div>
+            ) : (
+                <p className="text-xs text-muted-foreground mt-2 opacity-70">
+                    {responsavel !== 'Todos' ? 'Visão Consolidada' : 'Total Familiar'}
+                </p>
+            )}
           </CardContent>
         </Card>
       </TiltCard>
@@ -79,9 +94,16 @@ export function KpiSection({
             <div className="text-4xl font-light tracking-tight tabular-nums text-foreground">
               {formatCurrency(despesas)}
             </div>
-             <p className="text-xs text-muted-foreground mt-2 opacity-70">
-                {responsavel !== 'Todos' ? 'Visão Consolidada' : 'Total Familiar'}
-            </p>
+            {despesasAgendadas !== undefined && despesasAgendadas > 0 ? (
+                 <div className="mt-2 text-[11px] flex items-center justify-between font-medium">
+                     <span className="text-red-500/80">Realizado: {formatCurrency(despesasRealizadas || 0)}</span>
+                     <span className="text-muted-foreground/80">Agendado: {formatCurrency(despesasAgendadas)}</span>
+                 </div>
+            ) : (
+                 <p className="text-xs text-muted-foreground mt-2 opacity-70">
+                    {responsavel !== 'Todos' ? 'Visão Consolidada' : 'Total Familiar'}
+                </p>
+            )}
           </CardContent>
         </Card>
       </TiltCard>

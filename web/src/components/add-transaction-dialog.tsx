@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { CalendarIcon, Plus, Split } from "lucide-react"
+import { CalendarIcon, Plus, Split, Loader2 } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -57,6 +57,7 @@ export function AddTransactionDialog({ children, cartoes = [], variant = "primar
   const [isSplit, setIsSplit] = React.useState(false)
   const [splitLuan, setSplitLuan] = React.useState("")
   const [splitLuana, setSplitLuana] = React.useState("")
+  const isSubmittingRef = React.useRef(false)
 
   React.useEffect(() => {
     if (open) {
@@ -78,7 +79,7 @@ export function AddTransactionDialog({ children, cartoes = [], variant = "primar
       categoria: "",
       data: new Date(),
       conta_id: "none",
-      cartao_id: "",
+      cartao_id: "none",
       status: "Realizado",
     },
   })
@@ -87,8 +88,12 @@ export function AddTransactionDialog({ children, cartoes = [], variant = "primar
   const tipoSelecionado = form.watch("tipo")
 
   function onSubmit(values: z.infer<typeof TransactionSchema>) {
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
+    
     startTransition(async () => {
-      const formData = new FormData()
+      try {
+        const formData = new FormData()
       formData.append("descricao", values.descricao)
       formData.append("valor", String(values.valor))
       formData.append("categoria", values.categoria)
@@ -100,20 +105,25 @@ export function AddTransactionDialog({ children, cartoes = [], variant = "primar
       if (values.conta_id && values.conta_id !== "none") {
         formData.append("conta_id", values.conta_id)
       }
-      if (values.cartao_id) {
+      if (values.cartao_id && values.cartao_id !== "none") {
         formData.append("cartao_id", values.cartao_id)
       }
 
       let result: { error?: string; success?: boolean }
 
-      if (isSplit) {
-        formData.append("splits[0].responsavel", "Luan")
-        formData.append("splits[0].valor", splitLuan)
-        formData.append("splits[1].responsavel", "Luana")
-        formData.append("splits[1].valor", splitLuana)
-        result = await createSplitTransaction(formData)
-      } else {
-        result = await createTransaction(formData)
+      try {
+        if (isSplit) {
+          formData.append("splits[0].responsavel", "Luan")
+          formData.append("splits[0].valor", splitLuan)
+          formData.append("splits[1].responsavel", "Luana")
+          formData.append("splits[1].valor", splitLuana)
+          result = await createSplitTransaction(formData)
+        } else {
+          result = await createTransaction(formData)
+        }
+      } catch (fatalError: any) {
+        form.setError("root", { message: `[FATAL] ${fatalError.message || fatalError}` });
+        return;
       }
 
       if (result.error) {
@@ -124,6 +134,9 @@ export function AddTransactionDialog({ children, cartoes = [], variant = "primar
         setIsSplit(false)
         setSplitLuan("")
         setSplitLuana("")
+      }
+      } finally {
+        isSubmittingRef.current = false;
       }
     })
   }
@@ -264,7 +277,7 @@ export function AddTransactionDialog({ children, cartoes = [], variant = "primar
                         </FormControl>
                         <SelectContent>
                           <SelectItem value="none">Sem conta / Cartão</SelectItem>
-                          {contas.map(conta => (
+                          {contas.filter((c: any) => c.id && c.id.trim() !== "").map(conta => (
                             <SelectItem key={conta.id} value={conta.id}>
                               {conta.nome}
                             </SelectItem>
@@ -284,15 +297,15 @@ export function AddTransactionDialog({ children, cartoes = [], variant = "primar
                       <FormLabel>Ou Cartão de Crédito</FormLabel>
                       <Select onValueChange={(val) => {
                           field.onChange(val);
-                          if (val) form.setValue("conta_id", "none");
-                      }} value={field.value || ""}>
+                          if (val !== "none") form.setValue("conta_id", "none");
+                      }} value={field.value || "none"}>
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="Selecione..." />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="">Nenhum</SelectItem>
+                          <SelectItem value="none">Nenhum</SelectItem>
                           {cartoes.map(cartao => (
                             <SelectItem key={cartao.id} value={cartao.id}>
                               {cartao.nome}
@@ -341,9 +354,11 @@ export function AddTransactionDialog({ children, cartoes = [], variant = "primar
                         </FormControl>
                         <SelectContent>
                            {categoriasFiltradas.length > 0 ? (
-                               categoriasFiltradas.map(cat => (
-                                 <SelectItem key={cat.id || cat.nome} value={cat.nome}>{cat.nome}</SelectItem>
-                               ))
+                               categoriasFiltradas
+                                 .filter(cat => cat.nome && cat.nome.trim() !== "")
+                                 .map(cat => (
+                                   <SelectItem key={cat.id || cat.nome} value={cat.nome}>{cat.nome}</SelectItem>
+                                 ))
                            ) : (
                                <SelectItem value="Outros">Outros</SelectItem>
                            )}
@@ -436,7 +451,12 @@ export function AddTransactionDialog({ children, cartoes = [], variant = "primar
                 })())} 
                 data-testid="btn-salvar-transacao"
               >
-                {isPending ? "Salvando..." : isSplit ? "Salvar Split" : "Salvar Transação"}
+                {isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Salvando...
+                  </>
+                ) : isSplit ? "Salvar Split" : "Salvar Transação"}
               </Button>
             </DialogFooter>
           </form>

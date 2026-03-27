@@ -1,0 +1,65 @@
+[dotenv@17.3.1] injecting env (7) from .env.local -- tip: ⚙️  override existing env vars with { override: true }
+[dotenv@17.3.1] injecting env (0) from .env.local -- tip: ⚙️  specify custom .env file path with { path: '/custom/path/.env' }
+
+Running 2 tests using 1 worker
+
+[dotenv@17.3.1] injecting env (0) from .env.local -- tip: ⚙️  specify custom .env file path with { path: '/custom/path/.env' }
+[dotenv@17.3.1] injecting env (0) from .env.local -- tip: ⚡️ secrets for agents: https://dotenvx.com/as2
+  ✓  1 [setup] › tests\e2e\auth.setup.ts:9:6 › authenticate (11.7s)
+[dotenv@17.3.1] injecting env (0) from .env.local -- tip: 🛡️ auth for agents: https://vestauth.com
+  ✘  2 [chromium-desktop] › tests\e2e\desktop.spec.ts:34:7 › Desktop E2E Suite › P0: Lançamento manual salva com sucesso sem crash (31.9s)
+[dotenv@17.3.1] injecting env (0) from .env.local -- tip: 🛠️  run anywhere with `dotenvx run -- yourcommand`
+  ✘  3 [chromium-desktop] › tests\e2e\desktop.spec.ts:34:7 › Desktop E2E Suite › P0: Lançamento manual salva com sucesso sem crash (retry #1) (31.4s)
+[dotenv@17.3.1] injecting env (0) from .env.local -- tip: 🔐 encrypt with Dotenvx: https://dotenvx.com
+  ✘  4 [chromium-desktop] › tests\e2e\desktop.spec.ts:34:7 › Desktop E2E Suite › P0: Lançamento manual salva com sucesso sem crash (retry #2) (2.5s)
+
+
+  1) [chromium-desktop] › tests\e2e\desktop.spec.ts:34:7 › Desktop E2E Suite › P0: Lançamento manual salva com sucesso sem crash 
+
+    [31mTest timeout of 30000ms exceeded while setting up "page".[39m
+
+    Error: browserContext.newPage: Test timeout of 30000ms exceeded.
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    [31mTest timeout of 30000ms exceeded.[39m
+
+    Error: locator.fill: Test timeout of 30000ms exceeded.
+    Call log:
+    [2m  - waiting for getByTestId('input-descricao')[22m
+
+
+      40 |
+      41 |     // 2. Preencher dados mínimos
+    > 42 |     await page.getByTestId('input-descricao').fill('Playwright P0 Manual Test');
+         |                                               ^
+      43 |     await page.getByTestId('input-valor').fill('100.50');
+      44 |     
+      45 |     // Selecionar categoria (pega a primeira disponível)
+        at C:\projetos\family_wealth_manager\web\tests\e2e\desktop.spec.ts:42:47
+
+    Error Context: test-results\desktop-Desktop-E2E-Suite--e2a73-salva-com-sucesso-sem-crash-chromium-desktop-retry1\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\desktop-Desktop-E2E-Suite--e2a73-salva-com-sucesso-sem-crash-chromium-desktop-retry1\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\desktop-Desktop-E2E-Suite--e2a73-salva-com-sucesso-sem-crash-chromium-desktop-retry1\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Retry #2 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Test was interrupted.
+
+    Error: browser.newContext: Target page, context or browser has been closed
+    Browser logs:
+
+    <launching> C:\Users\luan.rosa\AppData\Local\ms-playwright\chromium_headless_shell-1208\chrome-headless-shell-win64\chrome-headless-shell.exe --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,Translate,AutoDeElevate,RenderDocument,OptimizationHints --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --enable-automation --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --headless --hide-scrollbars --mute-audio --blink-settings=primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4 --no-sandbox --user-data-dir=C:\Users\LUAN~1.ROS\AppData\Local\Temp\playwright_chromiumdev_profile-qRUgpt --remote-debugging-pipe --no-startup-window
+    <launched> pid=17364
+
+  1 failed
+    [chromium-desktop] › tests\e2e\desktop.spec.ts:34:7 › Desktop E2E Suite › P0: Lançamento manual salva com sucesso sem crash 
+  1 passed (1.8m)
+Deseja finalizar o arquivo em lotes (S/N)? 
+^C

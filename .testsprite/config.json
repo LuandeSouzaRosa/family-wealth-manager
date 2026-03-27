@@ -3,14 +3,14 @@
   "type": "frontend",
   "scope": "codebase",
   "localEndpoint": "http://localhost:3001",
-  "loginUser": "luan.teste@test.com",
-  "loginPassword": "123456",
+  "loginUser": "luan_souza_r@hotmail.com",
+  "loginPassword": "@Lu96385674173267697",
   "executionArgs": {
     "projectName": "family_wealth_manager",
     "projectPath": "c:\\projetos\\family_wealth_manager",
     "testIds": [],
-    "additionalInstruction": "Ensure coverage for the new Bank Reconciliation (CSV Import) and Recurring Expenses features. Also verify the Dashboard and Transaction flows.",
-    "serverMode": "development",
+    "additionalInstruction": "Focus entirely on the mobile UI aspects of transacoes-client.tsx, orcamentos-client.tsx, the strict behavior of isResponsibleMatch across Dashboard and Budgets, and the behavior of CSV Reconciliation (csv-importer.tsx) with 'Exato', 'Forte', and 'Possível' matches.",
+    "serverMode": "production",
     "envs": {
       "API_KEY": "sk-user-z6Fwr2H5OWulZdQiyF07B0VTHtyk_PubgbeTLlLX5PFUnQpAyCjLDF4YS1WbEsnAdo_0P5hu2CoUNnWFaoGt_XWhVzKgKwdiluJOwkQxxHS9AkpAFUaJCqtfTmqA8cB38-Y"
     }

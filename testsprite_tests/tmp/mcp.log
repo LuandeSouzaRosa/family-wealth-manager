@@ -103588,3 +103588,23 @@
 {"timestamp":"2026-03-14T01:59:33.021Z","level":"error","message":"HTTP proxy close timed out, forcing resolve"}
 {"timestamp":"2026-03-14T01:59:33.029Z","level":"info","message":"🔌 Control connection closed. Was connected: true, Total connections handled: 889"}
 {"timestamp":"2026-03-14T01:59:33.022Z","level":"info","message":"Tunnel has been closed."}
+{"timestamp":"2026-03-19T13:37:42.318Z","level":"debug","message":"Generate code and execute params","context":{"projectName":"family_wealth_manager","projectPath":"c:\\projetos\\family_wealth_manager","testIds":[],"serverMode":"production"}}
+{"timestamp":"2026-03-19T13:37:42.392Z","level":"info","message":"Attempting to start server (attempt 1/3)"}
+{"timestamp":"2026-03-19T13:37:42.401Z","level":"info","message":"HTTP server started successfully on port 54971"}
+{"timestamp":"2026-03-19T13:37:42.618Z","level":"info","message":"HTTP proxy started successfully on port 54973"}
+{"timestamp":"2026-03-19T13:37:42.583Z","level":"info","message":"Prod-mode test cap: selecting 30 of 42 frontend tests (serverMode=production)"}
+{"timestamp":"2026-03-19T13:37:42.584Z","level":"info","message":"Selected tests: TC001[High], TC003[High], TC004[High], TC009[High], TC011[High], TC013[High], TC015[High], TC017[High], TC018[High], TC019[High], TC021[High], TC024[High], TC025[High], TC026[High], TC027[High], TC028[High], TC029[High], TC030[High], TC031[High], TC032[High], TC033[High], TC036[High], TC037[High], TC038[High], TC039[High], TC041[High], TC042[High], TC002[Medium], TC005[Medium], TC006[Medium]"}
+{"timestamp":"2026-03-19T13:37:42.615Z","level":"info","message":"Attempting to start HTTP proxy (attempt 1/3)"}
+{"timestamp":"2026-03-19T13:37:42.584Z","level":"info","message":"Skipped tests: TC010[Medium], TC012[Medium], TC014[Medium], TC016[Medium], TC020[Medium], TC022[Medium], TC023[Medium], TC034[Medium], TC035[Medium], TC040[Medium], TC007[Low], TC008[Low]"}
+{"timestamp":"2026-03-19T13:37:43.566Z","level":"info","message":"🚀 Starting tunnel client: 95ef6379-0943-46f9-8636-c7f7c71385e0"}
+{"timestamp":"2026-03-19T13:37:43.568Z","level":"info","message":"📋 Config: localhost:54973 -> tun.testsprite.com:7300"}
+{"timestamp":"2026-03-19T13:37:43.898Z","level":"info","message":"proxy: [REDACTED]tun.testsprite.com:8080"}
+{"timestamp":"2026-03-19T13:37:43.899Z","level":"info","message":"Pre-flight probe attempt 1/3 to http://localhost:3001..."}
+{"timestamp":"2026-03-19T13:37:44.222Z","level":"info","message":"✅ Tunnel established, remote port: 8080"}
+{"timestamp":"2026-03-19T13:37:43.569Z","level":"info","message":"🔗 Establishing control connection..."}
+{"timestamp":"2026-03-19T13:37:43.568Z","level":"info","message":"⏱️ Network timeout: 10000ms, Auth: enabled"}
+{"timestamp":"2026-03-19T13:37:46.764Z","level":"info","message":"GET /favicon.ico 404 15ms"}
+{"timestamp":"2026-03-19T13:37:53.924Z","level":"warn","message":"Pre-flight probe attempt 1 failed: This operation was aborted — retrying in 2s..."}
+{"timestamp":"2026-03-19T13:37:55.926Z","level":"info","message":"Pre-flight probe attempt 2/3 to http://localhost:3001..."}
+{"timestamp":"2026-03-19T13:38:05.938Z","level":"warn","message":"Pre-flight probe attempt 2 failed: This operation was aborted — retrying in 4s..."}
+{"timestamp":"2026-03-19T13:38:09.945Z","level":"info","message":"Pre-flight probe attempt 3/3 to http://localhost:3001..."}

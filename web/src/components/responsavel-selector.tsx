@@ -2,7 +2,7 @@
 
 import { useFilter } from "@/contexts/filter-context"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Users, User, UserCheck } from "lucide-react"
+import { Users, User, UserCheck, Heart } from "lucide-react"
 
 export function ResponsavelSelector() {
   const { responsavel, setResponsavel } = useFilter()
@@ -15,7 +15,8 @@ export function ResponsavelSelector() {
                     <div className="p-1.5 rounded-full bg-secondary">
                         {responsavel === "Todos" && <Users className="w-4 h-4 text-foreground" />}
                         {responsavel === "Luan" && <User className="w-4 h-4 text-blue-500" />}
-                        {responsavel === "Esposa" && <UserCheck className="w-4 h-4 text-pink-500" />}
+                        {responsavel === "Luana" && <UserCheck className="w-4 h-4 text-pink-500" />}
+                        {responsavel === "Casal" && <Heart className="w-4 h-4 text-rose-500" />}
                     </div>
                     <span>{responsavel}</span>
                 </div>
@@ -33,10 +34,16 @@ export function ResponsavelSelector() {
                         <span>Luan</span>
                     </div>
                 </SelectItem>
-                <SelectItem value="Esposa">
+                <SelectItem value="Luana">
                     <div className="flex items-center gap-2">
                         <UserCheck className="w-4 h-4 text-pink-500" />
-                        <span>Esposa</span>
+                        <span>Luana</span>
+                    </div>
+                </SelectItem>
+                <SelectItem value="Casal">
+                    <div className="flex items-center gap-2">
+                        <Heart className="w-4 h-4 text-rose-500" />
+                        <span>Casal</span>
                     </div>
                 </SelectItem>
             </SelectContent>

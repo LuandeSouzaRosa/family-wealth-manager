@@ -1,0 +1,86 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - complementary [ref=e3]:
+      - generic [ref=e8]: L&L Wealth
+      - generic [ref=e9]:
+        - link "Dashboard" [ref=e10] [cursor=pointer]:
+          - /url: /
+          - img [ref=e11]
+          - generic [ref=e16]: Dashboard
+        - link "Extrato" [ref=e17] [cursor=pointer]:
+          - /url: /transacoes
+          - img [ref=e18]
+          - generic [ref=e20]: Extrato
+        - link "Cartões" [ref=e21] [cursor=pointer]:
+          - /url: /cartoes
+          - img [ref=e22]
+          - generic [ref=e24]: Cartões
+        - link "Conciliação" [ref=e25] [cursor=pointer]:
+          - /url: /conciliacao
+          - img [ref=e26]
+          - generic [ref=e29]: Conciliação
+        - generic [ref=e30]: Planejamento
+        - link "Orçamentos" [ref=e31] [cursor=pointer]:
+          - /url: /orcamentos
+          - img [ref=e32]
+          - generic [ref=e35]: Orçamentos
+        - link "Recorrências" [ref=e36] [cursor=pointer]:
+          - /url: /recorrentes
+          - img [ref=e37]
+          - generic [ref=e42]: Recorrências
+        - link "Metas" [ref=e43] [cursor=pointer]:
+          - /url: /metas
+          - img [ref=e44]
+          - generic [ref=e48]: Metas
+        - generic [ref=e49]: Patrimônio
+        - link "Investimentos" [ref=e50] [cursor=pointer]:
+          - /url: /investimentos
+          - img [ref=e51]
+          - generic [ref=e54]: Investimentos
+        - link "Contas Bancárias" [ref=e55] [cursor=pointer]:
+          - /url: /contas
+          - img [ref=e56]
+          - generic [ref=e58]: Contas Bancárias
+        - link "Balanço Patrimonial" [ref=e59] [cursor=pointer]:
+          - /url: /patrimonio
+          - img [ref=e60]
+          - generic [ref=e63]: Balanço Patrimonial
+        - generic [ref=e64]: Configurações
+        - link "Categorias" [ref=e65] [cursor=pointer]:
+          - /url: /categorias
+          - img [ref=e66]
+          - generic [ref=e71]: Categorias
+      - generic [ref=e72]:
+        - generic [ref=e73]:
+          - button "Toggle theme" [ref=e74]:
+            - img
+            - generic [ref=e75]: Toggle theme
+          - combobox [ref=e77]:
+            - generic [ref=e78]:
+              - img [ref=e80]
+              - generic [ref=e85]: Todos
+            - img [ref=e86]
+        - button "Sair" [ref=e89]:
+          - img
+          - generic [ref=e90]: Sair
+        - button [ref=e91]:
+          - img
+    - main [ref=e92]:
+      - generic [ref=e94]:
+        - img [ref=e97]
+        - heading "Ops! Algo deu errado" [level=2] [ref=e99]
+        - paragraph [ref=e100]: Encontramos uma inconsistência no processamento dos seus dados. Não se preocupe, seu patrimônio está seguro.
+        - generic [ref=e101]:
+          - button "Tentar Novamente" [ref=e102]:
+            - img
+            - text: Tentar Novamente
+          - button "Ir para Início" [ref=e103]:
+            - img
+            - text: Ir para Início
+  - region "Notifications alt+T"
+  - alert [ref=e104]
+  - generic [ref=e105]: R$0k
+```

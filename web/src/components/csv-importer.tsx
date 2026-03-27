@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Papa from 'papaparse'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -10,7 +10,7 @@ import { processReconciliationBatch } from '@/actions/transactions'
 import { getCategorizationRules, createCategorizationRule } from '@/actions/categories'
 import { getContasBancarias } from '@/actions/accounts'
 import { getReconciliationCandidates } from '@/actions/reconciliation'
-import { findBestMatch } from '@/lib/reconciliation-logic'
+import { findBestMatch, parseDate, parseMoney } from '@/lib/reconciliation-logic'
 import { Upload, Check, AlertCircle, Loader2, FileSpreadsheet, PlusCircle, Info } from 'lucide-react'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
@@ -25,37 +25,6 @@ const CATEGORIAS = [
 
 const RESPONSAVEIS = ["Casal", "Luan", "Luana"]
 
-const parseMoney = (val: string) => {
-  if (typeof val === 'number') return val;
-  // Exemplo Nubank: "16.99" ou "-16.99"
-  // Remove qualquer caractere que não seja número, ponto ou sinal de menos
-  let cleanStr = String(val).replace(/[^0-9.,-]/g, '');
-  
-  // Se não tem vírgula, mas tem ponto (ex: 16.99 do Nubank), é um número float válido no formato US
-  if (cleanStr.includes('.') && !cleanStr.includes(',')) {
-      return parseFloat(cleanStr);
-  }
-  
-  // Se tem vírgula, assumimos padrão brasileiro (ex: 1.200,50 ou 16,99)
-  // Removemos todos os pontos e trocamos a última vírgula por ponto
-  if (cleanStr.includes(',')) {
-      cleanStr = cleanStr.replace(/\./g, '').replace(',', '.');
-      return parseFloat(cleanStr);
-  }
-
-  return parseFloat(cleanStr) || 0;
-}
-
-const parseDate = (val: string) => {
-  if (!val) return new Date().toISOString();
-  // Formato Nubank DD/MM/YYYY
-  const parts = val.split('/');
-  if (parts.length === 3) {
-    return new Date(`${parts[2]}-${parts[1]}-${parts[0]}`).toISOString();
-  }
-  return new Date(val).toISOString();
-}
-
 export function CsvImporter() {
   const [isUploading, setIsUploading] = useState(false)
   const [data, setData] = useState<any[]>([])
@@ -65,6 +34,7 @@ export function CsvImporter() {
   const [novasRegras, setNovasRegras] = useState<Set<number>>(new Set()) // Índices das linhas que virarão regra
   const [contas, setContas] = useState<any[]>([])
   const [contaSelecionada, setContaSelecionada] = useState<string>("none")
+  const isSubmittingRef = useRef(false)
   
   const contaAtual = contas.find(c => c.id === contaSelecionada)
 
@@ -108,11 +78,16 @@ export function CsvImporter() {
     Papa.parse(file, {
       header: true,
              complete: async (results) => {
+          let lastValidDate = new Date().toISOString();
           const normalized = results.data.map((row: any, index) => {
             const desc = row['descricao'] || row['Descrição'] || row['description'] || "Sem descrição"
+            const rawDate = row['data'] || row['Data'] || row['date']
+            const safeDate = parseDate(rawDate, lastValidDate)
+            lastValidDate = safeDate;
+
             return {
               id: index,
-              data: parseDate(row['data'] || row['Data'] || row['date']),
+              data: safeDate,
               descricao: desc,
               valor: parseMoney(row['valor'] || row['Valor'] || row['value'] || "0"),
               categoria: aplicarRegras(desc),
@@ -138,11 +113,26 @@ export function CsvImporter() {
 
               const candidates = await getReconciliationCandidates(minStr, maxStr);
 
+              // Hardening: Bloqueio contra Duplicate Claiming 
+              const usedCandidates = new Set<string>();
+
               const reconciledData = cleanData.map(row => {
-                  const match = findBestMatch(row, candidates);
+                  const availableCandidates = candidates.filter(c => {
+                      const id = c.is_split_group ? c.split_group_id! : c.id;
+                      return !usedCandidates.has(id);
+                  });
+
+                  const match = findBestMatch(row, availableCandidates);
                   let acao: "Novo" | "Conciliar" | "Duplicado" = "Novo";
-                  if (match.level === "Exato") acao = "Duplicado"; // Ignore by default
-                  else if (match.level === "Forte") acao = "Conciliar"; // Apenas Forte e Exato se auto-determinam
+                  
+                  if (match.level === "Exato") {
+                     acao = "Duplicado"; 
+                     if (match.candidateId) usedCandidates.add(match.candidateId);
+                  }
+                  else if (match.level === "Forte") {
+                     acao = "Conciliar"; 
+                     if (match.candidateId) usedCandidates.add(match.candidateId);
+                  }
                   
                   return {
                       ...row,
@@ -173,9 +163,9 @@ export function CsvImporter() {
   }
 
   const handleImport = async () => {
+    if (isSubmittingRef.current) return; // True synchronous lock via ref
+    isSubmittingRef.current = true;
     setIsUploading(true)
-    
-    // Ignora explicitamente os que ficaram na UI como "Duplicado"
     const valids = data.filter(r => r.acao !== "Duplicado")
     
     const payload = valids.map(({ id, acao, matchLevel, matchCandidateId, isSplitGroup, matchScore, ...rest }) => ({
@@ -232,17 +222,21 @@ export function CsvImporter() {
         isSplitGroup: p._isSplitGroup
     }));
 
-    const result = await processReconciliationBatch({ inserts, conciliations })
-    setIsUploading(false)
+    try {
+      const result = await processReconciliationBatch({ inserts, conciliations })
+      setIsUploading(false)
 
-    if (result && 'count' in result) {
-      const concMsg = result.conciliated && result.conciliated > 0 ? ` e ${result.conciliated} conciliações realizadas` : ""
-      setSuccessMsg(`${result.count} novas importadas${concMsg} com sucesso!`)
-      toast.success("Importação concluída com sucesso!")
-      setData([])
-      setFileName("")
-    } else if (result && 'error' in result) {
-      toast.error("Erro na importação: " + result.error)
+      if (result && 'count' in result) {
+        const concMsg = result.conciliated && result.conciliated > 0 ? ` e ${result.conciliated} conciliações realizadas` : ""
+        setSuccessMsg(`${result.count} novas importadas${concMsg} com sucesso!`)
+        toast.success("Importação concluída com sucesso!")
+        setData([])
+        setFileName("")
+      } else if (result && 'error' in result) {
+        toast.error("Erro na importação: " + result.error)
+      }
+    } finally {
+      isSubmittingRef.current = false;
     }
   }
 

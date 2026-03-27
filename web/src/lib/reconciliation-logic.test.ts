@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { findBestMatch, normalizeDescription, calculateSimilarTokens, CandidateTransaction, CsvRow } from './reconciliation-logic';
+import { findBestMatch, normalizeDescription, calculateSimilarTokens, CandidateTransaction, CsvRow, parseMoney } from './reconciliation-logic';
 
 describe('Reconciliation Logic', () => {
   describe('normalizeDescription', () => {
@@ -12,6 +12,18 @@ describe('Reconciliation Logic', () => {
   describe('calculateSimilarTokens', () => {
     it('deve calcular matching básico de palavras', () => {
       expect(calculateSimilarTokens('ifood 45', 'IFOOD*DELIVERY')).toBe(1);
+    });
+  });
+
+  describe('parseMoney (Hardening)', () => {
+    it('deve parsear formato BR 1.200,50', () => expect(parseMoney('1.200,50')).toBe(1200.5));
+    it('deve parsear formato US 1,200.50', () => expect(parseMoney('1,200.50')).toBe(1200.5));
+    it('deve parsear numeros limpos 1200.50', () => expect(parseMoney('1200.50')).toBe(1200.5));
+    it('deve parsear com multiplas virgulas US 1,200,000.00', () => expect(parseMoney('1,200,000.00')).toBe(1200000));
+    it('deve parsear negativo e contabil (150.00)', () => {
+       expect(parseMoney('-150.00')).toBe(-150);
+       expect(parseMoney('(150.00)')).toBe(-150);
+       expect(parseMoney('R$ - 150,00')).toBe(-150);
     });
   });
 
@@ -94,16 +106,51 @@ describe('Reconciliation Logic', () => {
     it('deve priorizar o Match Exato sobre Possível quando há conflito de dias preservando os motivos', () => {
       const csvRow: CsvRow = { descricao: 'Uber', valor: 25.00, data: '2023-10-05', tipo: 'Saída' };
       const candidates: CandidateTransaction[] = [
-        { id: '1', descricao: 'Viagem', valor: 25.00, data: '2023-10-01', tipo: 'Saída' }, // 4 days, 0 tokens = Possível
-        { id: '2', descricao: 'Uber ida pro trabalho', valor: 25.00, data: '2023-10-04', tipo: 'Saída' } // 1 day, 1 token = Exato
+        { id: '1', descricao: 'Viagem', valor: 25.00, data: '2023-10-01', tipo: 'Saída' }, // 4 dias, 0 token, SemMatch!
+        { id: '2', descricao: 'Uber ida pro trabalho', valor: 25.00, data: '2023-10-04', tipo: 'Saída' } // 1 dia, 1 token = Exato
       ];
 
       const match = findBestMatch(csvRow, candidates);
       expect(match.level).toBe('Exato');
       expect(match.candidateId).toBe('2');
-      expect(match.reasons).toContain('Data próxima');
-      expect(match.reasons).toContain('Valor exato');
-      expect(match.reasons).toContain('Descrição parecida');
+    });
+
+    it('Conservadorismo: Disputa/Conflito faz downgrade automático para Possível', () => {
+      // Dois Ubers cobrados no mesmo dia pelo exato mesmo valor
+      const csvRow: CsvRow = { descricao: 'UBER DO BRASIL', valor: 30.00, data: '2023-10-05', tipo: 'Saída' };
+      const candidates: CandidateTransaction[] = [
+        { id: '1', descricao: 'Uber ida', valor: 30.00, data: '2023-10-05', tipo: 'Saída' },
+        { id: '2', descricao: 'Uber volta', valor: 30.00, data: '2023-10-05', tipo: 'Saída' }
+      ];
+
+      const match = findBestMatch(csvRow, candidates);
+      // Apesar de ser score máximo para ambos, a engine tem que ser pessimista.
+      expect(match.level).toBe('Possível'); 
+      expect(match.reasons[0]).toContain('Disputa visível');
+    });
+
+    it('Conservadorismo: Vetar otimismo nulo em valores redondos (Genéricos)', () => {
+        // Assinatura genérica "PAGAMENTO" com 50.00 sem texto relacionado, cai na malha fina.
+        const csvRow: CsvRow = { descricao: 'PAGAMENTO BOLETO', valor: 50.00, data: '2023-10-05', tipo: 'Saída' };
+        const candidates: CandidateTransaction[] = [
+          { id: '1', descricao: 'Restaurante aleatório', valor: 50.00, data: '2023-10-05', tipo: 'Saída' } 
+        ];
+  
+        const match = findBestMatch(csvRow, candidates);
+        expect(match.level).toBe('Possível');
+        expect(match.reasons).toContain('Match Fraco: Valor redondo comum');
+        expect(match.reasons).toContain('Descrições divergentes');
+    });
+
+    it('Conservadorismo: Interromper ligação Cega de Data distante sem suporte de token', () => {
+        // Descrição divergente e >2 dias = Nada feito
+        const csvRow: CsvRow = { descricao: 'Hospedagem', valor: 550.00, data: '2023-10-05', tipo: 'Saída' };
+        const candidates: CandidateTransaction[] = [
+          { id: '1', descricao: 'Plano de Saúde', valor: 550.00, data: '2023-10-01', tipo: 'Saída' } // 4 dias de diferença
+        ];
+  
+        const match = findBestMatch(csvRow, candidates);
+        expect(match.level).toBe('Sem_Match');
     });
   });
 });

@@ -4,6 +4,7 @@ import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { unstable_cache } from "next/cache";
 import { CACHE_TAGS } from "@/lib/cache";
+import { calculateDashboardMetrics, calculateFinancialHealthMetrics } from "@/lib/dashboard-logic";
 
 // ==========================================
 // DASHBOARD & ANALYTICS (with cache)
@@ -15,42 +16,22 @@ const getCachedDashboardMetrics = unstable_cache(
   async (userId: string) => {
     const supabase = createAdminClient();
 
-    // 1. Métricas do Mês Atual (View com user_id para o total global)
-    const { data: metricsMonth, error: errorMonth } = await supabase
-      .from("vw_mes_atual_metricas")
-      .select("*")
-      .eq("user_id", userId)
-      .single();
-
-    if (errorMonth && errorMonth.code !== "PGRST116") {
-      console.error("Erro ao ler métricas do mês:", errorMonth);
-    }
-
-    const metrics = metricsMonth || { renda: 0, despesas: 0, investido: 0 };
-
-    // 1.1 Calcular a renda e despesa isolada do mês por responsável (Tornando o Dashboard fidedigno)
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
 
-    const { data: monthTx } = await supabase
+    // 1. Calcular tudo diretamente usando as transações do mês em curso!
+    // Substitui a View estática para blindar o status real (Agendado vs Realizado).
+    const { data: monthTx, error: errorMonthTx } = await supabase
       .from("transacoes")
-      .select("valor, tipo, responsavel")
+      .select("valor, tipo, responsavel, status")
       .eq("user_id", userId)
       .gte("data", startOfMonth);
 
-    const porResponsavel: Record<string, { renda: number, despesas: number }> = {
-       "Luan": { renda: 0, despesas: 0 },
-       "Luana": { renda: 0, despesas: 0 },
-       "Casal": { renda: 0, despesas: 0 }
-    };
+    if (errorMonthTx && errorMonthTx.code !== "PGRST116") {
+      console.error("Erro ao ler transações do mês para Dashboard:", errorMonthTx);
+    }
 
-    monthTx?.forEach(tx => {
-       const resp = tx.responsavel;
-       if (resp && porResponsavel[resp]) {
-           if (tx.tipo === "Entrada") porResponsavel[resp].renda += Number(tx.valor);
-           if (tx.tipo === "Saída") porResponsavel[resp].despesas += Number(tx.valor);
-       }
-    });
+    const metrics = calculateDashboardMetrics(monthTx || []);
 
     // 2. Saldo Total Acumulado e Lista de Contas
     const { data: contas } = await supabase
@@ -74,7 +55,6 @@ const getCachedDashboardMetrics = unstable_cache(
 
     return {
       ...metrics,
-      porResponsavel,
       saldoTotal,
       saldoComprometido,
       saldoLivre,
@@ -201,20 +181,11 @@ const getCachedFinancialHealthMetrics = unstable_cache(
 
     const { data: transactions } = await supabase
       .from("transacoes")
-      .select("valor, tipo")
+      .select("valor, tipo, data, status")
       .eq("user_id", userId)
       .gte("data", threeMonthsAgo.toISOString());
 
-    let totalEntradas = 0;
-    let totalSaidas = 0;
-
-    transactions?.forEach((t) => {
-      if (t.tipo === "Entrada") totalEntradas += t.valor;
-      if (t.tipo === "Saída") totalSaidas += t.valor;
-    });
-
-    const avgIncome = totalEntradas / 3;
-    const avgBurnRate = totalSaidas / 3;
+    const { avgIncome, avgBurnRate } = calculateFinancialHealthMetrics(transactions || [], 3);
 
     // 3. Métricas
     const savingsRate = avgIncome > 0 ? ((avgIncome - avgBurnRate) / avgIncome) * 100 : 0;

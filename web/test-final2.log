@@ -1,0 +1,47 @@
+﻿[dotenv@17.3.1] injecting env (7) from .env.local -- tip: ÔÜÖ´©Å  override existing env vars with { override: true }
+[dotenv@17.3.1] injecting env (0) from .env.local -- tip: ­ƒöÉ prevent building .env in docker: https://dotenvx.com/prebuild
+
+Running 2 tests using 1 worker
+
+[1A[2K[dotenv@17.3.1] injecting env (0) from .env.local -- tip: ÔÜÖ´©Å  enable debug logging with { debug: true }
+
+[1A[2K[dotenv@17.3.1] injecting env (0) from .env.local -- tip: ÔÜÖ´©Å  suppress all logs with { quiet: true }
+
+[1A[2K[1/2] [setup] ÔÇ║ tests\e2e\auth.setup.ts:9:6 ÔÇ║ authenticate
+[1A[2K[dotenv@17.3.1] injecting env (0) from .env.local -- tip: ­ƒøá´©Å  run anywhere with `dotenvx run -- yourcommand`
+
+[1A[2K[2/2] [chromium-desktop] ÔÇ║ tests\e2e\desktop.spec.ts:34:7 ÔÇ║ Desktop E2E Suite ÔÇ║ P0: Lan├ºamento manual salva com sucesso sem crash
+[1A[2K  1) [chromium-desktop] ÔÇ║ tests\e2e\desktop.spec.ts:34:7 ÔÇ║ Desktop E2E Suite ÔÇ║ P0: Lan├ºamento manual salva com sucesso sem crash 
+
+    [31mTest timeout of 30000ms exceeded.[39m
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m([22m[2m)[22m failed
+
+    Locator:  getByText('Playwright P0 Manual Test').first()
+    Expected: visible
+    Received: hidden
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 15000ms[22m
+    [2m  - waiting for getByText('Playwright P0 Manual Test').first()[22m
+    [2m    17 ├ù locator resolved to <span class="text-sm font-medium text-foreground line-clamp-1">Playwright P0 Manual Test</span>[22m
+    [2m       - unexpected value "hidden"[22m
+
+
+      54 |     // 4. Validar resultado
+      55 |     // Se n├úo ocorrer crash e a listagem for atualizada com o novo valor, o teste passa.
+    > 56 |     await expect(page.getByText('Playwright P0 Manual Test').first()).toBeVisible({ timeout: 15000 });
+         |                                                                       ^
+      57 |   });
+      58 | });
+      59 |
+        at C:\projetos\family_wealth_manager\web\tests\e2e\desktop.spec.ts:56:71
+
+    Error Context: test-results\desktop-Desktop-E2E-Suite--e2a73-salva-com-sucesso-sem-crash-chromium-desktop\error-context.md
+
+
+[1A[2K  1 failed
+    [chromium-desktop] ÔÇ║ tests\e2e\desktop.spec.ts:34:7 ÔÇ║ Desktop E2E Suite ÔÇ║ P0: Lan├ºamento manual salva com sucesso sem crash 
+  1 passed (1.0m)
+
+[36m  Serving HTML report at http://localhost:9323. Press Ctrl+C to quit.[39m

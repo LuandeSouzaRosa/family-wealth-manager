@@ -1,20 +1,31 @@
-# Family Wealth Manager (v4.0)
+# Family Wealth Manager (v6.0)
 
-Arquivo principal: `app.py`
+Aplicação web centrada no controle ágil e transparente das finanças do casal. O projeto opera em **Next.js 15 (App Router)** e **Supabase**, desenhado com extrema atenção a métricas claras, ingestão rápida de dados (CSV/Manual) e isolamento seguro de lançamentos.
 
-## Funcionalidades v4.0
-- **Aba Patrimônio**: Controle de saldos iniciais e bens duráveis.
-- **Cálculo de Renda**: Soma automática da renda mensal.
-- **Filtro Responsável**: Visualize os dados por 'Luan', 'Luana' ou 'Casal'.
-- **Resiliência**: Tratamento de erros de conexão e planilhas vazias.
+## Documentação Técnica do Repositório
 
-## Execução
-Para a versão de produção:
+Arquitetura, protocolos e regras de domínio estão imantados dentro da pasta `docs/`. Agentes sintéticos prestando manutenção têm diretrizes absolutas nestes endereços:
+
+* 🧠 **Agentes / IAs:** Leitura inicial mandatória do [Prompt Mestre](docs/operations/AGENT_MASTER_PROMPT.md) e do [Protocolo de Execução](docs/operations/AGENT_EXECUTION_PROTOCOL.md).
+* ⚙️ **Regras de Infra:** Leia os [Contratos de Arquitetura](docs/architecture/ARCHITECTURE_DECISIONS.md).
+* 💰 **Lógica de Domínio:** Consulte as regras matemáticas em [Invariantes Financeiros](docs/quality/FINANCIAL_INVARIANTS.md).
+* 🚦 **Fase Atual:** Verifique [Fase Operacional](docs/operations/CURRENT_PHASE.md) e [Riscos Vivos](docs/operations/KNOWN_RISKS.md).
+* 🔍 **Visões Legadas & PRDs Antigos:** Mergulhe no histórico em `docs/archive/`.
+
+## Ambiente, Setup Mínimo Útil e Testes
+
+Para executar localmente, garanta que as variáveis de ambiente baseadas no `.env.example` existem (credenciais de Supabase).
+
 ```bash
-streamlit run app.py
-```
+# Setup
+npm install
 
-Para a versão de homologação:
-```bash
-streamlit run app_homolog.py
+# Desenvolvimento
+npm run dev
+
+# Bateria de Validação
+npm run test
+
+# Build de Produção Local
+npm run build
 ```

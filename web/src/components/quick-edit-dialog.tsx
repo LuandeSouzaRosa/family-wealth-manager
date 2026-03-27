@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { useTransition } from "react"
+import { useTransition, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -33,17 +33,25 @@ export function QuickEditTransactionDialog({
   const [categoria, setCategoria] = React.useState(transaction.categoria)
   const [responsavel, setResponsavel] = React.useState(transaction.responsavel || "Casal")
   const [isPending, startTransition] = useTransition()
+  const isSubmittingRef = useRef(false)
 
   const CATEGORIAS_FALLBACK = ["Moradia", "Alimentação", "Transporte", "Saúde", "Educação", "Lazer", "Outros", "Salário", "Investimentos"]
   const categorias = categoriasValidas.length > 0 ? categoriasValidas : CATEGORIAS_FALLBACK
 
   const handleSave = () => {
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
+    
     startTransition(async () => {
-      const res = await quickEditTransaction(transaction.id, categoria, responsavel)
-      if (res?.error) {
-        alert(res.error)
-      } else {
-        setOpen(false)
+      try {
+        const res = await quickEditTransaction(transaction.id, categoria, responsavel)
+        if (res?.error) {
+          alert(res.error)
+        } else {
+          setOpen(false)
+        }
+      } finally {
+        isSubmittingRef.current = false;
       }
     })
   }

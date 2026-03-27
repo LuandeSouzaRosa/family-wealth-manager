@@ -1,6 +1,6 @@
 "use client"
 
-import { useTransition, useState } from "react"
+import { useTransition, useState, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -14,6 +14,7 @@ export function QuickAddWidget() {
   const [isOpen, setIsOpen] = useState(false)
   const [inputValue, setInputValue] = useState("")
   const [isPending, startTransition] = useTransition()
+  const isSubmittingRef = useRef(false)
   const [preview, setPreview] = useState<{
     descricao: string
     valor: number
@@ -34,7 +35,8 @@ export function QuickAddWidget() {
 
   const handleSubmit = (e?: React.FormEvent) => {
     e?.preventDefault()
-    if (!inputValue) return
+    if (isSubmittingRef.current || !inputValue) return
+    isSubmittingRef.current = true
 
     const parsed = parseQuickAdd(inputValue)
     if (!parsed) {
@@ -43,27 +45,46 @@ export function QuickAddWidget() {
     }
 
     startTransition(async () => {
+      console.log("[DEBUG] QuickAdd: Iniciando formData...");
       const formData = new FormData()
       formData.append("descricao", parsed.descricao)
       formData.append("valor", String(parsed.valor))
       formData.append("tipo", parsed.tipo)
       formData.append("categoria", parsed.categoria)
-      formData.append("data", parsed.data.toISOString())
+      
+      try {
+        formData.append("data", parsed.data.toISOString())
+      } catch (err) {
+        console.error("[DEBUG] Erro local no toISOString (Quick Add):", err)
+        toast.error("Erro interno ao processar a data.")
+        return
+      }
+      
       formData.append("status", "Realizado")
 
-      const result = await createTransaction(formData)
+      console.log("[DEBUG] QuickAdd: Chamando createTransaction...");
+      try {
+        const result = await createTransaction(formData)
+        console.log("[DEBUG] QuickAdd: Retorno de createTransaction:", result);
 
-      if ('error' in result) {
-        toast.error(result.error)
-      } else {
-        const tipoLabel = parsed.tipo === "Entrada" ? "Receita" : "Despesa"
-        toast.success(
-          `${tipoLabel}: ${parsed.descricao} — R$ ${parsed.valor.toFixed(2)}`,
-          { description: `Categoria: ${parsed.categoria}` }
-        )
-        setInputValue("")
-        setPreview(null)
-        setIsOpen(false)
+        if ('error' in result) {
+          toast.error(result.error)
+        } else {
+          const tipoLabel = parsed.tipo === "Entrada" ? "Receita" : "Despesa"
+          toast.success(
+            `${tipoLabel}: ${parsed.descricao} — R$ ${parsed.valor.toFixed(2)}`,
+            { description: `Categoria: ${parsed.categoria}` }
+          )
+          setInputValue("")
+          setPreview(null)
+          setIsOpen(false)
+        }
+      } catch (fatalError: any) {
+        console.error("[FATAL DEBUG] QuickAdd Crashou completamente o client during/after Server Action:", fatalError);
+        // Exibimos o stack exato no browser
+        toast.error(`[FATAL] ${fatalError.message || fatalError}`);
+      } finally {
+        isSubmittingRef.current = false;
       }
     })
   }

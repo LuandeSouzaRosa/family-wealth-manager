@@ -42,16 +42,16 @@ export async function createTransaction(formData: FormData) {
     }
 
     // 3. Inserir no Banco 
+    const finalPayload = {
+      ...parsed.data,
+      data: parsed.data.data?.toISOString(),
+      origem: "Manual",
+      user_id: user.id,
+    };
+
     const { error } = await supabase
       .from("transacoes")
-      .insert([
-        {
-          ...parsed.data,
-          data: parsed.data.data?.toISOString(),
-          origem: "Manual",
-          user_id: user.id,
-        }
-      ]);
+      .insert([finalPayload]);
 
     if (error) {
       return handleError({ action: "createTransaction", userId: user.id }, error);
@@ -221,13 +221,18 @@ export async function getTransactions(month?: number, year?: number) {
     .select("*")
     .order("data", { ascending: false });
     
-  if (month && year) {
-     // Configurar range de data para o mês específico
-     // no Postgres extrair month é possível mas filtrar via JS range na string ISO é mais verboso
-     // Vamos usar range start e end 
-     const startDate = new Date(year, month - 1, 1).toISOString();
-     const endDate = new Date(year, month, 0, 23, 59, 59).toISOString();
-     query = query.gte("data", startDate).lte("data", endDate);
+  if (year && year > 0) {
+     if (month && month > 0) {
+        // Range do mês específico
+        const startDate = new Date(year, month - 1, 1).toISOString();
+        const endDate = new Date(year, month, 0, 23, 59, 59).toISOString();
+        query = query.gte("data", startDate).lte("data", endDate);
+     } else {
+        // Range do ano inteiro (month === 0)
+        const startDate = new Date(year, 0, 1).toISOString();
+        const endDate = new Date(year, 11, 31, 23, 59, 59).toISOString();
+        query = query.gte("data", startDate).lte("data", endDate);
+     }
   }
 
   const { data, error } = await query;

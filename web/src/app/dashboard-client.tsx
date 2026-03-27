@@ -41,11 +41,15 @@ interface DashboardClientProps {
     renda: number
     despesas: number
     investido: number
+    rendaRealizada?: number
+    rendaAgendada?: number
+    despesasRealizadas?: number
+    despesasAgendadas?: number
     saldoTotal?: number
     saldoComprometido?: number
     saldoLivre?: number
     contas?: any[] 
-    porResponsavel?: Record<string, { renda: number, despesas: number }>
+    porResponsavel?: Record<string, { rendaRealizada: number, rendaAgendada: number, despesasRealizadas: number, despesasAgendadas: number, renda: number, despesas: number }>
   }
   recentTx: any[]
   orcamentoStatus: Record<string, any[]>
@@ -96,12 +100,21 @@ export function DashboardClientShell({
         : undefined;
 
   // Renda e Despesa Isoladas
-  let rendaAtual = metrics.renda;
-  let despesasAtual = metrics.despesas;
+  let rendaAtual = metrics.rendaRealizada !== undefined ? metrics.rendaRealizada + metrics.rendaAgendada! : metrics.renda;
+  let despesasAtual = metrics.despesasRealizadas !== undefined ? metrics.despesasRealizadas + metrics.despesasAgendadas! : metrics.despesas;
+  let rendaRealizada = metrics.rendaRealizada || metrics.renda;
+  let rendaAgendada = metrics.rendaAgendada || 0;
+  let despesasRealizadas = metrics.despesasRealizadas || metrics.despesas;
+  let despesasAgendadas = metrics.despesasAgendadas || 0;
 
   if (responsavel !== "Todos" && metrics.porResponsavel && metrics.porResponsavel[responsavel]) {
-      rendaAtual = metrics.porResponsavel[responsavel].renda;
-      despesasAtual = metrics.porResponsavel[responsavel].despesas;
+      const respMetrics = metrics.porResponsavel[responsavel];
+      rendaAtual = respMetrics.renda;
+      despesasAtual = respMetrics.despesas;
+      rendaRealizada = respMetrics.rendaRealizada;
+      rendaAgendada = respMetrics.rendaAgendada;
+      despesasRealizadas = respMetrics.despesasRealizadas;
+      despesasAgendadas = respMetrics.despesasAgendadas;
   }
 
   return (
@@ -123,6 +136,10 @@ export function DashboardClientShell({
         saldoAtual={saldoAtual}
         renda={rendaAtual}
         despesas={despesasAtual}
+        rendaRealizada={rendaRealizada}
+        rendaAgendada={rendaAgendada}
+        despesasRealizadas={despesasRealizadas}
+        despesasAgendadas={despesasAgendadas}
         recentTx={filteredRecentTx}
         responsavel={responsavel}
         financialEvolution={financialEvolution}
@@ -184,6 +201,10 @@ export function DashboardClientShell({
                 saldoAtual={saldoAtual}
                 renda={rendaAtual}
                 despesas={despesasAtual}
+                rendaRealizada={rendaRealizada}
+                rendaAgendada={rendaAgendada}
+                despesasRealizadas={despesasRealizadas}
+                despesasAgendadas={despesasAgendadas}
                 saldoLivre={saldoLivreAtualizado}
                 saldoComprometido={metrics.saldoComprometido}
                 responsavel={responsavel}

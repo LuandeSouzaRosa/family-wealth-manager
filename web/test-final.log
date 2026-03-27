@@ -1,0 +1,39 @@
+﻿[dotenv@17.3.1] injecting env (7) from .env.local -- tip: ÔÜÖ´©Å  enable debug logging with { debug: true }
+[dotenv@17.3.1] injecting env (0) from .env.local -- tip: ­ƒøá´©Å  run anywhere with `dotenvx run -- yourcommand`
+
+Running 2 tests using 1 worker
+
+[1A[2K[dotenv@17.3.1] injecting env (0) from .env.local -- tip: ÔÜí´©Å secrets for agents: https://dotenvx.com/as2
+
+[1A[2K[dotenv@17.3.1] injecting env (0) from .env.local -- tip: ÔÜÖ´©Å  write to custom object with { processEnv: myObject }
+
+[1A[2K[1/2] [setup] ÔÇ║ tests\e2e\auth.setup.ts:9:6 ÔÇ║ authenticate
+[1A[2K[dotenv@17.3.1] injecting env (0) from .env.local -- tip: ­ƒñû agentic secret storage: https://dotenvx.com/as2
+
+[1A[2K[2/2] [chromium-desktop] ÔÇ║ tests\e2e\desktop.spec.ts:34:7 ÔÇ║ Desktop E2E Suite ÔÇ║ P0: Lan├ºamento manual salva com sucesso sem crash
+[1A[2K  1) [chromium-desktop] ÔÇ║ tests\e2e\desktop.spec.ts:34:7 ÔÇ║ Desktop E2E Suite ÔÇ║ P0: Lan├ºamento manual salva com sucesso sem crash 
+
+    [31mTest timeout of 30000ms exceeded.[39m
+
+    Error: locator.click: Test timeout of 30000ms exceeded.
+    Call log:
+    [2m  - waiting for getByRole('option', { name: 'Outros' }).first()[22m
+
+
+      46 |     const categoryTrigger = page.getByTestId('select-categoria').first();
+      47 |     await categoryTrigger.click();
+    > 48 |     await page.getByRole('option', { name: 'Outros' }).first().click();
+         |                                                                ^
+      49 |
+      50 |     // 3. Salvar
+      51 |     const btnSalvar = page.getByTestId('btn-salvar-transacao').first();
+        at C:\projetos\family_wealth_manager\web\tests\e2e\desktop.spec.ts:48:64
+
+    Error Context: test-results\desktop-Desktop-E2E-Suite--e2a73-salva-com-sucesso-sem-crash-chromium-desktop\error-context.md
+
+
+[1A[2K  1 failed
+    [chromium-desktop] ÔÇ║ tests\e2e\desktop.spec.ts:34:7 ÔÇ║ Desktop E2E Suite ÔÇ║ P0: Lan├ºamento manual salva com sucesso sem crash 
+  1 passed (58.7s)
+
+[36m  Serving HTML report at http://localhost:9323. Press Ctrl+C to quit.[39m

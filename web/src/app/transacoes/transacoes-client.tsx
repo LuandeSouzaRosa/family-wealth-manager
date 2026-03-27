@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition, useMemo } from 'react'
+import { useState, useTransition, useMemo, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { Card, CardContent } from '@/components/ui/card'
 import { Trash2, Calendar, FileText, ArrowUpRight, ArrowDownRight, Edit3, Upload, Search, Filter, Download, Split } from 'lucide-react'
@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/u
 import { Input } from '@/components/ui/input'
 import { useFilter } from '@/contexts/filter-context'
 import { isResponsibleMatch } from '@/lib/filter-utils'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 
@@ -28,6 +29,8 @@ interface Transaction {
 interface TransacoesClientProps {
   initialData: Transaction[]
   initialCartoes: any[]
+  initialMonth?: string
+  initialYear?: string
 }
 
 const SPRING_TRANSITION = { type: "spring" as const, bounce: 0.4, duration: 0.8 }
@@ -60,13 +63,25 @@ const MONTHS = [
 
 const YEARS = ["2026", "2025", "2024"]
 
-export function TransacoesClientShell({ initialData, initialCartoes }: TransacoesClientProps) {
+export function TransacoesClientShell({ initialData, initialCartoes, initialMonth = "0", initialYear = new Date().getFullYear().toString() }: TransacoesClientProps) {
   const { responsavel } = useFilter()
+  const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const [month, setMonth] = useState<string>("0") // 0 means all for the selected year
-  const [year, setYear] = useState<string>(new Date().getFullYear().toString())
+  const [month, setMonth] = useState<string>(initialMonth) // 0 means all for the selected year
+  const [year, setYear] = useState<string>(initialYear)
+
+  // Hardening: Sincronize local state when URL changes via Browser Back/Forward
+  useEffect(() => {
+    setMonth(initialMonth)
+    setYear(initialYear)
+  }, [initialMonth, initialYear])
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("Todas")
+  const [visibleCount, setVisibleCount] = useState(30)
+
+  useEffect(() => {
+    setVisibleCount(30)
+  }, [month, year, responsavel, searchTerm, selectedCategory])
 
   const uniqueCategories = useMemo(() => {
     const cats = new Set(initialData.map(tx => tx.categoria))
@@ -111,6 +126,8 @@ export function TransacoesClientShell({ initialData, initialCartoes }: Transacoe
 
     return result
   }, [initialData, month, year, responsavel, searchTerm, selectedCategory])
+
+  const displayData = filteredData.slice(0, visibleCount)
 
   // Get month label for display
   const currentMonthLabel = MONTHS.find(m => m.value === month)?.label || "Mês"
@@ -233,8 +250,14 @@ export function TransacoesClientShell({ initialData, initialCartoes }: Transacoe
                   <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-2">
                         <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Ano</label>
-                        <Select value={year} onValueChange={(val) => setYear(val || "0")}>
-                          <SelectTrigger className="w-full bg-background border-input text-foreground h-10 px-3">
+                        <Select value={year} onValueChange={(val) => {
+                           const v = val || "0";
+                           setYear(v);
+                           startTransition(() => {
+                               router.push(`?month=${month}&year=${v}`);
+                           });
+                        }}>
+                          <SelectTrigger data-testid="filter-year" className="w-full bg-background border-input text-foreground h-10 px-3">
                             <span className="flex-1 min-w-0 truncate text-left">
                                 {year === "0" ? "Todos" : year}
                             </span>
@@ -248,8 +271,14 @@ export function TransacoesClientShell({ initialData, initialCartoes }: Transacoe
 
                       <div className="space-y-2">
                         <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Mês</label>
-                        <Select value={month} onValueChange={(val) => setMonth(val || "0")}>
-                          <SelectTrigger className="w-full bg-background border-input text-foreground h-10 px-3">
+                        <Select value={month} onValueChange={(val) => {
+                           const v = val || "0";
+                           setMonth(v);
+                           startTransition(() => {
+                               router.push(`?month=${v}&year=${year}`);
+                           });
+                        }}>
+                          <SelectTrigger data-testid="filter-month" className="w-full bg-background border-input text-foreground h-10 px-3">
                             <span className="flex-1 min-w-0 truncate text-left">
                                 {MONTHS.find(m => m.value === month)?.label || "Mês"}
                             </span>
@@ -323,14 +352,15 @@ export function TransacoesClientShell({ initialData, initialCartoes }: Transacoe
                 <th scope="col" className="px-3 py-3 md:px-6 md:py-4 font-medium">Data</th>
                 <th scope="col" className="px-3 py-3 md:px-6 md:py-4 font-medium">Descrição</th>
                 <th scope="col" className="px-3 py-3 md:px-6 md:py-4 font-medium">Categoria</th>
+                <th scope="col" className="px-3 py-3 md:px-6 md:py-4 font-medium">Responsável</th>
                 <th scope="col" className="px-3 py-3 md:px-6 md:py-4 font-medium text-right">Valor</th>
                 <th scope="col" className="px-3 py-3 md:px-6 md:py-4 font-medium text-center">Ações</th>
               </tr>
             </thead>
             <tbody>
-              {filteredData.length === 0 ? (
+              {displayData.length === 0 ? (
                 <tr>
-                  <td colSpan={5}>
+                  <td colSpan={6}>
                     <div className="p-10 flex flex-col items-center justify-center text-center space-y-4">
                       <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-2">
                         <FileText className="w-8 h-8 text-primary" />
@@ -350,7 +380,7 @@ export function TransacoesClientShell({ initialData, initialCartoes }: Transacoe
                   </td>
                 </tr>
               ) : (
-                filteredData.map((tx, idx) => {
+                displayData.map((tx, idx) => {
                   const isIncome = tx.tipo === 'Entrada'
                   return (
                     <motion.tr 
@@ -379,6 +409,11 @@ export function TransacoesClientShell({ initialData, initialCartoes }: Transacoe
                       <td className="px-3 py-3 md:px-6 md:py-4">
                         <span className="px-2.5 py-0.5 rounded-full bg-secondary text-xs font-medium text-secondary-foreground border border-border">
                           {tx.categoria}
+                        </span>
+                      </td>
+                      <td className="px-3 py-3 md:px-6 md:py-4">
+                        <span className="px-2 py-0.5 rounded-md border border-border/50 text-[10px] text-muted-foreground whitespace-nowrap">
+                          {tx.responsavel || "Casal"}
                         </span>
                       </td>
                       <td className={`px-3 py-3 md:px-6 md:py-4 text-right font-medium tabular-nums ${isIncome ? 'text-emerald-400' : 'text-foreground/90'}`}>
@@ -413,12 +448,23 @@ export function TransacoesClientShell({ initialData, initialCartoes }: Transacoe
                 })
               )}
             </tbody>
+            {filteredData.length > visibleCount && (
+              <tfoot>
+                <tr>
+                  <td colSpan={6} className="px-6 py-4 text-center border-t border-border bg-background">
+                    <Button variant="outline" size="sm" onClick={() => setVisibleCount(v => v + 30)} className="w-full max-w-sm rounded-[10px]">
+                      Carregar mais lançamentos...
+                    </Button>
+                  </td>
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
 
         {/* Mobile View (Cards) */}
         <div className="md:hidden flex flex-col divide-y divide-border">
-          {filteredData.length === 0 ? (
+          {displayData.length === 0 ? (
             <div className="p-10 flex flex-col items-center justify-center text-center space-y-4">
               <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-2">
                 <FileText className="w-8 h-8 text-primary" />
@@ -436,7 +482,8 @@ export function TransacoesClientShell({ initialData, initialCartoes }: Transacoe
               </Link>
             </div>
           ) : (
-            filteredData.map((tx, idx) => {
+            <>
+              {displayData.map((tx, idx) => {
               const isIncome = tx.tipo === 'Entrada'
               return (
                 <motion.div 
@@ -489,7 +536,15 @@ export function TransacoesClientShell({ initialData, initialCartoes }: Transacoe
                   </div>
                 </motion.div>
               )
-            })
+              })}
+              {filteredData.length > visibleCount && (
+                <div className="p-4 flex justify-center bg-background border-t border-border">
+                  <Button variant="outline" size="sm" onClick={() => setVisibleCount(v => v + 30)} className="w-full rounded-[10px]">
+                    Carregar mais lançamentos...
+                  </Button>
+                </div>
+              )}
+            </>
           )}
         </div>
       </Card>
