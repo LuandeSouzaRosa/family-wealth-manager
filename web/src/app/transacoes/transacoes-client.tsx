@@ -75,6 +75,11 @@ export function TransacoesClientShell({ initialData, initialCartoes, initialMont
     setMonth(initialMonth)
     setYear(initialYear)
   }, [initialMonth, initialYear])
+
+  // Context Persistence: Sincroniza a validade final (provada pela URL ou Cookie) com a memória de fallback
+  useEffect(() => {
+    document.cookie = `fwm_transacoes_period=${month}-${year}; path=/; max-age=2592000`; // Salva por 30 dias
+  }, [month, year])
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("Todas")
   const [visibleCount, setVisibleCount] = useState(30)
