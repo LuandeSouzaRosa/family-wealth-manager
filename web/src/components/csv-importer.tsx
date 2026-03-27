@@ -66,14 +66,19 @@ export function CsvImporter() {
     const diferenca = saldoInformado - resultadoCSV
     setSaldoInicialInfo({ calculado: saldoInformado, diferenca })
   }
-  const [successMsg, setSuccessMsg] = useState("")
+  const [importReceipt, setImportReceipt] = useState<{
+    totalNoLote: number;
+    importadas: number;
+    conciliadas: number;
+    ignoradas: number;
+  } | null>(null)
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
     setFileName(file.name)
-    setSuccessMsg("") // Limpa msg anterior
+    setImportReceipt(null) // Limpa recibo anterior
     
     Papa.parse(file, {
       header: true,
@@ -230,9 +235,13 @@ export function CsvImporter() {
       setIsUploading(false)
 
       if (result && 'count' in result) {
-        const concMsg = result.conciliated && result.conciliated > 0 ? ` e ${result.conciliated} conciliações realizadas` : ""
-        setSuccessMsg(`${result.count} novas importadas${concMsg} com sucesso!`)
-        toast.success("Importação concluída com sucesso!")
+        setImportReceipt({
+           totalNoLote: data.length,
+           importadas: result.count,
+           conciliadas: result.conciliated || 0,
+           ignoradas: data.filter(r => r.acao === "Duplicado").length
+        })
+        toast.success("Lote processado com sucesso!")
         setData([])
         setFileName("")
       } else if (result && 'error' in result) {
@@ -246,7 +255,7 @@ export function CsvImporter() {
   return (
     <div className="space-y-8">
       {/* Dropzone Area */}
-      {!data.length && !successMsg && (
+      {!data.length && !importReceipt && (
         <div 
           onClick={() => document.getElementById('csv-upload')?.click()}
           className="border-2 border-dashed border-muted-foreground/25 hover:border-primary/50 bg-muted/30 hover:bg-muted/50 transition-all rounded-xl p-12 flex flex-col items-center justify-center cursor-pointer text-center space-y-4 group"
@@ -561,18 +570,40 @@ export function CsvImporter() {
       )}
 
       {/* Success State */}
-      {successMsg && (
+      {importReceipt && (
         <motion.div 
-          initial={{ scale: 0.9, opacity: 0 }}
+          initial={{ scale: 0.95, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
-          className="p-8 border border-emerald-500/20 bg-emerald-500/10 rounded-xl flex flex-col items-center justify-center text-center space-y-4"
+          className="p-8 border border-border bg-card rounded-xl flex flex-col items-center justify-center space-y-6 shadow-sm"
         >
-          <div className="h-12 w-12 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-500">
-            <Check className="h-6 w-6" />
+          <div className="flex flex-col items-center text-center space-y-2 mb-2">
+              <div className="h-12 w-12 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-500 mb-2">
+                <Check className="h-6 w-6" />
+              </div>
+              <h3 className="text-2xl font-bold tracking-tight text-foreground">Lote processado com sucesso</h3>
+              <p className="text-muted-foreground">O resumo da operação está detalhado abaixo.</p>
           </div>
-          <h3 className="text-xl font-bold text-emerald-600 dark:text-emerald-400">Importação Concluída!</h3>
-          <p className="text-muted-foreground">{successMsg}</p>
-          <Button variant="outline" onClick={() => { setSuccessMsg(""); setData([]) }}>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full max-w-3xl">
+             <div className="bg-muted/50 border border-border p-4 rounded-lg flex flex-col items-center justify-center text-center">
+                 <span className="text-3xl font-light text-foreground">{importReceipt.totalNoLote}</span>
+                 <span className="text-xs uppercase tracking-wider font-semibold text-muted-foreground mt-1">Total no Lote</span>
+             </div>
+             <div className="bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-lg flex flex-col items-center justify-center text-center">
+                 <span className="text-3xl font-light text-emerald-600 dark:text-emerald-400">{importReceipt.importadas}</span>
+                 <span className="text-xs uppercase tracking-wider font-semibold text-emerald-700/70 dark:text-emerald-500/70 mt-1">N. Importadas</span>
+             </div>
+             <div className="bg-blue-500/10 border border-blue-500/20 p-4 rounded-lg flex flex-col items-center justify-center text-center">
+                 <span className="text-3xl font-light text-blue-600 dark:text-blue-400">{importReceipt.conciliadas}</span>
+                 <span className="text-xs uppercase tracking-wider font-semibold text-blue-700/70 dark:text-blue-500/70 mt-1">Conciliadas</span>
+             </div>
+             <div className="bg-secondary border border-border/50 p-4 rounded-lg flex flex-col items-center justify-center text-center opacity-80">
+                 <span className="text-3xl font-light text-muted-foreground">{importReceipt.ignoradas}</span>
+                 <span className="text-xs uppercase tracking-wider font-semibold text-muted-foreground mt-1">Ignoradas</span>
+             </div>
+          </div>
+
+          <Button variant="outline" onClick={() => { setImportReceipt(null); setData([]) }} className="mt-4">
             Importar Outro Arquivo
           </Button>
         </motion.div>
