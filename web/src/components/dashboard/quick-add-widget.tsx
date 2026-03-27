@@ -22,14 +22,22 @@ export function QuickAddWidget() {
     categoria: string
     data: Date
   } | null>(null)
+  const [parseError, setParseError] = useState<string | null>(null)
 
   const handleInputChange = (value: string) => {
     setInputValue(value)
     if (value.trim().length > 1) {
       const parsed = parseQuickAdd(value)
-      setPreview(parsed)
+      if (parsed.success) {
+        setPreview((parsed as any).data)
+        setParseError(null)
+      } else {
+        setPreview(null)
+        setParseError((parsed as any).error)
+      }
     } else {
       setPreview(null)
+      setParseError(null)
     }
   }
 
@@ -39,24 +47,26 @@ export function QuickAddWidget() {
     isSubmittingRef.current = true
 
     const parsed = parseQuickAdd(inputValue)
-    if (!parsed) {
-      toast.error("Ops, não consegui entender a frase. Tente assim: 'ifood 45' ou 'salário 3000'")
+    if (!parsed.success) {
+      toast.error((parsed as any).error || "Inválido")
+      isSubmittingRef.current = false
       return
     }
 
     startTransition(async () => {
       console.log("[DEBUG] QuickAdd: Iniciando formData...");
       const formData = new FormData()
-      formData.append("descricao", parsed.descricao)
-      formData.append("valor", String(parsed.valor))
-      formData.append("tipo", parsed.tipo)
-      formData.append("categoria", parsed.categoria)
+      formData.append("descricao", parsed.data.descricao)
+      formData.append("valor", String(parsed.data.valor))
+      formData.append("tipo", parsed.data.tipo)
+      formData.append("categoria", parsed.data.categoria)
       
       try {
-        formData.append("data", parsed.data.toISOString())
+        formData.append("data", parsed.data.data.toISOString())
       } catch (err) {
         console.error("[DEBUG] Erro local no toISOString (Quick Add):", err)
         toast.error("Erro interno ao processar a data.")
+        isSubmittingRef.current = false
         return
       }
       
@@ -70,10 +80,10 @@ export function QuickAddWidget() {
         if ('error' in result) {
           toast.error(result.error)
         } else {
-          const tipoLabel = parsed.tipo === "Entrada" ? "Receita" : "Despesa"
+          const tipoLabel = parsed.data.tipo === "Entrada" ? "Receita" : "Despesa"
           toast.success(
-            `${tipoLabel}: ${parsed.descricao} — R$ ${parsed.valor.toFixed(2)}`,
-            { description: `Categoria: ${parsed.categoria}` }
+            `${tipoLabel}: ${parsed.data.descricao} — R$ ${parsed.data.valor.toFixed(2)}`,
+            { description: `Categoria: ${parsed.data.categoria}` }
           )
           setInputValue("")
           setPreview(null)
@@ -178,6 +188,15 @@ export function QuickAddWidget() {
                     <span>•</span>
                     <span>{preview.tipo}</span>
                   </div>
+                </motion.div>
+              ) : parseError ? (
+                <motion.div
+                  key="error"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="mt-3 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-xs text-red-600 dark:text-red-400 font-medium"
+                >
+                  {parseError}
                 </motion.div>
               ) : (
                 <motion.p

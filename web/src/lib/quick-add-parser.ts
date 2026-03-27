@@ -17,6 +17,10 @@ export interface ParsedTransaction {
   data: Date;
 }
 
+export type QuickAddResult = 
+  | { success: true; data: ParsedTransaction }
+  | { success: false; error: string };
+
 // Keywords that indicate income (Entrada)
 const INCOME_KEYWORDS = [
   "salário", "salario", "freelance", "renda", "recebimento",
@@ -86,44 +90,86 @@ const CATEGORY_HINTS: Record<string, string[]> = {
 
 /**
  * Parses a natural language string into a transaction.
- * Returns null if no value could be extracted.
+ * Returns discriminated union with explicit error messages if invalid.
  */
-export function parseQuickAdd(text: string): ParsedTransaction | null {
-  if (!text || text.trim().length === 0) return null;
+export function parseQuickAdd(text: string): QuickAddResult {
+  if (!text || text.trim().length === 0) {
+    return { success: false, error: "Digite algo para adicionar." };
+  }
 
   const input = text.trim();
   const lower = input.toLowerCase();
 
-  // 1. Extract value (first number in the text)
-  const valueMatch = input.match(/(\d+([.,]\d+)?)/);
-  if (!valueMatch) return null;
+  // 1. Extract value 
+  const valueMatches = input.match(/(\d+([.,]\d+)?)/g);
+  if (!valueMatches || valueMatches.length === 0) {
+    return { success: false, error: "Não identifiquei o valor." };
+  }
 
-  const valorStr = valueMatch[0].replace(",", ".");
-  const valor = parseFloat(valorStr);
-  if (isNaN(valor) || valor <= 0) return null;
+  let valorStr = "";
+  let stringToErase = "";
+
+  if (valueMatches.length > 1) {
+    // Multiple numbers detected
+    const withCents = valueMatches.filter(v => v.includes(",") || v.includes("."));
+    const hasMonetary = lower.match(/(?:r\$|rs)\s*(\d+([.,]\d+)?)/);
+    
+    if (hasMonetary) {
+      valorStr = hasMonetary[1];
+      stringToErase = hasMonetary[0]; // Erase the R$ part as well so it doesn't pollute description
+    } else if (withCents.length === 1) {
+      // Only one number has decimal formatting, highly likely to be the money
+      valorStr = withCents[0];
+      stringToErase = valorStr;
+    } else {
+      return { success: false, error: "Múltiplos números detectados. Use R$ antes do valor para ser exato." };
+    }
+  } else {
+    valorStr = valueMatches[0];
+    stringToErase = valorStr;
+  }
+
+  const parsedValueStr = valorStr.replace(",", ".");
+  const valor = parseFloat(parsedValueStr);
+  if (isNaN(valor) || valor <= 0) {
+    return { success: false, error: "Valor numérico inválido." };
+  }
 
   // 2. Extract date keyword
   let data = new Date();
   let dateKeywordFound = "";
-  for (const [keyword, getDate] of Object.entries(DATE_KEYWORDS)) {
-    if (lower.includes(keyword)) {
-      data = getDate();
-      dateKeywordFound = keyword;
-      break;
+
+  const diaMatch = lower.match(/\bdia\s+(\d+)\b/);
+  if (diaMatch) {
+    const diaNum = parseInt(diaMatch[1], 10);
+    if (diaNum >= 1 && diaNum <= 31) {
+      data.setDate(diaNum);
+    }
+    dateKeywordFound = diaMatch[0];
+  } else {
+    for (const [keyword, getDate] of Object.entries(DATE_KEYWORDS)) {
+      if (lower.includes(keyword)) {
+        data = getDate();
+        dateKeywordFound = keyword;
+        break;
+      }
     }
   }
 
-  // 3. Build description (remove value and date keyword)
-  let descricao = input
-    .replace(valueMatch[0], "")
-    .trim();
+  // 3. Build description
+  // Escape regex special chars from stringToErase just in case
+  const safeErase = stringToErase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  let descricao = input.replace(new RegExp(safeErase, "i"), "").trim();
 
   if (dateKeywordFound) {
     descricao = descricao.replace(new RegExp(dateKeywordFound, "i"), "").trim();
   }
 
-  // Remove common filler words that might be left
-  const FILLER_WORDS = ["crédito", "credito", "débito", "debito", "pix", "cartão", "cartao", "conta"];
+  // Remove common filler words
+  const FILLER_WORDS = [
+    "crédito", "credito", "débito", "debito", "pix", "cartão", "cartao", "conta",
+    "paguei", "comprei", "gastei"
+  ];
   for (const filler of FILLER_WORDS) {
     descricao = descricao.replace(new RegExp(`\\b${filler}\\b`, "gi"), "").trim();
   }
@@ -131,9 +177,9 @@ export function parseQuickAdd(text: string): ParsedTransaction | null {
   // Clean up extra spaces
   descricao = descricao.replace(/\s+/g, " ").trim();
 
-  // Fallback description
-  if (!descricao) {
-    descricao = "Gasto Rápido";
+  // Validate description (NO FALLBACK)
+  if (descricao.length < 2 || !/[a-zA-ZÀ-ÿ]/.test(descricao)) {
+    return { success: false, error: "Descreva o gasto com pelo menos uma palavra." };
   }
 
   // Capitalize first letter
@@ -152,10 +198,12 @@ export function parseQuickAdd(text: string): ParsedTransaction | null {
     }
   }
 
-  // For income, default to Salário if no specific category matched
   if (isIncome && categoria === "Outros") {
     categoria = "Salário";
   }
 
-  return { descricao, valor, tipo, categoria, data };
+  return { 
+    success: true, 
+    data: { descricao, valor, tipo, categoria, data } 
+  };
 }
