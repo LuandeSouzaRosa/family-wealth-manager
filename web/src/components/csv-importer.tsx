@@ -123,7 +123,7 @@ export function CsvImporter() {
                   });
 
                   const match = findBestMatch(row, availableCandidates);
-                  let acao: "Novo" | "Conciliar" | "Duplicado" = "Novo";
+                  let acao: "Novo" | "Conciliar" | "Duplicado" | "Pendente" = "Novo";
                   
                   if (match.level === "Exato") {
                      acao = "Duplicado"; 
@@ -132,6 +132,9 @@ export function CsvImporter() {
                   else if (match.level === "Forte") {
                      acao = "Conciliar"; 
                      if (match.candidateId) usedCandidates.add(match.candidateId);
+                  }
+                  else if (match.level === "Possível") {
+                     acao = "Pendente";
                   }
                   
                   return {
@@ -375,6 +378,24 @@ export function CsvImporter() {
             </motion.div>
           )}
 
+          {data.filter(r => r.acao === "Pendente").length > 0 && (
+            <motion.div 
+               initial={{ opacity: 0, y: -10 }}
+               animate={{ opacity: 1, y: 0 }}
+               className="bg-amber-500/10 border border-amber-500/30 p-4 rounded-lg flex items-start gap-3 mt-4"
+            >
+              <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
+              <div>
+                <h4 className="font-semibold text-amber-800 dark:text-amber-500 text-sm">
+                  {data.filter(r => r.acao === "Pendente").length} transação(ões) requer(em) sua revisão
+                </h4>
+                <p className="text-xs text-amber-700/80 dark:text-amber-400/80 mt-1">
+                  Identificamos itens ambíguos ou muito parecidos com seu histórico. Avalie o candidato sugerido nas linhas em destaque e tome uma decisão (Novo, Sugerido ou Ignorar) antes de importar.
+                </p>
+              </div>
+            </motion.div>
+          )}
+
           {/* Dica CSV-First */}
           <div className="bg-muted/30 p-4 rounded-lg border border-border/50 mb-4 flex items-start gap-3">
              <div className="mt-0.5 w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
@@ -411,27 +432,39 @@ export function CsvImporter() {
               </TableHeader>
               <TableBody>
                 {data.map((row, index) => (
-                  <TableRow key={index} className={row.acao === "Duplicado" ? "opacity-50" : ""}>
-                    <TableCell>
-                       <Select value={row.acao} onValueChange={(val) => updateRow(index, 'acao', val)}>
+                  <TableRow key={index} className={cn(
+                    row.acao === "Duplicado" && "opacity-50",
+                    row.acao === "Pendente" && "bg-amber-500/5 hover:bg-amber-500/10 transition-colors relative"
+                  )}>
+                    <TableCell className="relative">
+                      {row.acao === "Pendente" && <div className="absolute left-0 top-0 bottom-0 w-1 bg-amber-500 rounded-r-full" />}
+                       <Select value={row.acao === "Pendente" ? "" : row.acao} onValueChange={(val) => updateRow(index, 'acao', val)}>
                         <SelectTrigger className={cn(
                           "h-8 w-[160px] text-xs font-semibold border",
+                          row.acao === "Pendente" ? "bg-amber-500/10 text-amber-700 dark:text-amber-500 border-amber-500/30" : 
                           row.acao === "Conciliar" ? "bg-blue-500/10 text-blue-600 border-blue-500/20" : 
                           row.acao === "Novo" ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" : 
                           "bg-muted text-muted-foreground border-border"
                         )}>
-                          <SelectValue />
+                          <SelectValue placeholder="Revisão pendente" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="Novo">Importar Novo</SelectItem>
-                          <SelectItem value="Conciliar">
-                             {row.matchLevel === "Exato" || row.matchLevel === "Forte" || row.matchLevel === "Possível" 
-                                ? `Conciliar (${row.matchLevel})` 
-                                : "Conciliar (Forçar)"}
+                          <SelectItem value="Novo">Marcar como novo</SelectItem>
+                          <SelectItem value="Conciliar" disabled={!row.matchCandidateId}>
+                             {row.matchCandidateId ? "Usar candidato sugerido" : "Sugerido indisponível"}
                           </SelectItem>
                           <SelectItem value="Duplicado">Ignorar</SelectItem>
                         </SelectContent>
                       </Select>
+                      
+                      {row.acao === "Pendente" && (
+                          <div className="mt-1 flex flex-col gap-0.5 max-w-[160px]">
+                             <span className="text-[10px] text-amber-700/80 dark:text-amber-400/80 leading-tight flex items-start gap-1">
+                               Motivo: {row.matchReasons?.join(" • ") || "Ambiguidade detectada"}
+                             </span>
+                          </div>
+                      )}
+                      
                       {row.acao === "Conciliar" && (
                           <div className="mt-1 flex flex-col gap-0.5">
                              {row.matchReasons?.length > 0 && (
@@ -442,11 +475,6 @@ export function CsvImporter() {
                              {row.isSplitGroup && (
                                  <span className="text-[10px] text-blue-500 font-medium">✨ Match: Grupo Split</span>
                              )}
-                          </div>
-                      )}
-                      {row.acao === "Novo" && row.matchLevel === "Possível" && (
-                          <div className="mt-1 text-[10px] text-amber-600 font-medium flex items-center gap-1 leading-tight">
-                            <AlertCircle className="w-3 h-3" /> Match possível não selecionado. Revisão recomendada.
                           </div>
                       )}
                     </TableCell>
@@ -517,10 +545,17 @@ export function CsvImporter() {
           </div>
 
           <div className="flex justify-end pt-4">
-             <Button onClick={handleImport} disabled={isUploading} size="lg" className="w-full md:w-auto bg-emerald-600 hover:bg-emerald-700 text-white">
-                {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
-                Confirmar e Importar {data.length} Transações
-             </Button>
+             {data.filter(r => r.acao === "Pendente").length > 0 ? (
+                 <Button disabled={true} size="lg" className="w-full md:w-auto bg-amber-600/50 text-white cursor-not-allowed">
+                    <AlertCircle className="mr-2 h-4 w-4" />
+                    Revise as pendências antes de importar
+                 </Button>
+             ) : (
+                 <Button onClick={handleImport} disabled={isUploading} size="lg" className="w-full md:w-auto bg-emerald-600 hover:bg-emerald-700 text-white">
+                    {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
+                    Confirmar e Importar {data.filter(r => r.acao !== "Duplicado").length} Transações
+                 </Button>
+             )}
           </div>
         </motion.div>
       )}
