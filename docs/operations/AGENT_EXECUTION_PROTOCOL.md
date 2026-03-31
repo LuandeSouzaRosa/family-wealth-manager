@@ -17,3 +17,42 @@ Ao operar no repositório **FWM**, a IA assume a responsabilidade pelas seguinte
 
 ## 4. Garantia de Saúde Pós-Interferência
 - Mudanças enraizadas em lógica financeira (`lib/`) ou ações primárias de gravação (`actions/`) não devem se dar por finalizadas sem que haja uma afirmação tática provada via execuções de lint, testes ou builds no ambiente local.
+
+## 5. Runbook Local - Prova Manual Double-Submit
+- Comando padrao local (executar em `web/`):
+  - `npm run test:e2e:manual-double-submit:local`
+- Variaveis obrigatorias em `.env.local`:
+  - `NEXT_PUBLIC_SUPABASE_URL`
+  - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+  - `TEST_EMAIL`
+  - `TEST_PASSWORD`
+- O comando sobe servidor local (`http://127.0.0.1:3001`) e roda, em sequencia:
+  - `tests/e2e/double-submit-desktop.spec.ts` (`chromium-desktop`)
+  - `tests/e2e/double-submit-mobile.spec.ts` (`chromium-mobile`)
+- Criterio de prova: efeito de negocio (submissao unica com persistencia unica), nao contagem bruta de POST.
+  - Evidencia esperada: `manualSubmitRequestCount=1` e `1` transacao manual persistida por descricao unica (com cleanup no final).
+
+## 6. Runbook Local - Prova Quick Add
+- Comando padrao local (executar em `web/`):
+  - `npm run test:e2e:quick-add:local`
+- Variaveis obrigatorias em `.env.local`:
+  - `NEXT_PUBLIC_SUPABASE_URL`
+  - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+  - `TEST_EMAIL`
+  - `TEST_PASSWORD`
+- O comando sobe servidor local (`http://127.0.0.1:3001`) e roda, em sequencia:
+  - `tests/e2e/quick-add-desktop.spec.ts` (`chromium-desktop`)
+  - `tests/e2e/quick-add-mobile.spec.ts` (`chromium-mobile`)
+- Criterio de prova: submit unico e persistencia unica por descricao unica (com cleanup no final).
+
+## 7. Runbook Local - Coerencia Dashboard <-> Extrato
+- Comando padrao local (executar em `web/`):
+  - `npm run test:e2e:dashboard-extrato-coherence:local`
+- Variaveis obrigatorias em `.env.local`:
+  - `NEXT_PUBLIC_SUPABASE_URL`
+  - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+  - `TEST_EMAIL`
+  - `TEST_PASSWORD`
+- O comando sobe servidor local (`http://127.0.0.1:3001`) e roda:
+  - `tests/e2e/dashboard-extrato-coherence-desktop.spec.ts` (`chromium-desktop`)
+- Criterio de prova: no mesmo recorte de periodo/responsavel, o delta de agregado (Dashboard) bate com o delta do detalhado (Extrato), usando fixture controlada e cleanup.

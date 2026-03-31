@@ -334,11 +334,11 @@ export function TransacoesClientShell({ initialData, initialCartoes, initialMont
                   <div className="flex items-center gap-6 w-full md:w-auto">
                      <div className="bg-emerald-500/10 p-4 rounded-xl border border-emerald-500/20 w-full md:w-40 text-center md:text-left">
                         <p className="text-emerald-500 uppercase tracking-widest text-[10px] font-bold mb-1 flex items-center justify-center md:justify-start gap-1"><ArrowUpRight size={12}/> Receitas</p>
-                        <p className="text-xl font-light text-emerald-400">{formatCurrency(totalEntradas)}</p>
+                        <p className="text-xl font-light text-emerald-400" data-testid="extrato-total-entradas">{formatCurrency(totalEntradas)}</p>
                      </div>
                      <div className="bg-red-500/10 p-4 rounded-xl border border-red-500/20 w-full md:w-40 text-center md:text-left">
                         <p className="text-red-500 uppercase tracking-widest text-[10px] font-bold mb-1 flex items-center justify-center md:justify-start gap-1"><ArrowDownRight size={12}/> Despesas</p>
-                        <p className="text-xl font-light text-red-400">{formatCurrency(totalSaidas)}</p>
+                        <p className="text-xl font-light text-red-400" data-testid="extrato-total-saidas">{formatCurrency(totalSaidas)}</p>
                      </div>
                   </div>
                 </CardContent>

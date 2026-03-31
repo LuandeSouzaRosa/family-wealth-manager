@@ -9,6 +9,9 @@
     "lint": "eslint",
     "test": "vitest related --run",
     "test:e2e": "playwright test",
+    "test:e2e:manual-double-submit:local": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/run-manual-double-submit-local.ps1",
+    "test:e2e:quick-add:local": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/run-quick-add-proof-local.ps1",
+    "test:e2e:dashboard-extrato-coherence:local": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/run-dashboard-extrato-coherence-local.ps1",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:debug": "playwright test --headed --debug"
   },
@@ -50,11 +53,13 @@
   "devDependencies": {
     "@playwright/test": "^1.58.2",
     "@tailwindcss/postcss": "^4",
+    "@testing-library/react": "^16.3.2",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
+    "jsdom": "^22.1.0",
     "next-pwa": "^5.6.0",
     "tailwindcss": "^4",
     "typescript": "^5",

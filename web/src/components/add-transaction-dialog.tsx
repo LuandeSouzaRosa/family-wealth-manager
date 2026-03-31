@@ -87,10 +87,7 @@ export function AddTransactionDialog({ children, cartoes = [], variant = "primar
   // Assistir o 'tipo' para renderizar as categorias certas
   const tipoSelecionado = form.watch("tipo")
 
-  function onSubmit(values: z.infer<typeof TransactionSchema>) {
-    if (isSubmittingRef.current) return;
-    isSubmittingRef.current = true;
-    
+  function submitTransaction(values: z.infer<typeof TransactionSchema>) {
     startTransition(async () => {
       try {
         const formData = new FormData()
@@ -141,6 +138,19 @@ export function AddTransactionDialog({ children, cartoes = [], variant = "primar
     })
   }
 
+  const handleInvalidSubmit = () => {
+    isSubmittingRef.current = false
+  }
+
+  const handleFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    if (isSubmittingRef.current || isPending) return
+
+    // Lock acquired before RHF validation callback to avoid pre-callback re-entry.
+    isSubmittingRef.current = true
+    void form.handleSubmit(submitTransaction, handleInvalidSubmit)(e)
+  }
+
   const triggerButton = (
     <Button 
       data-testid="btn-nova-transacao"
@@ -174,7 +184,7 @@ export function AddTransactionDialog({ children, cartoes = [], variant = "primar
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={handleFormSubmit} className="space-y-4">
             {form.formState.errors.root && (
               <div className="p-3 mb-4 text-sm text-destructive-foreground bg-destructive/20 rounded-md border border-destructive/50">
                 {form.formState.errors.root.message}

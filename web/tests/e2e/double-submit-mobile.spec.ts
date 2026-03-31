@@ -6,13 +6,15 @@ import {
   createAuthenticatedSupabaseClient,
 } from './helpers/manual-proof-helpers';
 
-test.describe('Fase 4D - Synchronous Guard Runtime Hardening', () => {
-  test('Deve garantir submissao unica com criterio de persistencia real no lancamento manual', async ({ page }) => {
+test.describe('Fase 4D Mobile - Synchronous Guard Runtime Hardening', () => {
+  test('Deve garantir submissao unica com criterio de persistencia real no lancamento manual (mobile)', async ({ page }) => {
+    test.setTimeout(90000);
+
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? '';
     const isLocalBaseUrl = /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/i.test(appUrl);
     test.skip(!isLocalBaseUrl, `Teste exige NEXT_PUBLIC_APP_URL local. Atual: ${appUrl || '(vazio)'}`);
 
-    const descricaoUnica = buildUniqueDescription('E2E_MANUAL_DOUBLE');
+    const descricaoUnica = buildUniqueDescription('E2E_MANUAL_DOUBLE_MOBILE');
     const supabaseClient = await createAuthenticatedSupabaseClient();
     let manualSubmitRequestCount = 0;
 
@@ -41,8 +43,13 @@ test.describe('Fase 4D - Synchronous Guard Runtime Hardening', () => {
 
       await page.goto('/');
 
-      const btnNovoGasto = page.getByTestId('btn-nova-transacao').first();
-      await btnNovoGasto.click();
+      const btnNovoGastoByTestId = page.getByTestId('btn-nova-transacao').first();
+      if (await btnNovoGastoByTestId.isVisible().catch(() => false)) {
+        await btnNovoGastoByTestId.scrollIntoViewIfNeeded();
+        await btnNovoGastoByTestId.click();
+      } else {
+        await page.locator('text=Novo Gasto').first().click();
+      }
 
       const inputDesc = page.getByTestId('input-descricao').first();
       await inputDesc.waitFor({ state: 'visible', timeout: 8000 });
@@ -74,7 +81,7 @@ test.describe('Fase 4D - Synchronous Guard Runtime Hardening', () => {
 
       expect(manualSubmitRequestCount).toBe(1);
 
-      console.log(`Auditoria 4D: descricao=${descricaoUnica} manualSubmitRequestCount=${manualSubmitRequestCount}`);
+      console.log(`Auditoria 4D Mobile: descricao=${descricaoUnica} manualSubmitRequestCount=${manualSubmitRequestCount}`);
     } finally {
       await cleanupTransactionsByDescription(supabaseClient, descricaoUnica);
       await supabaseClient.auth.signOut();

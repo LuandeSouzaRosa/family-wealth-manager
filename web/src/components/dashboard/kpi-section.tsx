@@ -62,7 +62,10 @@ export function KpiSection({
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-4xl font-light tracking-tight tabular-nums text-foreground">
+            <div
+              className="text-4xl font-light tracking-tight tabular-nums text-foreground"
+              data-testid="dashboard-total-entradas"
+            >
               {formatCurrency(renda)}
             </div>
             {rendaAgendada !== undefined && rendaAgendada > 0 ? (
@@ -91,7 +94,10 @@ export function KpiSection({
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-4xl font-light tracking-tight tabular-nums text-foreground">
+            <div
+              className="text-4xl font-light tracking-tight tabular-nums text-foreground"
+              data-testid="dashboard-total-saidas"
+            >
               {formatCurrency(despesas)}
             </div>
             {despesasAgendadas !== undefined && despesasAgendadas > 0 ? (

@@ -68,7 +68,7 @@ export function QuickAddWidget() {
   const handleSubmit = (e?: React.FormEvent) => {
     e?.preventDefault()
     // Trava de guarda síncrona
-    if (isSubmittingRef.current || !inputValue || !preview) return
+    if (status !== "idle" || isSubmittingRef.current || !inputValue || !preview) return
     isSubmittingRef.current = true
     
     setStatus("saving")
@@ -85,12 +85,9 @@ export function QuickAddWidget() {
     if (timeoutRef.current) clearTimeout(timeoutRef.current)
     timeoutRef.current = setTimeout(() => {
       if (isSubmittingRef.current) {
-        setStatus("idle")
-        setInputValue("")
-        setPreview(null)
-        setIsOpen(false)
-        isSubmittingRef.current = false
-        toast.info("Transação registrada. O painel deve atualizar em breve.")
+        // Mantém o lock até resposta real da Server Action para evitar duplo envio
+        setStatus((prev) => (prev === "saving" ? "syncing" : prev))
+        toast.info("Transação enviada. Aguardando sincronização do painel.")
       }
     }, 8000)
 
@@ -171,6 +168,7 @@ export function QuickAddWidget() {
 
             <form onSubmit={handleSubmit} className="flex gap-2">
               <Input
+                data-testid="quick-add-input"
                 autoFocus
                 disabled={status !== "idle"}
                 placeholder={`Ex: "ifood 45 ontem" ou "salário 3000"`}
@@ -179,6 +177,7 @@ export function QuickAddWidget() {
                 className="flex-1 h-12 text-base"
               />
               <Button
+                data-testid="quick-add-submit"
                 type="submit"
                 disabled={status !== "idle" || !preview}
                 size="icon"
@@ -258,6 +257,7 @@ export function QuickAddWidget() {
       </AnimatePresence>
 
       <motion.button
+        data-testid="quick-add-toggle"
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
         onClick={() => setIsOpen(!isOpen)}
