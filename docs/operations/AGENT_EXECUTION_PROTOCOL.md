@@ -61,9 +61,58 @@ Ao operar no repositório **FWM**, a IA assume a responsabilidade pelas seguinte
 - Janela sugerida: 3 a 7 dias de uso real no beta interno.
 - Momento de uso: primeira abertura do Dashboard no dia.
 - Checklist rapido (responder `sim` ou `nao`):
-  - Em ate 5 segundos, ficou claro o principal problema do mes?
-  - O insight principal pareceu util (nao generico)?
+  - Em ate 5 segundos, ficou claro o que significa `Saldo em contas`?
+  - `Livre apos metas` ficou claro ou gerou duvida?
+  - No filtro por responsavel, a observacao sobre metas globais foi suficiente?
+  - O card de clareza ajudou a perceber rapidamente onde agir?
+  - O insight principal pareceu especifico (nao generico)?
   - O CTA `Revisar no extrato` ajudou a ir para acao?
-  - O bloco `Ajuste sugerido de maior impacto` ajudou ou ficou vago?
 - Registro minimo recomendado: 1 linha por dia (`data`, `responsavel`, `sim/nao` por pergunta, observacao curta).
+- Modelo sugerido de linha diaria:
+  - `2026-03-31 | Casal | saldo=sim | livre=sim | metas_globais=nao | clareza_acao=sim | insight_especifico=sim | cta=sim | obs=confusao no texto de metas globais`
 - Criterio simples de leitura: se houver `nao` recorrente na mesma pergunta por 3 dias, abrir microajuste de copy/ordem (sem nova feature).
+
+## 9. Runbook Local - Fallback Honesto do Card de Clareza
+- Comando padrao local (executar em `web/`):
+  - `npm run test:e2e:spending-clarity-fallback:local`
+- Variaveis obrigatorias em `.env.local`:
+  - `NEXT_PUBLIC_SUPABASE_URL`
+  - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+  - `TEST_EMAIL`
+  - `TEST_PASSWORD`
+- O comando sobe servidor local (`http://127.0.0.1:3001`) e roda:
+  - `tests/e2e/spending-clarity-fallback-desktop.spec.ts` (`chromium-desktop`)
+- Criterio de prova:
+  - existe saida realizada no mes em `Todos`
+  - filtro ativo de responsavel sem saida realizada
+  - o card nao fica com mensagem vazia enganosa
+  - o fallback honesto aparece informando que ha movimentacao no mes fora do filtro atual
+
+## 10. Runbook Local - Coerencia Pos-Mutacao Imediata (Dashboard <-> Extrato)
+- Comando padrao local (executar em `web/`):
+  - `npm run test:e2e:dashboard-extrato-post-mutation:local`
+- Variaveis obrigatorias em `.env.local`:
+  - `NEXT_PUBLIC_SUPABASE_URL`
+  - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+  - `TEST_EMAIL`
+  - `TEST_PASSWORD`
+- O comando sobe servidor local (`http://127.0.0.1:3001`) e roda:
+  - `tests/e2e/dashboard-extrato-post-mutation-desktop.spec.ts` (`chromium-desktop`)
+- Criterio de prova:
+  - ler totais iniciais no Dashboard e no Extrato no mesmo recorte (mes atual, responsavel `Casal`)
+  - criar 1 lancamento manual unico via UI
+  - validar delta coerente nas duas telas (`renda=0`, `despesas=+valor`) com cleanup final
+- Observacao operacional:
+  - pode haver janela curta de propagacao apos mutacao, entao o teste usa polling explicito para leitura de tela sem mascarar cache/revalidacao.
+
+## 11. Runbook Local - CSV Real Import Workflows
+- Documento operacional dedicado:
+  - `docs/operations/REAL_IMPORT_WORKFLOWS.md`
+- Comandos curtos (executar em `web/`):
+  - `npm run ops:prepare-real-import-reset -- --dry-run --email <email>`
+  - `npm run ops:prepare-real-import-reset -- --confirm --email <email>`
+  - `npm run ops:analyze-bank-statement-import -- --file <csv-path> --email <email>`
+  - `npm run ops:real-import-ui -- --file <csv-path> --email <email>`
+  - `npm run ops:post-import-validation -- --email <email> [--year YYYY --month MM]`
+- Politica critica:
+  - em reset para ciclo real, preservar `regras_categorizacao` e tabelas de configuracao.
