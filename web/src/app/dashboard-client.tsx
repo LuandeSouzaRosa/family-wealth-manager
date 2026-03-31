@@ -17,6 +17,7 @@ import { RecentTransactions } from '@/components/dashboard/recent-transactions'
 import { MobileDashboard } from '@/components/dashboard/mobile-dashboard'
 import { FinancialHealthWidget } from '@/components/dashboard/financial-health'
 import { ResponsavelSelector } from '@/components/responsavel-selector'
+import { SpendingClarityCard } from '@/components/dashboard/spending-clarity-card'
 
 // Constants for orchestration
 const STAGGER_DELAY = 0.1
@@ -50,6 +51,16 @@ interface DashboardClientProps {
     saldoLivre?: number
     contas?: any[] 
     porResponsavel?: Record<string, { rendaRealizada: number, rendaAgendada: number, despesasRealizadas: number, despesasAgendadas: number, renda: number, despesas: number }>
+    spendingClarity?: Record<string, {
+      totalSaidasRealizadas: number
+      topCategorias: Array<{ categoria: string; total: number; percentual: number; lancamentos: number }>
+      concentracaoTop3Percentual: number
+      totalRecorrente: number
+      totalPontual: number
+      percentualRecorrente: number
+      percentualPontual: number
+      maiorAltaVsMesAnterior: { categoria: string; delta: number } | null
+    }>
   }
   recentTx: any[]
   orcamentoStatus: Record<string, any[]>
@@ -117,6 +128,21 @@ export function DashboardClientShell({
       despesasAgendadas = respMetrics.despesasAgendadas;
   }
 
+  const emptySpendingClarity = {
+    totalSaidasRealizadas: 0,
+    topCategorias: [],
+    concentracaoTop3Percentual: 0,
+    totalRecorrente: 0,
+    totalPontual: 0,
+    percentualRecorrente: 0,
+    percentualPontual: 0,
+    maiorAltaVsMesAnterior: null,
+  };
+  const activeSpendingClarity =
+    metrics.spendingClarity?.[responsavel] ||
+    metrics.spendingClarity?.Todos ||
+    emptySpendingClarity;
+
   return (
     <motion.div 
       initial="hidden"
@@ -145,6 +171,7 @@ export function DashboardClientShell({
         financialEvolution={financialEvolution}
         financialHealth={financialHealth}
         cashFlowForecast={cashFlowForecast}
+        spendingClarity={activeSpendingClarity}
       />
 
       {/* ===================================================================================== */}
@@ -209,6 +236,10 @@ export function DashboardClientShell({
                 saldoComprometido={metrics.saldoComprometido}
                 responsavel={responsavel}
             />
+        </motion.div>
+
+        <motion.div variants={fadeUpVariant}>
+          <SpendingClarityCard data={activeSpendingClarity} responsavel={responsavel} />
         </motion.div>
 
         {/* Financial Evolution Chart (NEW) */}

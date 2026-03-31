@@ -6,6 +6,7 @@ import { revalidatePath, unstable_cache } from "next/cache";
 import { OrcamentoSchema } from "@/lib/schemas";
 import { CACHE_TAGS, invalidateTag } from "@/lib/cache";
 import { isResponsibleMatch } from "@/lib/filter-utils";
+import { getCurrentMonthIsoRange } from "@/lib/period-range";
 
 // ==========================================
 // ORÇAMENTOS (Budgets)
@@ -36,13 +37,14 @@ const getCachedOrcamentoStatus = unstable_cache(
       .eq("user_id", userId);
 
     // Buscar transações do mês
-    const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
+    const { startIso, endExclusiveIso } = getCurrentMonthIsoRange();
     const { data: txs } = await supabase
       .from("transacoes")
       .select("valor, categoria, responsavel, tipo")
       .eq("user_id", userId)
       .eq("tipo", "Saída") // Apenas saídas afetam orçamento
-      .gte("data", startOfMonth);
+      .gte("data", startIso)
+      .lt("data", endExclusiveIso);
 
     const calcForResponsavel = (filtro: string) => {
       const validTxs = txs?.filter(t => isResponsibleMatch(t.responsavel, filtro));
@@ -102,13 +104,14 @@ const getCached503020Metrics = unstable_cache(
     };
 
     // Buscar transações
-    const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
+    const { startIso, endExclusiveIso } = getCurrentMonthIsoRange();
     const { data: txs } = await supabase
       .from("transacoes")
       .select("valor, categoria, responsavel, tipo")
       .eq("user_id", userId)
       .eq("tipo", "Saída")
-      .gte("data", startOfMonth);
+      .gte("data", startIso)
+      .lt("data", endExclusiveIso);
 
     const calc503020 = (filtro: string) => {
         const validTxs = txs?.filter(t => isResponsibleMatch(t.responsavel, filtro));
@@ -156,24 +159,31 @@ export async function createOrcamento(formData: FormData) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   
-  if (!user) return { error: "Sessão expirada." };
+  if (!user) return { error: "Sessao expirada." };
 
   const data = {
     categoria: formData.get("categoria") as string,
-    limite: parseFloat(formData.get("limite_mensal") as string), // Frontend envia 'limite_mensal', mapeamos para 'limite'
+    limite_mensal: parseFloat(formData.get("limite_mensal") as string),
     responsavel: formData.get("responsavel") as string || "Casal",
   };
 
   const parsed = OrcamentoSchema.safeParse(data);
-  if (!parsed.success) return { error: "Campos inválidos." };
+  if (!parsed.success) return { error: "Campos invalidos." };
+
+  const payload = {
+    categoria: parsed.data.categoria,
+    valor_limite: parsed.data.limite_mensal,
+    responsavel: parsed.data.responsavel,
+    user_id: user.id,
+  };
 
   const { error } = await supabase
     .from("orcamentos")
-    .insert([{ ...parsed.data, user_id: user.id }]);
+    .insert([payload]);
 
   if (error) {
-    if (error.code === '23505') { // Unique violation
-      return { error: "Já existe um orçamento definido para esta categoria." };
+    if (error.code === '23505') {
+      return { error: "Ja existe um orcamento definido para esta categoria." };
     }
     return { error: error.message };
   }
@@ -195,3 +205,6 @@ export async function deleteOrcamento(id: string) {
   invalidateTag(CACHE_TAGS.dashboard);
   return { success: true };
 }
+
+
+

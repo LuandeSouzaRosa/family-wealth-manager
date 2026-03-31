@@ -5,6 +5,8 @@ import { createAdminClient } from "@/utils/supabase/admin";
 import { unstable_cache } from "next/cache";
 import { CACHE_TAGS } from "@/lib/cache";
 import { calculateDashboardMetrics, calculateFinancialHealthMetrics } from "@/lib/dashboard-logic";
+import { getCurrentMonthIsoRange, getPreviousMonthIsoRange } from "@/lib/period-range";
+import { buildSpendingClaritySnapshot } from "@/lib/spending-clarity";
 
 // ==========================================
 // DASHBOARD & ANALYTICS (with cache)
@@ -16,22 +18,36 @@ const getCachedDashboardMetrics = unstable_cache(
   async (userId: string) => {
     const supabase = createAdminClient();
 
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+    const { startIso, endExclusiveIso } = getCurrentMonthIsoRange();
 
     // 1. Calcular tudo diretamente usando as transações do mês em curso!
     // Substitui a View estática para blindar o status real (Agendado vs Realizado).
     const { data: monthTx, error: errorMonthTx } = await supabase
       .from("transacoes")
-      .select("valor, tipo, responsavel, status")
+      .select("valor, tipo, categoria, responsavel, status")
       .eq("user_id", userId)
-      .gte("data", startOfMonth);
+      .gte("data", startIso)
+      .lt("data", endExclusiveIso);
 
     if (errorMonthTx && errorMonthTx.code !== "PGRST116") {
       console.error("Erro ao ler transações do mês para Dashboard:", errorMonthTx);
     }
 
     const metrics = calculateDashboardMetrics(monthTx || []);
+    const { startIso: previousStartIso, endExclusiveIso: previousEndExclusiveIso } = getPreviousMonthIsoRange();
+
+    const { data: previousMonthTx, error: errorPreviousMonthTx } = await supabase
+      .from("transacoes")
+      .select("valor, tipo, categoria, responsavel, status")
+      .eq("user_id", userId)
+      .gte("data", previousStartIso)
+      .lt("data", previousEndExclusiveIso);
+
+    if (errorPreviousMonthTx && errorPreviousMonthTx.code !== "PGRST116") {
+      console.error("Erro ao ler transacoes do mes anterior para Dashboard:", errorPreviousMonthTx);
+    }
+
+    const spendingClarity = buildSpendingClaritySnapshot(monthTx || [], previousMonthTx || []);
 
     // 2. Saldo Total Acumulado e Lista de Contas
     const { data: contas } = await supabase
@@ -59,6 +75,7 @@ const getCachedDashboardMetrics = unstable_cache(
       saldoComprometido,
       saldoLivre,
       contas: contas || [],
+      spendingClarity,
     };
   },
   ["dashboard-metrics"],
@@ -264,7 +281,57 @@ const getCachedCashFlowForecast = unstable_cache(
 export async function getDashboardMetrics() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { renda: 0, despesas: 0, investido: 0, saldoTotal: 0, saldoComprometido: 0, saldoLivre: 0, contas: [] };
+  if (!user) return {
+    renda: 0,
+    despesas: 0,
+    investido: 0,
+    saldoTotal: 0,
+    saldoComprometido: 0,
+    saldoLivre: 0,
+    contas: [],
+    spendingClarity: {
+      Todos: {
+        totalSaidasRealizadas: 0,
+        topCategorias: [],
+        concentracaoTop3Percentual: 0,
+        totalRecorrente: 0,
+        totalPontual: 0,
+        percentualRecorrente: 0,
+        percentualPontual: 0,
+        maiorAltaVsMesAnterior: null,
+      },
+      Luan: {
+        totalSaidasRealizadas: 0,
+        topCategorias: [],
+        concentracaoTop3Percentual: 0,
+        totalRecorrente: 0,
+        totalPontual: 0,
+        percentualRecorrente: 0,
+        percentualPontual: 0,
+        maiorAltaVsMesAnterior: null,
+      },
+      Luana: {
+        totalSaidasRealizadas: 0,
+        topCategorias: [],
+        concentracaoTop3Percentual: 0,
+        totalRecorrente: 0,
+        totalPontual: 0,
+        percentualRecorrente: 0,
+        percentualPontual: 0,
+        maiorAltaVsMesAnterior: null,
+      },
+      Casal: {
+        totalSaidasRealizadas: 0,
+        topCategorias: [],
+        concentracaoTop3Percentual: 0,
+        totalRecorrente: 0,
+        totalPontual: 0,
+        percentualRecorrente: 0,
+        percentualPontual: 0,
+        maiorAltaVsMesAnterior: null,
+      },
+    },
+  };
 
   return getCachedDashboardMetrics(user.id);
 }

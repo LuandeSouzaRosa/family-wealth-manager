@@ -8,6 +8,7 @@ import { formatCurrency } from "@/lib/utils"
 import { FinancialEvolutionChart } from "@/components/charts/financial-evolution-chart"
 import { FinancialHealthWidget } from "@/components/dashboard/financial-health"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { SpendingClarityCard } from "@/components/dashboard/spending-clarity-card"
 
 interface MobileDashboardProps {
   userEmail: string
@@ -23,6 +24,16 @@ interface MobileDashboardProps {
   financialEvolution: any[]
   financialHealth: any
   cashFlowForecast: any[]
+  spendingClarity: {
+    totalSaidasRealizadas: number
+    topCategorias: Array<{ categoria: string; total: number; percentual: number; lancamentos: number }>
+    concentracaoTop3Percentual: number
+    totalRecorrente: number
+    totalPontual: number
+    percentualRecorrente: number
+    percentualPontual: number
+    maiorAltaVsMesAnterior: { categoria: string; delta: number } | null
+  }
 }
 
 export function MobileDashboard({ 
@@ -38,7 +49,8 @@ export function MobileDashboard({
   responsavel,
   financialEvolution,
   financialHealth,
-  cashFlowForecast
+  cashFlowForecast,
+  spendingClarity
 }: MobileDashboardProps) {
   const [hideValues, setHideValues] = useState(false)
   const [greeting, setGreeting] = useState("Olá")
@@ -120,6 +132,8 @@ export function MobileDashboard({
       </div>
 
       {/* 3.5 Evolução e Saúde (Mobile) */}
+      <SpendingClarityCard data={spendingClarity} responsavel={responsavel} compact />
+
       <div className="space-y-3">
           <h3 className="text-base font-semibold">Saúde Financeira</h3>
           <FinancialHealthWidget metrics={financialHealth} forecast={cashFlowForecast} />

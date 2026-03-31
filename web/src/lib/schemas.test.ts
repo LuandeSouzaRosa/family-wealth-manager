@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { SplitTransactionSchema } from './schemas';
+import { OrcamentoSchema, SplitTransactionSchema } from './schemas';
 
 describe('SplitTransactionSchema', () => {
   const validBase = {
@@ -77,5 +77,27 @@ describe('SplitTransactionSchema', () => {
 
     const result = SplitTransactionSchema.safeParse(data);
     expect(result.success).toBe(true);
+  });
+});
+
+describe('OrcamentoSchema', () => {
+  it('deve validar payload com limite_mensal', () => {
+    const result = OrcamentoSchema.safeParse({
+      categoria: 'Alimentacao',
+      limite_mensal: 500,
+      responsavel: 'Casal',
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it('deve rejeitar payload legado com chave limite (contrato explicito)', () => {
+    const result = OrcamentoSchema.safeParse({
+      categoria: 'Alimentacao',
+      limite: 500,
+      responsavel: 'Casal',
+    });
+
+    expect(result.success).toBe(false);
   });
 });

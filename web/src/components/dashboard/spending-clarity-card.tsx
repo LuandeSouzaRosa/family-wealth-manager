@@ -1,0 +1,140 @@
+"use client";
+
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { formatCurrency } from "@/lib/utils";
+import Link from "next/link";
+import { AlertTriangle, TrendingUp } from "lucide-react";
+
+interface TopCategory {
+  categoria: string;
+  total: number;
+  percentual: number;
+  lancamentos: number;
+}
+
+interface BiggestIncrease {
+  categoria: string;
+  delta: number;
+}
+
+interface SpendingClarityData {
+  totalSaidasRealizadas: number;
+  topCategorias: TopCategory[];
+  concentracaoTop3Percentual: number;
+  totalRecorrente: number;
+  totalPontual: number;
+  percentualRecorrente: number;
+  percentualPontual: number;
+  maiorAltaVsMesAnterior: BiggestIncrease | null;
+}
+
+interface SpendingClarityCardProps {
+  data: SpendingClarityData;
+  responsavel: string;
+  compact?: boolean;
+}
+
+function buildControlHint(data: SpendingClarityData): string {
+  if (data.topCategorias.length === 0) {
+    return "Sem saidas realizadas no filtro atual.";
+  }
+
+  if (data.concentracaoTop3Percentual >= 70) {
+    return `Top 3 categorias concentram ${data.concentracaoTop3Percentual.toFixed(0)}% do mes. Revisar essas categorias tende a gerar maior impacto.`;
+  }
+
+  if (data.maiorAltaVsMesAnterior) {
+    return `${data.maiorAltaVsMesAnterior.categoria} foi a maior alta do mes. Revisar essa categoria primeiro reduz o desvio mais rapido.`;
+  }
+
+  if (data.percentualPontual >= 40) {
+    return "Parte relevante do gasto foi pontual. Vale revisar lancamentos excepcionais antes de criar regra fixa.";
+  }
+
+  return "Gasto distribuido entre categorias. Priorize a categoria lider e as duas seguintes para controle semanal rapido.";
+}
+
+export function SpendingClarityCard({ data, responsavel, compact = false }: SpendingClarityCardProps) {
+  const hint = buildControlHint(data);
+  const categoriaLider = data.topCategorias[0] ?? null;
+
+  return (
+    <Card className="border border-border/50 shadow-sm bg-card">
+      <CardHeader className={compact ? "pb-2" : "pb-3"}>
+        <CardTitle className="text-lg font-medium flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4 text-amber-500" />
+          Onde esta pesando no mes
+        </CardTitle>
+        <CardDescription>
+          Saidas realizadas ({responsavel})
+        </CardDescription>
+      </CardHeader>
+      <CardContent className={compact ? "space-y-3" : "space-y-4"}>
+        {data.totalSaidasRealizadas <= 0 ? (
+          <p className="text-sm text-muted-foreground">Nao houve saidas realizadas neste recorte.</p>
+        ) : (
+          <>
+            <div className="rounded-lg border border-border/60 p-3 bg-muted/20 space-y-1 text-sm">
+              <p>
+                Total de saidas realizadas: <strong>{formatCurrency(data.totalSaidasRealizadas)}</strong>.
+              </p>
+              {categoriaLider ? (
+                <p>
+                  Categoria lider do mes: <strong>{categoriaLider.categoria}</strong> ({formatCurrency(categoriaLider.total)}, {categoriaLider.percentual.toFixed(0)}%).
+                </p>
+              ) : null}
+            </div>
+
+            <div className="space-y-2">
+              {data.topCategorias.map((item, index) => (
+                <div key={`${item.categoria}-${index}`} className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="w-5 text-xs text-muted-foreground">{index + 1}.</span>
+                    <span className="font-medium">{item.categoria}</span>
+                    <span className="text-xs text-muted-foreground">({item.lancamentos} lanc.)</span>
+                  </div>
+                  <div className="text-right">
+                    <div className="font-medium tabular-nums">{formatCurrency(item.total)}</div>
+                    <div className="text-xs text-muted-foreground">{item.percentual.toFixed(0)}%</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="rounded-lg border border-border/60 p-3 bg-muted/20 space-y-2 text-sm">
+              <p>
+                Top 3 concentram <strong>{data.concentracaoTop3Percentual.toFixed(0)}%</strong> das saidas do mes.
+              </p>
+              {data.maiorAltaVsMesAnterior ? (
+                <p className="flex items-center gap-1">
+                  <TrendingUp className="w-4 h-4 text-red-500" />
+                  Maior alta vs mes anterior: <strong>{data.maiorAltaVsMesAnterior.categoria}</strong> (+{formatCurrency(data.maiorAltaVsMesAnterior.delta)}).
+                </p>
+              ) : (
+                <p className="text-muted-foreground">Sem alta de categoria vs mes anterior para este filtro.</p>
+              )}
+              <p>
+                Recorrente x pontual: <strong>{formatCurrency(data.totalRecorrente)}</strong> ({data.percentualRecorrente.toFixed(0)}%) vs{" "}
+                <strong>{formatCurrency(data.totalPontual)}</strong> ({data.percentualPontual.toFixed(0)}%).
+              </p>
+            </div>
+
+            <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm">
+              <p className="font-medium mb-1">Controle rapido</p>
+              <p className="text-muted-foreground">{hint}</p>
+            </div>
+          </>
+        )}
+
+        <div className="pt-1">
+          <Link href="/transacoes">
+            <Button variant="outline" size="sm">
+              Revisar no extrato
+            </Button>
+          </Link>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
