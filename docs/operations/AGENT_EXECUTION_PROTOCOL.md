@@ -56,3 +56,14 @@ Ao operar no repositório **FWM**, a IA assume a responsabilidade pelas seguinte
 - O comando sobe servidor local (`http://127.0.0.1:3001`) e roda:
   - `tests/e2e/dashboard-extrato-coherence-desktop.spec.ts` (`chromium-desktop`)
 - Criterio de prova: no mesmo recorte de periodo/responsavel, o delta de agregado (Dashboard) bate com o delta do detalhado (Extrato), usando fixture controlada e cleanup.
+
+## 8. Validacao Pratica Curta - Card de Clareza de Gastos
+- Janela sugerida: 3 a 7 dias de uso real no beta interno.
+- Momento de uso: primeira abertura do Dashboard no dia.
+- Checklist rapido (responder `sim` ou `nao`):
+  - Em ate 5 segundos, ficou claro o principal problema do mes?
+  - O insight principal pareceu util (nao generico)?
+  - O CTA `Revisar no extrato` ajudou a ir para acao?
+  - O bloco `Ajuste sugerido de maior impacto` ajudou ou ficou vago?
+- Registro minimo recomendado: 1 linha por dia (`data`, `responsavel`, `sim/nao` por pergunta, observacao curta).
+- Criterio simples de leitura: se houver `nao` recorrente na mesma pergunta por 3 dias, abrir microajuste de copy/ordem (sem nova feature).
