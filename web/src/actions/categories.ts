@@ -73,7 +73,8 @@ export async function getCategorizationRules() {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("regras_categorizacao")
-    .select("*");
+    .select("*")
+    .order("created_at", { ascending: false });
 
   if (error) {
     console.error("Erro ao buscar regras de categorização:", error);

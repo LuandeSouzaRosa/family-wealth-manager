@@ -11,6 +11,7 @@ import { getCategorizationRules, createCategorizationRule } from '@/actions/cate
 import { getContasBancarias } from '@/actions/accounts'
 import { getReconciliationCandidates } from '@/actions/reconciliation'
 import { findBestMatch, parseDate, parseMoney } from '@/lib/reconciliation-logic'
+import { categorizeImportedDescription, deriveRuleTextFromDescription } from '@/lib/csv-categorization'
 import { Upload, Check, AlertCircle, Loader2, FileSpreadsheet, PlusCircle, Info } from 'lucide-react'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
@@ -20,7 +21,7 @@ import { toast } from "sonner"
 
 const CATEGORIAS = [
   "Alimentação", "Moradia", "Transporte", "Lazer", "Saúde", 
-  "Educação", "Salário", "Investimentos", "Outros"
+  "Educação", "Salário", "Investimentos", "Fatura Cartao", "Outros"
 ]
 
 const RESPONSAVEIS = ["Casal", "Luan", "Luana"]
@@ -45,9 +46,8 @@ export function CsvImporter() {
   }, [])
 
   const aplicarRegras = (descricao: string) => {
-    // Busca a primeira regra que bate com a descrição (case insensitive)
-    const regra = regras.find(r => descricao.toLowerCase().includes(r.texto_contem.toLowerCase()))
-    return regra ? regra.categoria_destino : "Outros"
+    // Usa matching normalizado e alias curto para reduzir quedas em categoria genérica.
+    return categorizeImportedDescription(descricao, regras)
   }
 
   const calcularPreviaSaldo = (val: string) => {
@@ -219,7 +219,7 @@ export function CsvImporter() {
     if (novasRegras.size > 0) {
       const promises = Array.from(novasRegras).map(index => {
         const item = data[index]
-        return createCategorizationRule(item.descricao, item.categoria)
+        return createCategorizationRule(deriveRuleTextFromDescription(item.descricao), item.categoria)
       })
       await Promise.all(promises)
     }
