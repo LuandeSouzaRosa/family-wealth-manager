@@ -35,28 +35,69 @@ interface SpendingClarityCardProps {
   compact?: boolean;
 }
 
-function buildControlHint(data: SpendingClarityData): string {
+type PrimaryInsight = {
+  title: string;
+  message: string;
+};
+
+function buildPrimaryInsight(data: SpendingClarityData): PrimaryInsight {
   if (data.topCategorias.length === 0) {
-    return "Sem saidas realizadas no filtro atual.";
+    return {
+      title: "Sem pressao de gasto",
+      message: "Nao houve saidas realizadas no filtro atual.",
+    };
   }
 
   if (data.concentracaoTop3Percentual >= 70) {
-    return `Top 3 categorias concentram ${data.concentracaoTop3Percentual.toFixed(0)}% do mes. Revisar essas categorias tende a gerar maior impacto.`;
+    return {
+      title: "Gasto concentrado",
+      message: `Top 3 categorias concentram ${data.concentracaoTop3Percentual.toFixed(0)}% das saidas. Revisar essas categorias tende a gerar maior impacto.`,
+    };
   }
 
   if (data.maiorAltaVsMesAnterior) {
-    return `${data.maiorAltaVsMesAnterior.categoria} foi a maior alta do mes. Revisar essa categoria primeiro reduz o desvio mais rapido.`;
+    return {
+      title: "Maior alta do mes",
+      message: `${data.maiorAltaVsMesAnterior.categoria} subiu ${formatCurrency(data.maiorAltaVsMesAnterior.delta)} vs mes anterior. Revisar essa categoria primeiro reduz o desvio mais rapido.`,
+    };
   }
 
   if (data.percentualPontual >= 40) {
-    return "Parte relevante do gasto foi pontual. Vale revisar lancamentos excepcionais antes de criar regra fixa.";
+    return {
+      title: "Peso de gastos pontuais",
+      message: "Parte relevante do gasto foi pontual. Revise lancamentos excepcionais antes de criar regra fixa.",
+    };
   }
 
-  return "Gasto distribuido entre categorias. Priorize a categoria lider e as duas seguintes para controle semanal rapido.";
+  return {
+    title: "Gasto espalhado",
+    message: "O gasto esta distribuido. Priorize a categoria lider e as duas seguintes para controle semanal rapido.",
+  };
+}
+
+function buildControlHint(data: SpendingClarityData): string {
+  if (data.topCategorias.length === 0) {
+    return "Sem acao necessaria neste recorte.";
+  }
+
+  if (data.concentracaoTop3Percentual >= 70) {
+    return "Revise agora as 3 categorias lideres no extrato e corte pelo menos 1 item de cada.";
+  }
+
+  if (data.maiorAltaVsMesAnterior) {
+    return `Comece pela categoria ${data.maiorAltaVsMesAnterior.categoria} para reduzir o desvio mais rapido.`;
+  }
+
+  if (data.percentualPontual >= 40) {
+    return "Filtre lancamentos pontuais no extrato e valide o que nao vai se repetir.";
+  }
+
+  return "Revise semanalmente as 3 categorias lideres para manter o mes sob controle.";
 }
 
 export function SpendingClarityCard({ data, responsavel, compact = false }: SpendingClarityCardProps) {
   const hint = buildControlHint(data);
+  const primaryInsight = buildPrimaryInsight(data);
   const categoriaLider = data.topCategorias[0] ?? null;
 
   return (
@@ -86,6 +127,11 @@ export function SpendingClarityCard({ data, responsavel, compact = false }: Spen
               ) : null}
             </div>
 
+            <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm space-y-1">
+              <p className="font-medium">{primaryInsight.title}</p>
+              <p className="text-muted-foreground">{primaryInsight.message}</p>
+            </div>
+
             <div className="space-y-2">
               {data.topCategorias.map((item, index) => (
                 <div key={`${item.categoria}-${index}`} className="flex items-center justify-between text-sm">
@@ -103,9 +149,7 @@ export function SpendingClarityCard({ data, responsavel, compact = false }: Spen
             </div>
 
             <div className="rounded-lg border border-border/60 p-3 bg-muted/20 space-y-2 text-sm">
-              <p>
-                Top 3 concentram <strong>{data.concentracaoTop3Percentual.toFixed(0)}%</strong> das saidas do mes.
-              </p>
+              <p>Concentracao top 3: <strong>{data.concentracaoTop3Percentual.toFixed(0)}%</strong>.</p>
               {data.maiorAltaVsMesAnterior ? (
                 <p className="flex items-center gap-1">
                   <TrendingUp className="w-4 h-4 text-red-500" />
@@ -121,7 +165,7 @@ export function SpendingClarityCard({ data, responsavel, compact = false }: Spen
             </div>
 
             <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm">
-              <p className="font-medium mb-1">Controle rapido</p>
+              <p className="font-medium mb-1">Ajuste sugerido de maior impacto</p>
               <p className="text-muted-foreground">{hint}</p>
             </div>
           </>
