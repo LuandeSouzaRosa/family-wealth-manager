@@ -104,32 +104,40 @@ export function WealthCard3D({ saldoAtual, saldoLivre, saldoComprometido, respon
             {/* Middle: Balance */}
             <div className="space-y-1 my-4">
                 <span className="text-xs text-neutral-400 font-medium uppercase tracking-widest block mb-1">
-                    Patrimônio Líquido Disponível
+                    Saldo em contas (filtro atual)
                 </span>
                 <div className="text-3xl md:text-4xl font-mono text-white tracking-tight drop-shadow-lg">
                     {formatCurrency(saldoAtual)}
                 </div>
+                <p className="text-[10px] text-neutral-400 leading-relaxed">
+                    Soma dos saldos bancários. Não inclui investimentos, bens declarados ou passivos.
+                </p>
             </div>
 
             {/* Bottom: Details (Meta vs Livre) */}
             <div className="grid grid-cols-2 gap-4 border-t border-white/10 pt-4">
                 <div>
                     <span className="text-[10px] text-neutral-400 uppercase tracking-wider block">
-                        Livre
+                        Livre após metas
                     </span>
                     <span className="text-sm font-medium text-emerald-400 font-mono">
-                        {saldoLivre ? formatCurrency(saldoLivre) : '-'}
+                        {saldoLivre !== undefined ? formatCurrency(saldoLivre) : '-'}
                     </span>
                 </div>
                 <div className="text-right">
                     <span className="text-[10px] text-neutral-400 uppercase tracking-wider block">
-                        Comprometido
+                        Comprometido em metas
                     </span>
                     <span className="text-sm font-medium text-blue-400 font-mono">
-                        {saldoComprometido ? formatCurrency(saldoComprometido) : '-'}
+                        {saldoComprometido !== undefined ? formatCurrency(saldoComprometido) : '-'}
                     </span>
                 </div>
             </div>
+            {responsavel !== "Todos" && saldoComprometido !== undefined ? (
+              <p className="text-[10px] text-neutral-500 mt-2">
+                Metas comprometidas são globais e podem não refletir rateio por responsável.
+              </p>
+            ) : null}
 
         </div>
 

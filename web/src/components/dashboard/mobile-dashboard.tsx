@@ -34,6 +34,7 @@ interface MobileDashboardProps {
     percentualPontual: number
     maiorAltaVsMesAnterior: { categoria: string; delta: number } | null
   }
+  totalSaidasRealizadasTodos?: number
 }
 
 export function MobileDashboard({ 
@@ -50,7 +51,8 @@ export function MobileDashboard({
   financialEvolution,
   financialHealth,
   cashFlowForecast,
-  spendingClarity
+  spendingClarity,
+  totalSaidasRealizadasTodos = 0
 }: MobileDashboardProps) {
   const [hideValues, setHideValues] = useState(false)
   const [greeting, setGreeting] = useState("Olá")
@@ -79,7 +81,7 @@ export function MobileDashboard({
               </h1>
           </div>
           <p className="text-xs text-muted-foreground">
-              {responsavel === 'Todos' ? 'Capital Disponível Total' : `Capital (Visão Consolidada)`}
+              {responsavel === 'Todos' ? 'Saldo em contas (visão familiar)' : 'Saldo em contas (visão consolidada)'}
           </p>
       </div>
 
@@ -132,7 +134,12 @@ export function MobileDashboard({
       </div>
 
       {/* 3.5 Evolução e Saúde (Mobile) */}
-      <SpendingClarityCard data={spendingClarity} responsavel={responsavel} compact />
+      <SpendingClarityCard
+        data={spendingClarity}
+        responsavel={responsavel}
+        compact
+        totalSaidasRealizadasTodos={totalSaidasRealizadasTodos}
+      />
 
       <div className="space-y-3">
           <h3 className="text-base font-semibold">Saúde Financeira</h3>

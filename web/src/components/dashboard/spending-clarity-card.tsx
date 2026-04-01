@@ -33,6 +33,7 @@ interface SpendingClarityCardProps {
   data: SpendingClarityData;
   responsavel: string;
   compact?: boolean;
+  totalSaidasRealizadasTodos?: number;
 }
 
 type PrimaryInsight = {
@@ -40,11 +41,38 @@ type PrimaryInsight = {
   message: string;
 };
 
+function normalizeLabel(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function isGenericLeader(data: SpendingClarityData): boolean {
+  if (data.topCategorias.length === 0) return false;
+
+  const categoriaLider = data.topCategorias[0];
+  const categoriaLiderNormalizada = normalizeLabel(categoriaLider.categoria);
+  const liderGenerica =
+    categoriaLiderNormalizada === "outros" || categoriaLiderNormalizada === "sem categoria";
+
+  return liderGenerica && categoriaLider.percentual >= 60;
+}
+
 function buildPrimaryInsight(data: SpendingClarityData): PrimaryInsight {
   if (data.topCategorias.length === 0) {
     return {
       title: "Sem pressao de gasto",
       message: "Nao houve saidas realizadas no filtro atual.",
+    };
+  }
+
+  if (isGenericLeader(data)) {
+    const categoriaLider = data.topCategorias[0];
+    return {
+      title: "Classificacao ainda generica",
+      message: `Grande parte das saidas esta em \"${categoriaLider.categoria}\". Classificar os principais lancamentos deixa o insight mais confiavel.`,
     };
   }
 
@@ -80,6 +108,11 @@ function buildControlHint(data: SpendingClarityData): string {
     return "Sem acao necessaria neste recorte.";
   }
 
+  if (isGenericLeader(data)) {
+    const categoriaLider = data.topCategorias[0];
+    return `Revise no extrato os maiores lancamentos em \"${categoriaLider.categoria}\" e recategorize os mais relevantes.`;
+  }
+
   if (data.concentracaoTop3Percentual >= 70) {
     return "Revise agora as 3 categorias lideres no extrato e corte pelo menos 1 item de cada.";
   }
@@ -95,10 +128,19 @@ function buildControlHint(data: SpendingClarityData): string {
   return "Revise semanalmente as 3 categorias lideres para manter o mes sob controle.";
 }
 
-export function SpendingClarityCard({ data, responsavel, compact = false }: SpendingClarityCardProps) {
+export function SpendingClarityCard({
+  data,
+  responsavel,
+  compact = false,
+  totalSaidasRealizadasTodos = 0,
+}: SpendingClarityCardProps) {
   const hint = buildControlHint(data);
   const primaryInsight = buildPrimaryInsight(data);
   const categoriaLider = data.topCategorias[0] ?? null;
+  const hasOtherScopeMovement =
+    data.totalSaidasRealizadas <= 0 &&
+    totalSaidasRealizadasTodos > 0 &&
+    responsavel !== "Todos";
 
   return (
     <Card className="border border-border/50 shadow-sm bg-card">
@@ -113,7 +155,13 @@ export function SpendingClarityCard({ data, responsavel, compact = false }: Spen
       </CardHeader>
       <CardContent className={compact ? "space-y-3" : "space-y-4"}>
         {data.totalSaidasRealizadas <= 0 ? (
-          <p className="text-sm text-muted-foreground">Nao houve saidas realizadas neste recorte.</p>
+          hasOtherScopeMovement ? (
+            <p className="text-sm text-muted-foreground">
+              Ja houve saidas realizadas no mes, mas nao neste filtro de responsavel. Ajuste o filtro ou revise a classificacao no extrato.
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground">Nao houve saidas realizadas neste recorte.</p>
+          )
         ) : (
           <>
             <div className="rounded-lg border border-border/60 p-3 bg-muted/20 space-y-1 text-sm">

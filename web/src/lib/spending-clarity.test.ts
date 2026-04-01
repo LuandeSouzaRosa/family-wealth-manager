@@ -2,19 +2,19 @@ import { describe, expect, it } from "vitest";
 import { buildSpendingClaritySnapshot, type SpendingClarityInput } from "./spending-clarity";
 
 const currentMonth: SpendingClarityInput[] = [
-  { tipo: "Saída", valor: 300, categoria: "Alimentacao", responsavel: "Casal", status: "Realizado" },
-  { tipo: "Saída", valor: 120, categoria: "Transporte", responsavel: "Casal", status: "Realizado" },
-  { tipo: "Saída", valor: 100, categoria: "Transporte", responsavel: "Casal", status: "Realizado" },
-  { tipo: "Saída", valor: 80, categoria: "Transporte", responsavel: "Casal", status: "Realizado" },
-  { tipo: "Saída", valor: 200, categoria: "Assinaturas", responsavel: "Luan", status: "Realizado" },
-  { tipo: "Saída", valor: 50, categoria: "Lazer", responsavel: "Luana", status: "Pendente" },
+  { tipo: "Sa\u00EDda", valor: 300, categoria: "Alimentacao", responsavel: "Casal", status: "Realizado" },
+  { tipo: "Sa\u00EDda", valor: 120, categoria: "Transporte", responsavel: "Casal", status: "Realizado" },
+  { tipo: "Sa\u00EDda", valor: 100, categoria: "Transporte", responsavel: "Casal", status: "Realizado" },
+  { tipo: "Sa\u00EDda", valor: 80, categoria: "Transporte", responsavel: "Casal", status: "Realizado" },
+  { tipo: "Sa\u00EDda", valor: 200, categoria: "Assinaturas", responsavel: "Luan", status: "Realizado" },
+  { tipo: "Sa\u00EDda", valor: 50, categoria: "Lazer", responsavel: "Luana", status: "Pendente" },
   { tipo: "Entrada", valor: 900, categoria: "Salario", responsavel: "Luan", status: "Realizado" },
 ];
 
 const previousMonth: SpendingClarityInput[] = [
-  { tipo: "Saída", valor: 180, categoria: "Alimentacao", responsavel: "Casal", status: "Realizado" },
-  { tipo: "Saída", valor: 250, categoria: "Transporte", responsavel: "Casal", status: "Realizado" },
-  { tipo: "Saída", valor: 120, categoria: "Assinaturas", responsavel: "Luan", status: "Realizado" },
+  { tipo: "Sa\u00EDda", valor: 180, categoria: "Alimentacao", responsavel: "Casal", status: "Realizado" },
+  { tipo: "Sa\u00EDda", valor: 250, categoria: "Transporte", responsavel: "Casal", status: "Realizado" },
+  { tipo: "Sa\u00EDda", valor: 120, categoria: "Assinaturas", responsavel: "Luan", status: "Realizado" },
 ];
 
 describe("buildSpendingClaritySnapshot", () => {
@@ -53,12 +53,22 @@ describe("buildSpendingClaritySnapshot", () => {
 
   it("retorna estrutura vazia quando nao ha saidas realizadas no filtro", () => {
     const snapshot = buildSpendingClaritySnapshot(
-      [{ tipo: "Saída", valor: 50, categoria: "Lazer", responsavel: "Luana", status: "Pendente" }],
+      [{ tipo: "Sa\u00EDda", valor: 50, categoria: "Lazer", responsavel: "Luana", status: "Pendente" }],
       []
     );
 
     expect(snapshot.Luana.totalSaidasRealizadas).toBe(0);
     expect(snapshot.Luana.topCategorias).toEqual([]);
     expect(snapshot.Luana.maiorAltaVsMesAnterior).toBeNull();
+  });
+
+  it("aceita tipo sem acento (Saida) para nao perder gasto importado por variacao textual", () => {
+    const snapshot = buildSpendingClaritySnapshot(
+      [{ tipo: "Saida", valor: 150, categoria: "Mercado", responsavel: "Casal", status: "Realizado" }],
+      []
+    );
+
+    expect(snapshot.Todos.totalSaidasRealizadas).toBe(150);
+    expect(snapshot.Todos.topCategorias[0]?.categoria).toBe("Mercado");
   });
 });

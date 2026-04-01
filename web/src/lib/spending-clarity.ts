@@ -49,7 +49,14 @@ const EMPTY_VIEW: SpendingClarityView = {
 };
 
 const RESPONSAVEL_FILTROS: ResponsibleFilter[] = ["Todos", "Luan", "Luana", "Casal"];
-const SAIDA_VARIANTS = new Set(["saída", "saÃ­da"]);
+
+function normalizeToken(value: string | null | undefined): string {
+  return (value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
 
 function normalizeMoney(value: number | string): number {
   if (typeof value === "number") return Number.isFinite(value) ? value : 0;
@@ -58,12 +65,13 @@ function normalizeMoney(value: number | string): number {
 }
 
 function isExpenseType(tipo: string): boolean {
-  const normalized = (tipo || "").trim().toLowerCase();
-  return SAIDA_VARIANTS.has(normalized);
+  const normalized = normalizeToken(tipo);
+  return normalized === "saida";
 }
 
 function isRealized(status: string | null): boolean {
-  return status !== "Agendado" && status !== "Pendente";
+  const normalized = normalizeToken(status);
+  return normalized !== "agendado" && normalized !== "pendente";
 }
 
 function aggregateByCategory(

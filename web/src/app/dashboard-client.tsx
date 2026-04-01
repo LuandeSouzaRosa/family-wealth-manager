@@ -142,6 +142,8 @@ export function DashboardClientShell({
     metrics.spendingClarity?.[responsavel] ||
     metrics.spendingClarity?.Todos ||
     emptySpendingClarity;
+  const totalSaidasRealizadasTodos =
+    metrics.spendingClarity?.Todos?.totalSaidasRealizadas || 0;
 
   return (
     <motion.div 
@@ -172,6 +174,7 @@ export function DashboardClientShell({
         financialHealth={financialHealth}
         cashFlowForecast={cashFlowForecast}
         spendingClarity={activeSpendingClarity}
+        totalSaidasRealizadasTodos={totalSaidasRealizadasTodos}
       />
 
       {/* ===================================================================================== */}
@@ -239,7 +242,11 @@ export function DashboardClientShell({
         </motion.div>
 
         <motion.div variants={fadeUpVariant}>
-          <SpendingClarityCard data={activeSpendingClarity} responsavel={responsavel} />
+          <SpendingClarityCard
+            data={activeSpendingClarity}
+            responsavel={responsavel}
+            totalSaidasRealizadasTodos={totalSaidasRealizadasTodos}
+          />
         </motion.div>
 
         {/* Financial Evolution Chart (NEW) */}

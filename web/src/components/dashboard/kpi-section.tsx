@@ -75,7 +75,7 @@ export function KpiSection({
                  </div>
             ) : (
                 <p className="text-xs text-muted-foreground mt-2 opacity-70">
-                    {responsavel !== 'Todos' ? 'Visão Consolidada' : 'Total Familiar'}
+                    {responsavel !== 'Todos' ? 'Visão consolidada' : 'Total familiar'}
                 </p>
             )}
           </CardContent>
@@ -107,7 +107,7 @@ export function KpiSection({
                  </div>
             ) : (
                  <p className="text-xs text-muted-foreground mt-2 opacity-70">
-                    {responsavel !== 'Todos' ? 'Visão Consolidada' : 'Total Familiar'}
+                    {responsavel !== 'Todos' ? 'Visão consolidada' : 'Total familiar'}
                 </p>
             )}
           </CardContent>
