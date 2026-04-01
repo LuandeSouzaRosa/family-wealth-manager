@@ -34,6 +34,7 @@ interface SpendingClarityCardProps {
   responsavel: string;
   compact?: boolean;
   totalSaidasRealizadasTodos?: number;
+  transacoesHref?: string;
 }
 
 type PrimaryInsight = {
@@ -133,7 +134,11 @@ export function SpendingClarityCard({
   responsavel,
   compact = false,
   totalSaidasRealizadasTodos = 0,
+  transacoesHref,
 }: SpendingClarityCardProps) {
+  const now = new Date();
+  const defaultTransacoesHref = `/transacoes?month=${now.getMonth() + 1}&year=${now.getFullYear()}`;
+  const targetTransacoesHref = transacoesHref || defaultTransacoesHref;
   const hint = buildControlHint(data);
   const primaryInsight = buildPrimaryInsight(data);
   const categoriaLider = data.topCategorias[0] ?? null;
@@ -220,7 +225,7 @@ export function SpendingClarityCard({
         )}
 
         <div className="pt-1">
-          <Link href="/transacoes">
+          <Link href={targetTransacoesHref}>
             <Button variant="outline" size="sm">
               Revisar no extrato
             </Button>

@@ -144,6 +144,10 @@ export function DashboardClientShell({
     emptySpendingClarity;
   const totalSaidasRealizadasTodos =
     metrics.spendingClarity?.Todos?.totalSaidasRealizadas || 0;
+  const now = new Date();
+  const dashboardPeriodMonth = String(now.getMonth() + 1);
+  const dashboardPeriodYear = String(now.getFullYear());
+  const transacoesHref = `/transacoes?month=${dashboardPeriodMonth}&year=${dashboardPeriodYear}`;
 
   return (
     <motion.div 
@@ -175,6 +179,7 @@ export function DashboardClientShell({
         cashFlowForecast={cashFlowForecast}
         spendingClarity={activeSpendingClarity}
         totalSaidasRealizadasTodos={totalSaidasRealizadasTodos}
+        transacoesHref={transacoesHref}
       />
 
       {/* ===================================================================================== */}
@@ -246,6 +251,7 @@ export function DashboardClientShell({
             data={activeSpendingClarity}
             responsavel={responsavel}
             totalSaidasRealizadasTodos={totalSaidasRealizadasTodos}
+            transacoesHref={transacoesHref}
           />
         </motion.div>
 

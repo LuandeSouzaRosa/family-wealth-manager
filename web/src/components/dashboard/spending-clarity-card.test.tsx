@@ -55,4 +55,17 @@ describe("SpendingClarityCard", () => {
     expect(screen.getByText(/classificacao ainda generica/i)).toBeTruthy();
     expect(screen.getByText(/classificar os principais lancamentos deixa o insight mais confiavel/i)).toBeTruthy();
   });
+
+  it("usa deep-link explicito para extrato quando href contextual e informado", () => {
+    render(
+      <SpendingClarityCard
+        data={emptyData}
+        responsavel="Todos"
+        transacoesHref="/transacoes?month=4&year=2026"
+      />
+    );
+
+    const action = screen.getByRole("button", { name: /revisar no extrato/i }).closest("a");
+    expect(action?.getAttribute("href")).toBe("/transacoes?month=4&year=2026");
+  });
 });

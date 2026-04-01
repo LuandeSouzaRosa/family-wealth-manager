@@ -35,6 +35,7 @@ interface MobileDashboardProps {
     maiorAltaVsMesAnterior: { categoria: string; delta: number } | null
   }
   totalSaidasRealizadasTodos?: number
+  transacoesHref: string
 }
 
 export function MobileDashboard({ 
@@ -52,7 +53,8 @@ export function MobileDashboard({
   financialHealth,
   cashFlowForecast,
   spendingClarity,
-  totalSaidasRealizadasTodos = 0
+  totalSaidasRealizadasTodos = 0,
+  transacoesHref
 }: MobileDashboardProps) {
   const [hideValues, setHideValues] = useState(false)
   const [greeting, setGreeting] = useState("Olá")
@@ -94,7 +96,7 @@ export function MobileDashboard({
                   </div>
               </AddTransactionDialog>
           </div>
-          <Link href="/transacoes" className="col-span-1">
+          <Link href={transacoesHref} className="col-span-1">
               <div className="w-full bg-secondary text-secondary-foreground hover:bg-secondary/80 h-12 rounded-xl flex items-center justify-center gap-2 font-medium cursor-pointer">
                   <ListFilter className="w-5 h-5" /> Extrato
               </div>
@@ -157,7 +159,7 @@ export function MobileDashboard({
       <div className="space-y-3">
           <div className="flex items-center justify-between">
               <h3 className="text-base font-semibold">Últimas Movimentações {responsavel !== 'Todos' && <span className="text-xs font-normal text-muted-foreground">({responsavel})</span>}</h3>
-              <Link href="/transacoes" className="text-xs text-primary font-medium">Ver todas</Link>
+              <Link href={transacoesHref} className="text-xs text-primary font-medium">Ver todas</Link>
           </div>
           
           {recentTx.length === 0 ? (
