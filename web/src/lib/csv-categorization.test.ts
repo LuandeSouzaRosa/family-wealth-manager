@@ -111,4 +111,21 @@ describe("csv categorization helper", () => {
       categorizeImportedDescription("Pagamento de boleto efetuado - SEFAZ SANTA CATARINA", [])
     ).toBe("Transporte");
   });
+
+  it("aplica heuristica de moradia para pix recorrente de juliana", () => {
+    expect(
+      categorizeImportedDescription(
+        "Transferência enviada pelo Pix - JULIANA PATRICIO MARTELLO - •••.830.829-•• - CAIXA ECONOMICA FEDERAL (0104) Agência: 420 Conta: 3701000000586591022-8",
+        []
+      )
+    ).toBe("Moradia");
+  });
+
+  it("aplica heuristica de moradia para compra no debito de administradora", () => {
+    expect(categorizeImportedDescription("Compra no débito - Administradora", [])).toBe("Moradia");
+  });
+
+  it("aplica heuristica de moradia para merchant milium", () => {
+    expect(categorizeImportedDescription("Compra no débito - MILIUM LOJA 68", [])).toBe("Moradia");
+  });
 });

@@ -63,6 +63,18 @@ function inferCategoryByHeuristic(normalizedDescription: string): string | null 
   // Heuristica de fallback de baixo risco para elevar utilidade do insight sem sobrescrever regras do usuario.
   if (normalizedDescription.includes("pagamento de fatura")) return "Fatura Cartao";
   if (
+    normalizedDescription.includes("transferencia enviada pelo pix") &&
+    normalizedDescription.includes("juliana patricio martello")
+  ) {
+    return "Moradia";
+  }
+  if (normalizedDescription.includes("compra no debito") && normalizedDescription.includes("administradora")) {
+    return "Moradia";
+  }
+  if (normalizedDescription.includes("milium loja")) {
+    return "Moradia";
+  }
+  if (
     normalizedDescription.includes("pagamento de boleto efetuado") &&
     normalizedDescription.includes("sefaz")
   ) {
