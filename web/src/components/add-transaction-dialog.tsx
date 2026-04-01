@@ -48,6 +48,8 @@ import { getCategorias } from "@/actions/categories"
 // CATEGORIAS_ENTRADA e CATEGORIAS_SAIDA removidos como fallback estático, usaremos dinâmico
 
 import { TransactionSchema } from "@/lib/schemas"
+import { useFilter } from "@/contexts/filter-context"
+import { resolveResponsibleForNewTransaction } from "@/lib/filter-utils"
 
 export function AddTransactionDialog({ children, cartoes = [], variant = "primary" }: { children?: React.ReactNode, cartoes?: any[], variant?: "primary" | "secondary" }) {
   const [open, setOpen] = React.useState(false)
@@ -58,6 +60,7 @@ export function AddTransactionDialog({ children, cartoes = [], variant = "primar
   const [splitLuan, setSplitLuan] = React.useState("")
   const [splitLuana, setSplitLuana] = React.useState("")
   const isSubmittingRef = React.useRef(false)
+  const { responsavel } = useFilter()
 
   React.useEffect(() => {
     if (open) {
@@ -80,12 +83,18 @@ export function AddTransactionDialog({ children, cartoes = [], variant = "primar
       data: new Date(),
       conta_id: "none",
       cartao_id: "none",
+      responsavel: resolveResponsibleForNewTransaction(responsavel),
       status: "Realizado",
     },
   })
 
   // Assistir o 'tipo' para renderizar as categorias certas
   const tipoSelecionado = form.watch("tipo")
+
+  React.useEffect(() => {
+    if (!open) return
+    form.setValue("responsavel", resolveResponsibleForNewTransaction(responsavel))
+  }, [open, responsavel, form])
 
   function submitTransaction(values: z.infer<typeof TransactionSchema>) {
     startTransition(async () => {
@@ -95,6 +104,7 @@ export function AddTransactionDialog({ children, cartoes = [], variant = "primar
       formData.append("valor", String(values.valor))
       formData.append("categoria", values.categoria)
       formData.append("tipo", values.tipo)
+      formData.append("responsavel", values.responsavel || resolveResponsibleForNewTransaction(responsavel))
       if (values.data) {
           formData.append("data", values.data.toISOString())
       }
@@ -379,6 +389,29 @@ export function AddTransactionDialog({ children, cartoes = [], variant = "primar
                   )}}
                 />
             </div>
+
+            <FormField
+              control={form.control}
+              name="responsavel"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Responsável</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value || "Casal"} disabled={isSplit}>
+                    <FormControl>
+                      <SelectTrigger data-testid="select-responsavel">
+                        <SelectValue placeholder="Selecione..." />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="Casal">Casal</SelectItem>
+                      <SelectItem value="Luan">Luan</SelectItem>
+                      <SelectItem value="Luana">Luana</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             {/* Split Toggle (P3.12) */}
             <div className="border border-border rounded-lg p-3 space-y-3">

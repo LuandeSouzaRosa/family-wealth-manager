@@ -9,8 +9,11 @@ import { createTransaction } from "@/actions/transactions"
 import { parseQuickAdd } from "@/lib/quick-add-parser"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
+import { useFilter } from "@/contexts/filter-context"
+import { resolveResponsibleForNewTransaction } from "@/lib/filter-utils"
 
 export function QuickAddWidget() {
+  const { responsavel } = useFilter()
   const [isOpen, setIsOpen] = useState(false)
   const [inputValue, setInputValue] = useState("")
   const [isPending, startTransition] = useTransition()
@@ -97,6 +100,7 @@ export function QuickAddWidget() {
       formData.append("valor", String(parsed.data.valor))
       formData.append("tipo", parsed.data.tipo)
       formData.append("categoria", parsed.data.categoria)
+      formData.append("responsavel", resolveResponsibleForNewTransaction(responsavel))
       
       try {
         formData.append("data", parsed.data.data.toISOString())
