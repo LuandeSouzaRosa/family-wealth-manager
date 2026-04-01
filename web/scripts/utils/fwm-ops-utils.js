@@ -122,6 +122,53 @@ const GENERIC_CATEGORIES = new Set([
   "nao categorizado",
 ]);
 
+const CSV_HEADER_ALIASES = {
+  descricao: ["descricao", "descrição", "description", "historico", "histórico"],
+  data: ["data", "date"],
+  valor: ["valor", "value", "amount"],
+};
+
+const CSV_ALIAS_INDEX = Object.fromEntries(
+  Object.entries(CSV_HEADER_ALIASES).map(([field, aliases]) => [
+    field,
+    new Set(aliases.map((alias) => normalizeCsvHeader(alias))),
+  ])
+);
+
+function normalizeCsvHeader(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]/g, "");
+}
+
+function extractCanonicalCsvFields(row) {
+  const extracted = {
+    descricao: "",
+    data: "",
+    valor: "",
+  };
+
+  Object.entries(row || {}).forEach(([rawKey, rawValue]) => {
+    const normalizedKey = normalizeCsvHeader(rawKey);
+    if (!normalizedKey) return;
+
+    const value = String(rawValue ?? "").trim();
+    if (!value) return;
+
+    Object.keys(CSV_ALIAS_INDEX).forEach((field) => {
+      if (extracted[field]) return;
+      if (CSV_ALIAS_INDEX[field].has(normalizedKey)) {
+        extracted[field] = value;
+      }
+    });
+  });
+
+  return extracted;
+}
+
 function isGenericCategory(value) {
   return GENERIC_CATEGORIES.has(normalizeToken(value));
 }
@@ -321,5 +368,6 @@ module.exports = {
   resolveUserByEmail,
   writeJson,
   categorizeImportedDescription,
+  extractCanonicalCsvFields,
   normalizeToken,
 };

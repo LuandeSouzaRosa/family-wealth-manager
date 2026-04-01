@@ -5,6 +5,7 @@ const Papa = require("papaparse");
 const {
   categorizeImportedDescription,
   createServiceClient,
+  extractCanonicalCsvFields,
   formatMoney,
   isGenericCategory,
   parseMoney,
@@ -12,15 +13,6 @@ const {
   resolveUserByEmail,
   writeJson,
 } = require("./utils/fwm-ops-utils");
-
-function pickFirst(row, keys) {
-  for (const key of keys) {
-    if (Object.prototype.hasOwnProperty.call(row, key) && String(row[key] || "").trim()) {
-      return String(row[key]).trim();
-    }
-  }
-  return "";
-}
 
 function parseCsv(filePath) {
   const content = fs.readFileSync(filePath, "utf8");
@@ -36,8 +28,10 @@ function parseCsv(filePath) {
 }
 
 function classifyCsvRow(row, rules) {
-  const descricao = pickFirst(row, ["descricao", "Descrição", "description", "Historico", "histórico"]);
-  const rawValue = pickFirst(row, ["valor", "Valor", "value", "amount"]);
+  const fields = extractCanonicalCsvFields(row);
+  const descricaoRaw = fields.descricao;
+  const descricao = descricaoRaw || "";
+  const rawValue = fields.valor;
   const signedValue = parseMoney(rawValue);
   const absValue = Math.abs(signedValue);
   const tipo = signedValue < 0 ? "Saida" : "Entrada";
@@ -49,6 +43,7 @@ function classifyCsvRow(row, rules) {
     signedValue,
     value: absValue,
     importable: absValue > 0,
+    missingDescription: !descricaoRaw,
     categoria,
     genericCategory: isGenericCategory(categoria),
   };
@@ -62,6 +57,7 @@ function summarize(rows) {
     totalRows: rows.length,
     importableRows: importable.length,
     ignoredRows: rows.length - importable.length,
+    missingDescriptionRows: importable.filter((r) => r.missingDescription).length,
     importableExpenses: importableExpenses.length,
     importableExpensesValue: importableExpenses.reduce((acc, row) => acc + row.value, 0),
     genericExpenseRows: 0,
@@ -103,6 +99,10 @@ function summarize(rows) {
     totals.importableExpensesValue > 0
       ? (totals.genericExpenseValue / totals.importableExpensesValue) * 100
       : 0;
+  const missingDescriptionShareRows =
+    totals.importableRows > 0
+      ? (totals.missingDescriptionRows / totals.importableRows) * 100
+      : 0;
 
   const topCategories = Array.from(categoryMap.values())
     .sort((a, b) => b.total - a.total)
@@ -124,6 +124,11 @@ function summarize(rows) {
   if (totals.importableExpenses === 0) {
     clarityImpact.notes.push("Nao ha saidas importaveis no arquivo; spending clarity tende a ficar vazio.");
   } else {
+    if (missingDescriptionShareRows >= 15) {
+      clarityImpact.notes.push(
+        "Muitas linhas sem descricao reconhecida no CSV; revisar headers antes de importar pode evitar degradacao do dashboard."
+      );
+    }
     if (genericShareValue >= 40) {
       clarityImpact.notes.push(
         "Parcela relevante do valor de saidas tende a cair em categoria generica; insights ficam menos especificos."
@@ -139,6 +144,7 @@ function summarize(rows) {
   return {
     totals: {
       ...totals,
+      missingDescriptionShareRowsPct: Number(missingDescriptionShareRows.toFixed(1)),
       genericExpenseShareRowsPct: Number(genericShareRows.toFixed(1)),
       genericExpenseShareValuePct: Number(genericShareValue.toFixed(1)),
     },
@@ -216,6 +222,9 @@ async function main() {
   console.log(`[analyze-bank-statement-import] File: ${csvPath}`);
   console.log(
     `[analyze-bank-statement-import] Importable rows: ${report.totals.importableRows}/${report.totals.totalRows}`
+  );
+  console.log(
+    `[analyze-bank-statement-import] Missing description share: ${report.totals.missingDescriptionRows}/${report.totals.importableRows} (${report.totals.missingDescriptionShareRowsPct}%)`
   );
   console.log(
     `[analyze-bank-statement-import] Importable expenses: ${report.totals.importableExpenses} (${formatMoney(

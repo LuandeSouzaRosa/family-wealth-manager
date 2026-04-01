@@ -12,12 +12,19 @@ import { getContasBancarias } from '@/actions/accounts'
 import { getReconciliationCandidates } from '@/actions/reconciliation'
 import { findBestMatch, parseDate, parseMoney } from '@/lib/reconciliation-logic'
 import { categorizeImportedDescription, deriveRuleTextFromDescription } from '@/lib/csv-categorization'
+import { extractCanonicalCsvFields } from '@/lib/csv-column-normalization'
 import { Upload, Check, AlertCircle, Loader2, FileSpreadsheet, PlusCircle, Info } from 'lucide-react'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import { Checkbox } from "@/components/ui/checkbox"
 import { toast } from "sonner"
+
+type CsvQualityGuardrail = {
+  totalRows: number
+  missingDescriptionRows: number
+  missingDescriptionPct: number
+}
 
 const CATEGORIAS = [
   "Alimentação", "Moradia", "Transporte", "Lazer", "Saúde", 
@@ -35,6 +42,7 @@ export function CsvImporter() {
   const [novasRegras, setNovasRegras] = useState<Set<number>>(new Set()) // Índices das linhas que virarão regra
   const [contas, setContas] = useState<any[]>([])
   const [contaSelecionada, setContaSelecionada] = useState<string>("none")
+  const [csvQualityGuardrail, setCsvQualityGuardrail] = useState<CsvQualityGuardrail | null>(null)
   const isSubmittingRef = useRef(false)
   
   const contaAtual = contas.find(c => c.id === contaSelecionada)
@@ -71,6 +79,8 @@ export function CsvImporter() {
     importadas: number;
     conciliadas: number;
     ignoradas: number;
+    linhasSemDescricao: number;
+    pctSemDescricao: number;
   } | null>(null)
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -79,28 +89,31 @@ export function CsvImporter() {
 
     setFileName(file.name)
     setImportReceipt(null) // Limpa recibo anterior
+    setCsvQualityGuardrail(null)
     
     Papa.parse(file, {
       header: true,
              complete: async (results) => {
           let lastValidDate = new Date().toISOString();
           const normalized = results.data.map((row: any, index) => {
-            const desc = row['descricao'] || row['Descrição'] || row['description'] || "Sem descrição"
-            const rawDate = row['data'] || row['Data'] || row['date']
-            const safeDate = parseDate(rawDate, lastValidDate)
+            const fields = extractCanonicalCsvFields(row || {})
+            const rawDescription = fields.descricao
+            const desc = rawDescription || "Sem descricao"
+            const safeDate = parseDate(fields.data, lastValidDate)
+            const parsedValue = parseMoney(fields.valor || "0")
             lastValidDate = safeDate;
 
             return {
               id: index,
               data: safeDate,
               descricao: desc,
-              valor: parseMoney(row['valor'] || row['Valor'] || row['value'] || "0"),
+              valor: parsedValue,
               categoria: aplicarRegras(desc),
               responsavel: "Casal",
-              tipo: (parseMoney(row['valor'] || row['Valor'] || row['value'] || "0") < 0 ? "Saída" : "Entrada") as "Entrada" | "Saída"
+              tipo: (parsedValue < 0 ? "Sa\u00EDda" : "Entrada") as "Entrada" | "Sa\u00EDda",
+              missingDescription: !rawDescription
             }
           })
-          
           const cleanData = normalized.map(item => {
              let val = item.valor
              let tipo = item.tipo
@@ -110,6 +123,21 @@ export function CsvImporter() {
              }
              return { ...item, valor: val, tipo: tipo as "Entrada" | "Saída" }
           }).filter(item => item.valor > 0); // Ignore rows with 0 values
+
+          const missingDescriptionRows = cleanData.filter(item => item.missingDescription).length
+          const missingDescriptionPct = cleanData.length > 0
+            ? Number(((missingDescriptionRows / cleanData.length) * 100).toFixed(1))
+            : 0
+
+          setCsvQualityGuardrail({
+            totalRows: cleanData.length,
+            missingDescriptionRows,
+            missingDescriptionPct
+          })
+
+          if (missingDescriptionRows > 0) {
+            toast.warning(`Atencao: ${missingDescriptionRows} linha(s) sem descricao reconhecida no CSV. Isso pode concentrar gastos em "Outros".`)
+          }
 
           if (cleanData.length > 0) {
               const datas = cleanData.map(t => new Date(t.data).getTime());
@@ -176,7 +204,7 @@ export function CsvImporter() {
     setIsUploading(true)
     const valids = data.filter(r => r.acao !== "Duplicado")
     
-    const payload = valids.map(({ id, acao, matchLevel, matchCandidateId, isSplitGroup, matchScore, ...rest }) => ({
+    const payload = valids.map(({ id, acao, matchLevel, matchCandidateId, isSplitGroup, matchScore, missingDescription, ...rest }) => ({
         ...rest,
         conta_id: contaSelecionada !== "none" ? contaSelecionada : null,
         _acao: acao,
@@ -239,11 +267,16 @@ export function CsvImporter() {
            totalNoLote: data.length,
            importadas: result.count,
            conciliadas: result.conciliated || 0,
-           ignoradas: data.filter(r => r.acao === "Duplicado").length
+           ignoradas: data.filter(r => r.acao === "Duplicado").length,
+           linhasSemDescricao: data.filter(r => r.missingDescription).length,
+           pctSemDescricao: data.length > 0
+             ? Number(((data.filter(r => r.missingDescription).length / data.length) * 100).toFixed(1))
+             : 0,
         })
         toast.success("Lote processado com sucesso!")
         setData([])
         setFileName("")
+        setCsvQualityGuardrail(null)
       } else if (result && 'error' in result) {
         toast.error("Erro na importação: " + result.error)
       }
@@ -299,7 +332,7 @@ export function CsvImporter() {
                   </SelectContent>
                 </Select>
 
-                <Button variant="ghost" size="sm" onClick={() => { setData([]); setSaldoInicialInfo(null); }} className="w-full sm:w-auto text-destructive hover:text-destructive hover:bg-destructive/10">
+                <Button variant="ghost" size="sm" onClick={() => { setData([]); setSaldoInicialInfo(null); setCsvQualityGuardrail(null); }} className="w-full sm:w-auto text-destructive hover:text-destructive hover:bg-destructive/10">
                   Cancelar
                 </Button>
             </div>
@@ -405,6 +438,24 @@ export function CsvImporter() {
             </motion.div>
           )}
 
+          
+          {csvQualityGuardrail && csvQualityGuardrail.missingDescriptionRows > 0 && (
+            <motion.div
+               initial={{ opacity: 0, y: -10 }}
+               animate={{ opacity: 1, y: 0 }}
+               className="bg-amber-500/10 border border-amber-500/30 p-4 rounded-lg flex items-start gap-3 mt-4"
+            >
+              <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
+              <div>
+                <h4 className="font-semibold text-amber-800 dark:text-amber-500 text-sm">
+                  {csvQualityGuardrail.missingDescriptionRows} linha(s) sem descricao reconhecida ({csvQualityGuardrail.missingDescriptionPct}%)
+                </h4>
+                <p className="text-xs text-amber-700/80 dark:text-amber-400/80 mt-1">
+                  Guardrail pre-importacao: quando a descricao nao e reconhecida, o dashboard tende a perder clareza por concentracao em categoria generica.
+                </p>
+              </div>
+            </motion.div>
+          )}
           {/* Dica CSV-First */}
           <div className="bg-muted/30 p-4 rounded-lg border border-border/50 mb-4 flex items-start gap-3">
              <div className="mt-0.5 w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
@@ -603,7 +654,13 @@ export function CsvImporter() {
              </div>
           </div>
 
-          <Button variant="outline" onClick={() => { setImportReceipt(null); setData([]) }} className="mt-4">
+          {importReceipt.linhasSemDescricao > 0 && (
+            <p className="text-xs text-amber-700 dark:text-amber-400 text-center max-w-2xl">
+              Guardrail: {importReceipt.linhasSemDescricao} linha(s) entraram sem descricao reconhecida ({importReceipt.pctSemDescricao}%).
+            </p>
+          )}
+
+          <Button variant="outline" onClick={() => { setImportReceipt(null); setData([]); setCsvQualityGuardrail(null); }} className="mt-4">
             Importar Outro Arquivo
           </Button>
         </motion.div>

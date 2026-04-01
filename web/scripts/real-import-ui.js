@@ -38,6 +38,27 @@ function parseCountFromText(text, labelPattern) {
   return { value: null, method: null };
 }
 
+function parseMissingDescriptionFromReceiptText(text) {
+  const regex =
+    /Guardrail:\s*(\d+)\s*linha\(s\)\s*entraram\s*sem\s*descricao\s*reconhecida\s*\(([\d.,]+)%\)/i;
+  const match = text.match(regex);
+  if (!match?.[1]) {
+    return {
+      rows: null,
+      pct: null,
+      method: null,
+    };
+  }
+
+  const pctRaw = String(match[2] || "").replace(",", ".");
+  const pct = Number(pctRaw);
+  return {
+    rows: Number(match[1]),
+    pct: Number.isFinite(pct) ? pct : null,
+    method: "receipt-guardrail-text",
+  };
+}
+
 async function parseCountFromCardDom(page, labelRegex) {
   const label = page.locator("span", { hasText: labelRegex }).first();
   if ((await label.count()) < 1) return null;
@@ -171,6 +192,16 @@ async function main() {
     const previewRows = await page.locator("table tbody tr").count();
     console.log(`[real-import-ui] Preview rows detected: ${previewRows}`);
 
+    let preImportGuardrailVisible = false;
+    let preImportGuardrailText = null;
+    const preImportGuardrailLocator = page
+      .locator("h4", { hasText: /linha\(s\) sem descricao reconhecida/i })
+      .first();
+    if (await preImportGuardrailLocator.isVisible().catch(() => false)) {
+      preImportGuardrailVisible = true;
+      preImportGuardrailText = (await preImportGuardrailLocator.innerText().catch(() => "")).trim() || null;
+    }
+
     const pendingReviewButton = page.getByRole("button", {
       name: /Revise as pendencias antes de importar/i,
     });
@@ -193,6 +224,7 @@ async function main() {
     const importedParsed = parseCountFromText(rawReceiptText, "N\\.?\\s*Importadas");
     const conciliatedParsed = parseCountFromText(rawReceiptText, "Conciliadas");
     const ignoredParsed = parseCountFromText(rawReceiptText, "Ignoradas");
+    const missingDescriptionParsed = parseMissingDescriptionFromReceiptText(rawReceiptText);
 
     let importedCount = importedParsed.value;
     let conciliatedCount = conciliatedParsed.value;
@@ -201,6 +233,7 @@ async function main() {
     let importedMethod = importedParsed.method;
     let conciliatedMethod = conciliatedParsed.method;
     let ignoredMethod = ignoredParsed.method;
+    let missingDescriptionMethod = missingDescriptionParsed.method;
 
     if (importedCount === null) {
       const domValue = await parseCountFromCardDom(page, /N\. Importadas/i);
@@ -248,15 +281,22 @@ async function main() {
       result: {
         success: true,
         previewRows,
+        preImportGuardrailVisible,
+        preImportGuardrailText,
         receiptDetected: /Lote processado com sucesso/i.test(rawReceiptText),
         rawReceiptText,
         importedCountText: importedCount === null ? null : String(importedCount),
         conciliatedCountText: conciliatedCount === null ? null : String(conciliatedCount),
         ignoredCountText: ignoredCount === null ? null : String(ignoredCount),
+        missingDescriptionRowsText:
+          missingDescriptionParsed.rows === null ? null : String(missingDescriptionParsed.rows),
+        missingDescriptionPctText:
+          missingDescriptionParsed.pct === null ? null : String(missingDescriptionParsed.pct),
         parsing: {
           imported: importedMethod,
           conciliated: conciliatedMethod,
           ignored: ignoredMethod,
+          missingDescription: missingDescriptionMethod,
           usedFallback:
             importedMethod === "dom-card-fallback" ||
             conciliatedMethod === "dom-card-fallback" ||
