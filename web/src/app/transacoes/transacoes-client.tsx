@@ -31,6 +31,8 @@ interface TransacoesClientProps {
   initialCartoes: any[]
   initialMonth?: string
   initialYear?: string
+  initialCategory?: string
+  initialSort?: "date_desc" | "value_desc" | "value_asc"
 }
 
 const SPRING_TRANSITION = { type: "spring" as const, bounce: 0.4, duration: 0.8 }
@@ -63,7 +65,14 @@ const MONTHS = [
 
 const YEARS = ["2026", "2025", "2024"]
 
-export function TransacoesClientShell({ initialData, initialCartoes, initialMonth = "0", initialYear = new Date().getFullYear().toString() }: TransacoesClientProps) {
+export function TransacoesClientShell({
+  initialData,
+  initialCartoes,
+  initialMonth = "0",
+  initialYear = new Date().getFullYear().toString(),
+  initialCategory = "Todas",
+  initialSort = "date_desc",
+}: TransacoesClientProps) {
   const { responsavel } = useFilter()
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -81,8 +90,17 @@ export function TransacoesClientShell({ initialData, initialCartoes, initialMont
     document.cookie = `fwm_transacoes_period=${month}-${year}; path=/; max-age=2592000`; // Salva por 30 dias
   }, [month, year])
   const [searchTerm, setSearchTerm] = useState("")
-  const [selectedCategory, setSelectedCategory] = useState("Todas")
+  const [selectedCategory, setSelectedCategory] = useState(initialCategory)
+  const [sortBy, setSortBy] = useState<"date_desc" | "value_desc" | "value_asc">(initialSort)
   const [visibleCount, setVisibleCount] = useState(30)
+
+  useEffect(() => {
+    setSelectedCategory(initialCategory)
+  }, [initialCategory])
+
+  useEffect(() => {
+    setSortBy(initialSort)
+  }, [initialSort])
 
   useEffect(() => {
     setVisibleCount(30)
@@ -129,8 +147,15 @@ export function TransacoesClientShell({ initialData, initialCartoes, initialMont
       result = result.filter(tx => tx.categoria === selectedCategory)
     }
 
+    // 6. Ordenar para priorizar revisão pós-import quando necessário
+    if (sortBy === "value_desc") {
+      result = [...result].sort((a, b) => b.valor - a.valor)
+    } else if (sortBy === "value_asc") {
+      result = [...result].sort((a, b) => a.valor - b.valor)
+    }
+
     return result
-  }, [initialData, month, year, responsavel, searchTerm, selectedCategory])
+  }, [initialData, month, year, responsavel, searchTerm, selectedCategory, sortBy])
 
   const displayData = filteredData.slice(0, visibleCount)
 
@@ -143,6 +168,15 @@ export function TransacoesClientShell({ initialData, initialCartoes, initialMont
 
   const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val)
   const formatDate = (isoStr: string) => new Date(isoStr).toLocaleDateString('pt-BR')
+
+  const buildTransacoesQuery = (nextMonth: string, nextYear: string, nextCategory: string, nextSort: "date_desc" | "value_desc" | "value_asc") => {
+    const params = new URLSearchParams()
+    params.set("month", nextMonth)
+    params.set("year", nextYear)
+    if (nextCategory !== "Todas") params.set("category", nextCategory)
+    if (nextSort !== "date_desc") params.set("sort", nextSort)
+    return `?${params.toString()}`
+  }
 
   const handleDelete = (tx: Transaction) => {
     const isSplit = !!tx.split_group_id
@@ -259,7 +293,7 @@ export function TransacoesClientShell({ initialData, initialCartoes, initialMont
                            const v = val || "0";
                            setYear(v);
                            startTransition(() => {
-                               router.push(`?month=${month}&year=${v}`);
+                               router.push(buildTransacoesQuery(month, v, selectedCategory, sortBy));
                            });
                         }}>
                           <SelectTrigger data-testid="filter-year" className="w-full bg-background border-input text-foreground h-10 px-3">
@@ -280,7 +314,7 @@ export function TransacoesClientShell({ initialData, initialCartoes, initialMont
                            const v = val || "0";
                            setMonth(v);
                            startTransition(() => {
-                               router.push(`?month=${v}&year=${year}`);
+                               router.push(buildTransacoesQuery(v, year, selectedCategory, sortBy));
                            });
                         }}>
                           <SelectTrigger data-testid="filter-month" className="w-full bg-background border-input text-foreground h-10 px-3">
@@ -298,8 +332,13 @@ export function TransacoesClientShell({ initialData, initialCartoes, initialMont
                   {/* Categoria */}
                   <div className="space-y-2">
                     <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Categoria</label>
-                    <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                      <SelectTrigger className="w-full bg-background border-input text-foreground h-10 px-3">
+                    <Select value={selectedCategory} onValueChange={(val) => {
+                      setSelectedCategory(val)
+                      startTransition(() => {
+                        router.push(buildTransacoesQuery(month, year, val, sortBy))
+                      })
+                    }}>
+                      <SelectTrigger data-testid="filter-category" className="w-full bg-background border-input text-foreground h-10 px-3">
                         <span className="flex-1 min-w-0 truncate text-left">
                             {selectedCategory === "Todas" ? "Todas as Categorias" : selectedCategory}
                         </span>
@@ -307,6 +346,29 @@ export function TransacoesClientShell({ initialData, initialCartoes, initialMont
                       <SelectContent>
                         <SelectItem value="Todas">Todas as Categorias</SelectItem>
                         {uniqueCategories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Ordenação</label>
+                    <Select value={sortBy} onValueChange={(val) => {
+                      const normalizedSort =
+                        val === "value_desc" || val === "value_asc" ? val : "date_desc"
+                      setSortBy(normalizedSort)
+                      startTransition(() => {
+                        router.push(buildTransacoesQuery(month, year, selectedCategory, normalizedSort))
+                      })
+                    }}>
+                      <SelectTrigger data-testid="filter-sort" className="w-full bg-background border-input text-foreground h-10 px-3">
+                        <span className="flex-1 min-w-0 truncate text-left">
+                          {sortBy === "value_desc" ? "Maior valor" : sortBy === "value_asc" ? "Menor valor" : "Data mais recente"}
+                        </span>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="date_desc">Data mais recente</SelectItem>
+                        <SelectItem value="value_desc">Maior valor</SelectItem>
+                        <SelectItem value="value_asc">Menor valor</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

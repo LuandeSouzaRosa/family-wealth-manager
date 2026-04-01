@@ -19,6 +19,9 @@ export default async function TransacoesPage({ searchParams }: { searchParams: P
   // Next.js 15+ has async searchParams and cookies
   const resolvedParams = await searchParams;
   const cookieStore = await cookies();
+
+  const asSingleValue = (value: string | string[] | undefined): string | undefined =>
+    Array.isArray(value) ? value[0] : value;
   
   const currentMonth = new Date().getMonth() + 1;
   const currentYear = new Date().getFullYear();
@@ -30,8 +33,9 @@ export default async function TransacoesPage({ searchParams }: { searchParams: P
   let urlHasValidYear = false;
 
   // 1. Try URL parameters (highest priority)
-  if (resolvedParams?.month) {
-    const parsed = parseInt(resolvedParams.month as string);
+  const monthParamRaw = asSingleValue(resolvedParams?.month);
+  if (monthParamRaw) {
+    const parsed = parseInt(monthParamRaw);
     // 0 is "Todos"
     if (!isNaN(parsed) && parsed >= 0 && parsed <= 12) {
        monthParam = parsed;
@@ -39,8 +43,9 @@ export default async function TransacoesPage({ searchParams }: { searchParams: P
     }
   }
 
-  if (resolvedParams?.year) {
-    const parsed = parseInt(resolvedParams.year as string);
+  const yearParamRaw = asSingleValue(resolvedParams?.year);
+  if (yearParamRaw) {
+    const parsed = parseInt(yearParamRaw);
     // 0 is "Todos"
     if (!isNaN(parsed) && (parsed === 0 || (parsed >= 2000 && parsed <= 2100))) {
        yearParam = parsed;
@@ -70,6 +75,14 @@ export default async function TransacoesPage({ searchParams }: { searchParams: P
   // Lote fatiado! Overfetch evitado na fonte.
   const transactions = await getTransactions(monthParam, yearParam)
   const cartoes = await getCartoesCredito()
+  const categoryParam = asSingleValue(resolvedParams?.category);
+  const initialCategory =
+    categoryParam && categoryParam.trim().length > 0 && categoryParam.trim().length <= 80
+      ? categoryParam.trim()
+      : "Todas";
+  const sortParam = asSingleValue(resolvedParams?.sort);
+  const initialSort =
+    sortParam === "value_desc" || sortParam === "value_asc" ? sortParam : "date_desc";
 
   return (
     <div className="min-h-screen bg-transparent p-6 md:p-12 relative overflow-hidden">
@@ -82,6 +95,8 @@ export default async function TransacoesPage({ searchParams }: { searchParams: P
          initialCartoes={cartoes || []} 
          initialMonth={monthParam.toString()} 
          initialYear={yearParam.toString()} 
+         initialCategory={initialCategory}
+         initialSort={initialSort}
       />
     </div>
   )

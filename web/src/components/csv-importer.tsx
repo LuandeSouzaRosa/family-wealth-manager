@@ -13,6 +13,7 @@ import { getReconciliationCandidates } from '@/actions/reconciliation'
 import { findBestMatch, parseDate, parseMoney } from '@/lib/reconciliation-logic'
 import { categorizeImportedDescription, deriveRuleTextFromDescription } from '@/lib/csv-categorization'
 import { extractCanonicalCsvFields } from '@/lib/csv-column-normalization'
+import { buildPostImportReviewContext } from '@/lib/post-import-review-context'
 import { Upload, Check, AlertCircle, Loader2, FileSpreadsheet, PlusCircle, Info } from 'lucide-react'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
@@ -81,6 +82,9 @@ export function CsvImporter() {
     ignoradas: number;
     linhasSemDescricao: number;
     pctSemDescricao: number;
+    outrosRows: number;
+    outrosValue: number;
+    reviewHref: string | null;
   } | null>(null)
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -263,6 +267,8 @@ export function CsvImporter() {
       setIsUploading(false)
 
       if (result && 'count' in result) {
+        const reviewContext = buildPostImportReviewContext(valids)
+
         setImportReceipt({
            totalNoLote: data.length,
            importadas: result.count,
@@ -272,6 +278,9 @@ export function CsvImporter() {
            pctSemDescricao: data.length > 0
              ? Number(((data.filter(r => r.missingDescription).length / data.length) * 100).toFixed(1))
              : 0,
+           outrosRows: reviewContext.outrosRows,
+           outrosValue: reviewContext.outrosValue,
+           reviewHref: reviewContext.reviewHref,
         })
         toast.success("Lote processado com sucesso!")
         setData([])
@@ -658,6 +667,23 @@ export function CsvImporter() {
             <p className="text-xs text-amber-700 dark:text-amber-400 text-center max-w-2xl">
               Guardrail: {importReceipt.linhasSemDescricao} linha(s) entraram sem descricao reconhecida ({importReceipt.pctSemDescricao}%).
             </p>
+          )}
+
+          {importReceipt.outrosRows > 0 && importReceipt.reviewHref && (
+            <div className="w-full max-w-3xl rounded-lg border border-primary/20 bg-primary/5 p-4 text-sm">
+              <p className="font-medium text-foreground">
+                Restaram {importReceipt.outrosRows} linha(s) em "Outros" somando{" "}
+                {importReceipt.outrosValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}.
+              </p>
+              <p className="text-muted-foreground mt-1">
+                Para reduzir atrito de revisao, abra o extrato ja filtrado por "Outros" e ordenado por maior valor.
+              </p>
+              <Link href={importReceipt.reviewHref} className="inline-block mt-3">
+                <Button variant="outline" size="sm">
+                  Revisar maiores em Outros
+                </Button>
+              </Link>
+            </div>
           )}
 
           <Button variant="outline" onClick={() => { setImportReceipt(null); setData([]); setCsvQualityGuardrail(null); }} className="mt-4">
