@@ -1,8 +1,8 @@
 import { test, expect, type Page } from '@playwright/test';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import {
   buildUniqueDescription,
   cleanupTransactionsByDescription,
-  createAuthenticatedSupabaseClient,
 } from './helpers/manual-proof-helpers';
 
 type Responsible = 'Luan' | 'Luana' | 'Casal';
@@ -15,7 +15,83 @@ type TxRow = {
   responsavel: string | null;
 };
 
-const ZERO_TARGET_PRIORITY: Responsible[] = ['Luana', 'Luan', 'Casal'];
+type IsolatedIdentity = {
+  email: string;
+  password: string;
+  userId: string;
+  client: SupabaseClient;
+};
+
+const TARGET_WITHOUT_EXPENSE: Responsible = 'Luana';
+const SOURCE_WITH_MOVEMENT: Responsible = 'Casal';
+const FIXTURE_EXPENSE_TYPE = 'Sa\u00EDda';
+
+function getRequiredEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(`Missing required env "${name}" for spending clarity fallback E2E.`);
+  }
+  return value;
+}
+
+function createAdminSupabaseClient(): SupabaseClient {
+  const supabaseUrl = getRequiredEnv('NEXT_PUBLIC_SUPABASE_URL');
+  const serviceRoleKey = getRequiredEnv('SUPABASE_SERVICE_ROLE_KEY');
+
+  return createClient(supabaseUrl, serviceRoleKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  });
+}
+
+async function createIsolatedIdentity(): Promise<IsolatedIdentity> {
+  const supabaseUrl = getRequiredEnv('NEXT_PUBLIC_SUPABASE_URL');
+  const anonKey = getRequiredEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY');
+
+  const adminClient = createAdminSupabaseClient();
+  const nonce = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const email = `e2e.spending.clarity.${nonce}@fwm.local`;
+  const password = `Fwm!${Date.now()}Aa`;
+
+  const { data: createdUser, error: createUserError } = await adminClient.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+  });
+
+  if (createUserError || !createdUser.user?.id) {
+    throw new Error(`Unable to create isolated fallback E2E user: ${createUserError?.message ?? 'no-user-id'}`);
+  }
+
+  const client = createClient(supabaseUrl, anonKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  });
+
+  const { error: signInError } = await client.auth.signInWithPassword({ email, password });
+  if (signInError) {
+    throw new Error(`Unable to sign in isolated fallback E2E user: ${signInError.message}`);
+  }
+
+  return {
+    email,
+    password,
+    userId: createdUser.user.id,
+    client,
+  };
+}
+
+async function deleteIsolatedIdentity(userId: string): Promise<void> {
+  const adminClient = createAdminSupabaseClient();
+  const { error } = await adminClient.auth.admin.deleteUser(userId);
+  if (error) {
+    throw new Error(`Unable to delete isolated fallback E2E user (${userId}): ${error.message}`);
+  }
+}
 
 function normalizeToken(value: string | null | undefined): string {
   return String(value || '')
@@ -57,11 +133,7 @@ function summarizeRealizedExpenseByResponsible(rows: TxRow[]) {
   return totals;
 }
 
-function chooseZeroExpenseResponsible(totals: Record<Responsible, number>): Responsible | null {
-  return ZERO_TARGET_PRIORITY.find((responsavel) => totals[responsavel] <= 0) ?? null;
-}
-
-async function getCurrentMonthTransactions(client: Awaited<ReturnType<typeof createAuthenticatedSupabaseClient>>) {
+async function getCurrentMonthTransactions(client: SupabaseClient) {
   const now = new Date();
   const startIso = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
   const endExclusiveIso = new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString();
@@ -80,25 +152,21 @@ async function getCurrentMonthTransactions(client: Awaited<ReturnType<typeof cre
 }
 
 async function insertFixtureMovement(
-  client: Awaited<ReturnType<typeof createAuthenticatedSupabaseClient>>,
+  client: SupabaseClient,
   descricao: string,
   responsavel: Responsible,
+  userId: string,
 ) {
-  const { data: userData, error: userError } = await client.auth.getUser();
-  if (userError || !userData.user?.id) {
-    throw new Error(`Unable to resolve authenticated user for fallback fixture insertion: ${userError?.message ?? 'no-user'}`);
-  }
-
   const payload = {
     descricao,
     valor: 17.89,
     categoria: 'Teste Coerencia Fallback',
-    tipo: 'Saída',
+    tipo: FIXTURE_EXPENSE_TYPE,
     data: new Date().toISOString(),
     responsavel,
     origem: 'Manual',
     status: 'Realizado',
-    user_id: userData.user.id,
+    user_id: userId,
   };
 
   const { error } = await client.from('transacoes').insert([payload] as any);
@@ -118,9 +186,56 @@ async function setResponsibleFilter(page: Page, responsavel: DashboardResponsibl
   await expect(trigger).toContainText(responsavel, { timeout: 15000 });
 }
 
+async function loginAsIsolatedUser(page: Page, email: string, password: string) {
+  await page.context().clearCookies();
+  await page.goto('/login', { waitUntil: 'domcontentloaded', timeout: 30000 });
+  await page.evaluate(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+  });
+  await page.goto('/login', { waitUntil: 'domcontentloaded', timeout: 30000 });
+
+  await page.locator('input[name="email"]').fill(email);
+  await page.locator('input[name="password"]').fill(password);
+  await page.locator('button[type="submit"]').click();
+  await page.waitForURL((url) => url.pathname === '/', { timeout: 60000 });
+  await expect(page.getByTestId('dashboard-content')).toBeVisible({ timeout: 15000 });
+}
+
+async function waitForTodosTotalVisible(
+  page: Page,
+  runTag: string,
+  timeoutMs: number,
+) {
+  const deadline = Date.now() + timeoutMs;
+  const totalLocator = page.locator('p:has-text("Total de saidas realizadas:"):visible').first();
+  let attempts = 0;
+
+  while (Date.now() < deadline) {
+    attempts += 1;
+
+    await page.goto(`/?e2e_fallback_run=${encodeURIComponent(runTag)}&probe=${Date.now()}`, {
+      waitUntil: 'domcontentloaded',
+      timeout: 30000,
+    });
+    await expect(page.getByTestId('dashboard-content')).toBeVisible({ timeout: 15000 });
+
+    await setResponsibleFilter(page, 'Todos');
+    if (await totalLocator.isVisible()) {
+      return;
+    }
+
+    await page.waitForTimeout(5000);
+  }
+
+  throw new Error(
+    `Dashboard nao exibiu total de saidas em Todos apos aguardar revalidacao (tentativas=${attempts}, timeoutMs=${timeoutMs})`
+  );
+}
+
 test.describe('Spending Clarity fallback coherence (desktop)', () => {
   test('deve exibir fallback honesto quando Todos tem saidas e o filtro ativo nao tem saidas', async ({ page }) => {
-    test.setTimeout(240000);
+    test.setTimeout(300000);
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? '';
     const isLocalBaseUrl = /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/i.test(appUrl);
@@ -128,42 +243,27 @@ test.describe('Spending Clarity fallback coherence (desktop)', () => {
 
     const runTag = buildUniqueDescription('E2E_CLARITY_FALLBACK');
     const fixtureDescription = `${runTag}_todos_com_saida`;
-    const supabaseClient = await createAuthenticatedSupabaseClient();
+
+    const isolated = await createIsolatedIdentity();
 
     try {
-      await cleanupTransactionsByDescription(supabaseClient, fixtureDescription);
+      await cleanupTransactionsByDescription(isolated.client, fixtureDescription);
+      await insertFixtureMovement(isolated.client, fixtureDescription, SOURCE_WITH_MOVEMENT, isolated.userId);
 
-      const beforeRows = await getCurrentMonthTransactions(supabaseClient);
-      const beforeTotals = summarizeRealizedExpenseByResponsible(beforeRows);
-      const targetWithoutExpense = chooseZeroExpenseResponsible(beforeTotals);
+      const seededRows = await getCurrentMonthTransactions(isolated.client);
+      const seededTotals = summarizeRealizedExpenseByResponsible(seededRows);
+      const seededTodosTotal = seededTotals.Luan + seededTotals.Luana + seededTotals.Casal;
 
-      test.skip(
-        !targetWithoutExpense,
-        `Sem responsável com saída realizada zerada no mês atual. Totais atuais: ${JSON.stringify(beforeTotals)}`,
-      );
+      if (seededTodosTotal <= 0) {
+        throw new Error(
+          `Fixture inserida nao foi reconhecida como saida realizada no mes atual. Totais apos seed: ${JSON.stringify(seededTotals)}`
+        );
+      }
 
-      const sourceWithMovement = (['Casal', 'Luan', 'Luana'] as Responsible[]).find(
-        (responsavel) => responsavel !== targetWithoutExpense,
-      ) as Responsible;
+      await loginAsIsolatedUser(page, isolated.email, isolated.password);
+      await waitForTodosTotalVisible(page, runTag, 180000);
 
-      await insertFixtureMovement(supabaseClient, fixtureDescription, sourceWithMovement);
-
-      // Dashboard usa unstable_cache com revalidate=60. A fixture entra via cliente Supabase,
-      // então aguardamos expiração para validar leitura real da UI sem alterar produto.
-      await page.waitForTimeout(65000);
-
-      await page.goto(`/?e2e_fallback_run=${encodeURIComponent(runTag)}`, {
-        waitUntil: 'domcontentloaded',
-        timeout: 30000,
-      });
-      await expect(page.getByTestId('dashboard-content')).toBeVisible({ timeout: 15000 });
-
-      await setResponsibleFilter(page, 'Todos');
-      await expect(
-        page.locator('p:has-text("Total de saidas realizadas:"):visible').first()
-      ).toBeVisible({ timeout: 15000 });
-
-      await setResponsibleFilter(page, targetWithoutExpense as Responsible);
+      await setResponsibleFilter(page, TARGET_WITHOUT_EXPENSE);
       await expect(
         page.locator(
           'p:has-text("Ja houve saidas realizadas no mes, mas nao neste filtro de responsavel. Ajuste o filtro ou revise a classificacao no extrato."):visible'
@@ -172,19 +272,20 @@ test.describe('Spending Clarity fallback coherence (desktop)', () => {
 
       await expect(page.getByText(/Nao houve saidas realizadas neste recorte\./i)).toHaveCount(0);
 
-      const afterRows = await getCurrentMonthTransactions(supabaseClient);
+      const afterRows = await getCurrentMonthTransactions(isolated.client);
       const afterTotals = summarizeRealizedExpenseByResponsible(afterRows);
       const totalTodos = afterTotals.Luan + afterTotals.Luana + afterTotals.Casal;
 
       expect(totalTodos).toBeGreaterThan(0);
-      expect(afterTotals[targetWithoutExpense as Responsible]).toBe(0);
+      expect(afterTotals[TARGET_WITHOUT_EXPENSE]).toBe(0);
 
       console.log(
-        `SpendingClarity Fallback E2E: target=${targetWithoutExpense} source=${sourceWithMovement} totals=${JSON.stringify(afterTotals)}`,
+        `SpendingClarity Fallback E2E: target=${TARGET_WITHOUT_EXPENSE} source=${SOURCE_WITH_MOVEMENT} totals=${JSON.stringify(afterTotals)}`,
       );
     } finally {
-      await cleanupTransactionsByDescription(supabaseClient, fixtureDescription);
-      await supabaseClient.auth.signOut();
+      await cleanupTransactionsByDescription(isolated.client, fixtureDescription);
+      await isolated.client.auth.signOut();
+      await deleteIsolatedIdentity(isolated.userId);
     }
   });
 });
