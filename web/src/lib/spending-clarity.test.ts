@@ -71,4 +71,35 @@ describe("buildSpendingClaritySnapshot", () => {
     expect(snapshot.Todos.totalSaidasRealizadas).toBe(150);
     expect(snapshot.Todos.topCategorias[0]?.categoria).toBe("Mercado");
   });
+
+  it("exclui Fatura Cartao e Investimentos da lideranca de consumo", () => {
+    const snapshot = buildSpendingClaritySnapshot(
+      [
+        { tipo: "Saida", valor: 1200, categoria: "Fatura Cartao", responsavel: "Casal", status: "Realizado" },
+        { tipo: "Saida", valor: 300, categoria: "Investimentos", responsavel: "Casal", status: "Realizado" },
+        { tipo: "Saida", valor: 500, categoria: "Alimentacao", responsavel: "Casal", status: "Realizado" },
+      ],
+      []
+    );
+
+    expect(snapshot.Todos.totalSaidasRealizadas).toBe(500);
+    expect(snapshot.Todos.totalSaidasDesconsideradas).toBe(1500);
+    expect(snapshot.Todos.topCategorias.map((item) => item.categoria)).toEqual(["Alimentacao"]);
+    expect(snapshot.Todos.topCategorias[0]?.percentual).toBe(100);
+  });
+
+  it("retorna estado sem consumo quando o recorte tem apenas movimentacao financeira", () => {
+    const snapshot = buildSpendingClaritySnapshot(
+      [
+        { tipo: "Saida", valor: 900, categoria: "Fatura Cartao", responsavel: "Casal", status: "Realizado" },
+        { tipo: "Saida", valor: 200, categoria: "Investimentos", responsavel: "Casal", status: "Realizado" },
+      ],
+      []
+    );
+
+    expect(snapshot.Todos.totalSaidasRealizadas).toBe(0);
+    expect(snapshot.Todos.totalSaidasDesconsideradas).toBe(1100);
+    expect(snapshot.Todos.topCategorias).toEqual([]);
+    expect(snapshot.Todos.maiorAltaVsMesAnterior).toBeNull();
+  });
 });

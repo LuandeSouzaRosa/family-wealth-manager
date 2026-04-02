@@ -20,6 +20,7 @@ interface BiggestIncrease {
 
 interface SpendingClarityData {
   totalSaidasRealizadas: number;
+  totalSaidasDesconsideradas?: number;
   topCategorias: TopCategory[];
   concentracaoTop3Percentual: number;
   totalRecorrente: number;
@@ -72,8 +73,20 @@ function isGenericLeader(data: SpendingClarityData): boolean {
   return liderGenerica && categoriaLider.percentual >= 60;
 }
 
+function hasOnlyFinancialMovement(data: SpendingClarityData): boolean {
+  return data.totalSaidasRealizadas <= 0 && (data.totalSaidasDesconsideradas || 0) > 0;
+}
+
 function buildEvidenceCalibration(data: SpendingClarityData): EvidenceCalibration {
   if (data.totalSaidasRealizadas <= 0 || data.topCategorias.length === 0) {
+    if (hasOnlyFinancialMovement(data)) {
+      return {
+        strength: "baixa",
+        label: "Baixa",
+        message: "Movimentacao financeira domina o recorte; valide consumo no extrato antes de concluir.",
+      };
+    }
+
     return {
       strength: "baixa",
       label: "Baixa",
@@ -128,6 +141,13 @@ function buildEvidenceSignalsSummary(data: SpendingClarityData): string | null {
 
 function buildPrimaryInsight(data: SpendingClarityData): PrimaryInsight {
   if (data.topCategorias.length === 0) {
+    if (hasOnlyFinancialMovement(data)) {
+      return {
+        title: "Movimentacao financeira domina",
+        message: "Fatura Cartao/Investimentos nao entram no ranking de consumo. Revise o extrato para confirmar onde houve gasto real.",
+      };
+    }
+
     return {
       title: "Sem pressao de gasto",
       message: "Nao houve saidas realizadas no filtro atual.",
@@ -171,6 +191,10 @@ function buildPrimaryInsight(data: SpendingClarityData): PrimaryInsight {
 
 function buildControlHint(data: SpendingClarityData): string {
   if (data.topCategorias.length === 0) {
+    if (hasOnlyFinancialMovement(data)) {
+      return "Sem base de consumo no recorte: revise no extrato as linhas de movimentacao financeira antes de definir ajuste.";
+    }
+
     return "Sem acao necessaria neste recorte.";
   }
 
@@ -246,6 +270,7 @@ export function SpendingClarityCard({
   const reviewHref = buildLeaderReviewHref(targetTransacoesHref, categoriaLider?.categoria);
   const actionTitle = buildActionTitle(evidence);
   const actionHint = buildActionHint(data, hint, evidence);
+  const hasOnlyFinancialMovementState = hasOnlyFinancialMovement(data);
   const hasOtherScopeMovement =
     data.totalSaidasRealizadas <= 0 &&
     totalSaidasRealizadasTodos > 0 &&
@@ -264,7 +289,11 @@ export function SpendingClarityCard({
       </CardHeader>
       <CardContent className={compact ? "space-y-3" : "space-y-4"}>
         {data.totalSaidasRealizadas <= 0 ? (
-          hasOtherScopeMovement ? (
+          hasOnlyFinancialMovementState ? (
+            <p className="text-sm text-muted-foreground">
+              Movimentacoes financeiras dominaram este recorte (ex.: Fatura Cartao/Investimentos). Revise no extrato as saidas de consumo antes de definir corte.
+            </p>
+          ) : hasOtherScopeMovement ? (
             <p className="text-sm text-muted-foreground">
               Ja houve saidas realizadas no mes, mas nao neste filtro de responsavel. Ajuste o filtro ou revise a classificacao no extrato.
             </p>

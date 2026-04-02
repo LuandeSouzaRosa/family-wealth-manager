@@ -22,9 +22,18 @@ type IsolatedIdentity = {
   client: SupabaseClient;
 };
 
+type FixtureMovement = {
+  descricao: string;
+  valor: number;
+  categoria: string;
+  responsavel: Responsible;
+};
+
 const TARGET_WITHOUT_EXPENSE: Responsible = 'Luana';
 const SOURCE_WITH_MOVEMENT: Responsible = 'Casal';
 const FIXTURE_EXPENSE_TYPE = 'Sa\u00EDda';
+test.use({ storageState: { cookies: [], origins: [] } });
+test.describe.configure({ timeout: 300000 });
 
 function getRequiredEnv(name: string): string {
   const value = process.env[name];
@@ -175,6 +184,30 @@ async function insertFixtureMovement(
   }
 }
 
+async function insertFixtureMovements(
+  client: SupabaseClient,
+  rows: FixtureMovement[],
+  userId: string,
+) {
+  const nowIso = new Date().toISOString();
+  const payload = rows.map((row) => ({
+    descricao: row.descricao,
+    valor: row.valor,
+    categoria: row.categoria,
+    tipo: FIXTURE_EXPENSE_TYPE,
+    data: nowIso,
+    responsavel: row.responsavel,
+    origem: 'Manual',
+    status: 'Realizado',
+    user_id: userId,
+  }));
+
+  const { error } = await client.from('transacoes').insert(payload as any);
+  if (error) {
+    throw new Error(`Fallback fixtures insertion failed: ${error.message}`);
+  }
+}
+
 async function setResponsibleFilter(page: Page, responsavel: DashboardResponsible) {
   const trigger = page
     .locator('button[role="combobox"]')
@@ -233,6 +266,49 @@ async function waitForTodosTotalVisible(
   );
 }
 
+async function waitForTextInDashboard(
+  page: Page,
+  runTag: string,
+  visibleSelector: string,
+  timeoutMs: number,
+  credentials?: { email: string; password: string },
+) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    await page.goto(`/?e2e_semantic_guard_run=${encodeURIComponent(runTag)}&probe=${Date.now()}`, {
+      waitUntil: 'domcontentloaded',
+      timeout: 30000,
+    });
+    const dashboardVisible = await page
+      .getByTestId('dashboard-content')
+      .isVisible()
+      .catch(() => false);
+
+    if (!dashboardVisible) {
+      const emailInput = page.locator('input[name="email"]');
+      const shouldReLogin =
+        credentials &&
+        (await emailInput.isVisible().catch(() => false)) &&
+        (await page.locator('input[name="password"]').isVisible().catch(() => false));
+
+      if (shouldReLogin) {
+        await emailInput.fill(credentials.email);
+        await page.locator('input[name="password"]').fill(credentials.password);
+        await page.locator('button[type="submit"]').click();
+      }
+    }
+
+    await expect(page.getByTestId('dashboard-content')).toBeVisible({ timeout: 15000 });
+    await setResponsibleFilter(page, 'Todos');
+
+    const candidate = page.locator(visibleSelector).first();
+    if (await candidate.isVisible()) return;
+    await page.waitForTimeout(3000);
+  }
+
+  throw new Error(`Dashboard nao exibiu seletor esperado (${visibleSelector}) dentro do timeout ${timeoutMs}ms.`);
+}
+
 test.describe('Spending Clarity fallback coherence (desktop)', () => {
   test('deve exibir fallback honesto quando Todos tem saidas e o filtro ativo nao tem saidas', async ({ page }) => {
     test.setTimeout(300000);
@@ -284,6 +360,121 @@ test.describe('Spending Clarity fallback coherence (desktop)', () => {
       );
     } finally {
       await cleanupTransactionsByDescription(isolated.client, fixtureDescription);
+      await isolated.client.auth.signOut();
+      await deleteIsolatedIdentity(isolated.userId);
+    }
+  });
+
+  test('deve exibir estado honesto quando o recorte for dominado por movimentacao financeira', async ({ page }) => {
+    test.setTimeout(300000);
+
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? '';
+    const isLocalBaseUrl = /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/i.test(appUrl);
+    test.skip(!isLocalBaseUrl, `Teste exige NEXT_PUBLIC_APP_URL local. Atual: ${appUrl || '(vazio)'}`);
+
+    const runTag = buildUniqueDescription('E2E_CLARITY_SEMANTIC_ONLY_FINANCIAL');
+    const fixtureRows: FixtureMovement[] = [
+      {
+        descricao: `${runTag}_fatura`,
+        valor: 950,
+        categoria: 'Fatura Cartao',
+        responsavel: 'Casal',
+      },
+      {
+        descricao: `${runTag}_invest`,
+        valor: 400,
+        categoria: 'Investimentos',
+        responsavel: 'Casal',
+      },
+    ];
+
+    const isolated = await createIsolatedIdentity();
+
+    try {
+      for (const row of fixtureRows) {
+        await cleanupTransactionsByDescription(isolated.client, row.descricao);
+      }
+
+      await insertFixtureMovements(isolated.client, fixtureRows, isolated.userId);
+      await loginAsIsolatedUser(page, isolated.email, isolated.password);
+      await waitForTextInDashboard(
+        page,
+        runTag,
+        'p:has-text("Movimentacoes financeiras dominaram este recorte"):visible',
+        180000,
+        { email: isolated.email, password: isolated.password },
+      );
+
+      await expect(page.getByText(/nao houve saidas realizadas neste recorte\./i)).toHaveCount(0);
+      await expect(page.getByRole('button', { name: /revisar no extrato/i })).toBeVisible({ timeout: 15000 });
+    } finally {
+      for (const row of fixtureRows) {
+        await cleanupTransactionsByDescription(isolated.client, row.descricao);
+      }
+      await isolated.client.auth.signOut();
+      await deleteIsolatedIdentity(isolated.userId);
+    }
+  });
+
+  test('deve manter lideranca de consumo quando ainda houver categoria real apos excluir movimentacao financeira', async ({ page }) => {
+    test.setTimeout(300000);
+
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? '';
+    const isLocalBaseUrl = /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/i.test(appUrl);
+    test.skip(!isLocalBaseUrl, `Teste exige NEXT_PUBLIC_APP_URL local. Atual: ${appUrl || '(vazio)'}`);
+
+    const runTag = buildUniqueDescription('E2E_CLARITY_SEMANTIC_CONSUMPTION_LEADER');
+    const fixtureRows: FixtureMovement[] = [
+      {
+        descricao: `${runTag}_fatura`,
+        valor: 900,
+        categoria: 'Fatura Cartao',
+        responsavel: 'Casal',
+      },
+      {
+        descricao: `${runTag}_invest`,
+        valor: 350,
+        categoria: 'Investimentos',
+        responsavel: 'Casal',
+      },
+      {
+        descricao: `${runTag}_alimentacao_1`,
+        valor: 240,
+        categoria: 'Alimentacao',
+        responsavel: 'Casal',
+      },
+      {
+        descricao: `${runTag}_alimentacao_2`,
+        valor: 160,
+        categoria: 'Alimentacao',
+        responsavel: 'Casal',
+      },
+    ];
+
+    const isolated = await createIsolatedIdentity();
+
+    try {
+      for (const row of fixtureRows) {
+        await cleanupTransactionsByDescription(isolated.client, row.descricao);
+      }
+
+      await insertFixtureMovements(isolated.client, fixtureRows, isolated.userId);
+      await loginAsIsolatedUser(page, isolated.email, isolated.password);
+      await waitForTextInDashboard(page, runTag, 'p:has-text("Categoria lider do mes:"):visible', 180000, {
+        email: isolated.email,
+        password: isolated.password,
+      });
+
+      const leaderLine = page.locator('p:has-text("Categoria lider do mes:"):visible').first();
+      await expect(leaderLine).toContainText(/Alimentacao/i, { timeout: 15000 });
+      await expect(leaderLine).not.toContainText(/Fatura Cartao/i);
+      await expect(leaderLine).not.toContainText(/Investimentos/i);
+      await expect(page.getByText(/movimentacoes financeiras dominaram este recorte/i)).toHaveCount(0);
+      await expect(page.getByRole('button', { name: /revisar no extrato/i })).toBeVisible({ timeout: 15000 });
+    } finally {
+      for (const row of fixtureRows) {
+        await cleanupTransactionsByDescription(isolated.client, row.descricao);
+      }
       await isolated.client.auth.signOut();
       await deleteIsolatedIdentity(isolated.userId);
     }

@@ -26,6 +26,7 @@ export interface CategoryIncreaseInsight {
 
 export interface SpendingClarityView {
   totalSaidasRealizadas: number;
+  totalSaidasDesconsideradas?: number;
   topCategorias: TopCategoryInsight[];
   concentracaoTop3Percentual: number;
   totalRecorrente: number;
@@ -39,6 +40,7 @@ export type SpendingClaritySnapshot = Record<ResponsibleFilter, SpendingClarityV
 
 const EMPTY_VIEW: SpendingClarityView = {
   totalSaidasRealizadas: 0,
+  totalSaidasDesconsideradas: 0,
   topCategorias: [],
   concentracaoTop3Percentual: 0,
   totalRecorrente: 0,
@@ -49,6 +51,7 @@ const EMPTY_VIEW: SpendingClarityView = {
 };
 
 const RESPONSAVEL_FILTROS: ResponsibleFilter[] = ["Todos", "Luan", "Luana", "Casal"];
+const NON_CONSUMPTION_CATEGORY_TOKENS = new Set(["fatura cartao", "investimentos"]);
 
 function normalizeToken(value: string | null | undefined): string {
   return (value || "")
@@ -72,6 +75,33 @@ function isExpenseType(tipo: string): boolean {
 function isRealized(status: string | null): boolean {
   const normalized = normalizeToken(status);
   return normalized !== "agendado" && normalized !== "pendente";
+}
+
+function isNonConsumptionCategory(categoria: string): boolean {
+  return NON_CONSUMPTION_CATEGORY_TOKENS.has(normalizeToken(categoria));
+}
+
+function filterConsumptionAggregate(
+  totals: Map<string, number>,
+  counts: Map<string, number>
+) {
+  const filteredTotals = new Map<string, number>();
+  const filteredCounts = new Map<string, number>();
+  let excludedTotal = 0;
+  let filteredTotal = 0;
+
+  totals.forEach((total, categoria) => {
+    if (isNonConsumptionCategory(categoria)) {
+      excludedTotal += total;
+      return;
+    }
+
+    filteredTotals.set(categoria, total);
+    filteredCounts.set(categoria, counts.get(categoria) || 0);
+    filteredTotal += total;
+  });
+
+  return { filteredTotals, filteredCounts, filteredTotal, excludedTotal };
 }
 
 function aggregateByCategory(
@@ -104,39 +134,49 @@ function buildView(
   previousMonthTx: SpendingClarityInput[],
   filtro: ResponsibleFilter
 ): SpendingClarityView {
-  const current = aggregateByCategory(currentMonthTx, filtro);
-  const previous = aggregateByCategory(previousMonthTx, filtro);
+  const currentRaw = aggregateByCategory(currentMonthTx, filtro);
+  const previousRaw = aggregateByCategory(previousMonthTx, filtro);
 
-  if (current.totalSaidasRealizadas <= 0) return EMPTY_VIEW;
+  if (currentRaw.totalSaidasRealizadas <= 0) return EMPTY_VIEW;
 
-  const topCategorias = Array.from(current.totals.entries())
+  const current = filterConsumptionAggregate(currentRaw.totals, currentRaw.counts);
+  const previous = filterConsumptionAggregate(previousRaw.totals, previousRaw.counts);
+
+  if (current.filteredTotal <= 0) {
+    return {
+      ...EMPTY_VIEW,
+      totalSaidasDesconsideradas: current.excludedTotal,
+    };
+  }
+
+  const topCategorias = Array.from(current.filteredTotals.entries())
     .map(([categoria, total]) => ({
       categoria,
       total,
-      percentual: (total / current.totalSaidasRealizadas) * 100,
-      lancamentos: current.counts.get(categoria) || 0,
+      percentual: (total / current.filteredTotal) * 100,
+      lancamentos: current.filteredCounts.get(categoria) || 0,
     }))
     .sort((a, b) => b.total - a.total)
     .slice(0, 3);
 
   const totalTop3 = topCategorias.reduce((acc, item) => acc + item.total, 0);
-  const concentracaoTop3Percentual = (totalTop3 / current.totalSaidasRealizadas) * 100;
+  const concentracaoTop3Percentual = (totalTop3 / current.filteredTotal) * 100;
 
   let totalRecorrente = 0;
-  current.totals.forEach((total, categoria) => {
-    const count = current.counts.get(categoria) || 0;
+  current.filteredTotals.forEach((total, categoria) => {
+    const count = current.filteredCounts.get(categoria) || 0;
     if (count >= 3) {
       totalRecorrente += total;
     }
   });
 
-  const totalPontual = current.totalSaidasRealizadas - totalRecorrente;
-  const percentualRecorrente = (totalRecorrente / current.totalSaidasRealizadas) * 100;
-  const percentualPontual = (totalPontual / current.totalSaidasRealizadas) * 100;
+  const totalPontual = current.filteredTotal - totalRecorrente;
+  const percentualRecorrente = (totalRecorrente / current.filteredTotal) * 100;
+  const percentualPontual = (totalPontual / current.filteredTotal) * 100;
 
   let maiorAltaVsMesAnterior: CategoryIncreaseInsight | null = null;
-  current.totals.forEach((atual, categoria) => {
-    const anterior = previous.totals.get(categoria) || 0;
+  current.filteredTotals.forEach((atual, categoria) => {
+    const anterior = previous.filteredTotals.get(categoria) || 0;
     const delta = atual - anterior;
     if (delta <= 0) return;
 
@@ -151,7 +191,8 @@ function buildView(
   });
 
   return {
-    totalSaidasRealizadas: current.totalSaidasRealizadas,
+    totalSaidasRealizadas: current.filteredTotal,
+    totalSaidasDesconsideradas: current.excludedTotal,
     topCategorias,
     concentracaoTop3Percentual,
     totalRecorrente,

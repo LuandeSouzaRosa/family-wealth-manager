@@ -32,6 +32,29 @@ describe("SpendingClarityCard", () => {
     ).toBeTruthy();
   });
 
+  it("mostra estado honesto quando o recorte so tem movimentacao financeira", () => {
+    render(
+      <SpendingClarityCard
+        data={{
+          totalSaidasRealizadas: 0,
+          totalSaidasDesconsideradas: 1600,
+          topCategorias: [],
+          concentracaoTop3Percentual: 0,
+          totalRecorrente: 0,
+          totalPontual: 0,
+          percentualRecorrente: 0,
+          percentualPontual: 0,
+          maiorAltaVsMesAnterior: null,
+        }}
+        responsavel="Todos"
+      />
+    );
+
+    expect(screen.getByText(/movimentacoes financeiras dominaram este recorte/i)).toBeTruthy();
+    expect(screen.queryByText(/nao houve saidas realizadas neste recorte/i)).toBeNull();
+    expect(screen.getByRole("button", { name: /revisar no extrato/i })).toBeTruthy();
+  });
+
   it("prioriza aviso de classificacao generica quando categoria lider e Outros", () => {
     render(
       <SpendingClarityCard
