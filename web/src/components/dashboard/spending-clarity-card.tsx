@@ -211,10 +211,21 @@ function buildActionTitle(evidence: EvidenceCalibration): string {
   return "Sugestao preliminar (baixa confianca)";
 }
 
-function buildActionHint(hint: string, evidence: EvidenceCalibration): string {
+function buildActionHint(
+  data: SpendingClarityData,
+  hint: string,
+  evidence: EvidenceCalibration
+): string {
   if (evidence.strength === "alta") return hint;
-  if (evidence.strength === "moderada") return `${hint} Confirme as linhas de maior valor antes de decidir.`;
-  return `${hint} Trate como triagem inicial e valide no extrato antes de agir.`;
+
+  const categoriaLider = data.topCategorias[0]?.categoria?.trim();
+  const categoriaLabel = categoriaLider ? ` "${categoriaLider}"` : "";
+
+  if (evidence.strength === "moderada") {
+    return `Use o insight como direcao inicial: valide no extrato as maiores linhas de${categoriaLabel} antes de decidir corte.`;
+  }
+
+  return `Base fraca para prescrever corte: revise no extrato as maiores linhas de${categoriaLabel} e confirme o padrao do mes antes de agir.`;
 }
 
 export function SpendingClarityCard({
@@ -234,7 +245,7 @@ export function SpendingClarityCard({
   const categoriaLider = data.topCategorias[0] ?? null;
   const reviewHref = buildLeaderReviewHref(targetTransacoesHref, categoriaLider?.categoria);
   const actionTitle = buildActionTitle(evidence);
-  const actionHint = buildActionHint(hint, evidence);
+  const actionHint = buildActionHint(data, hint, evidence);
   const hasOtherScopeMovement =
     data.totalSaidasRealizadas <= 0 &&
     totalSaidasRealizadasTodos > 0 &&

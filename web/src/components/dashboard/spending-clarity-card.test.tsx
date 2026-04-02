@@ -132,6 +132,7 @@ describe("SpendingClarityCard", () => {
     const evidenceSignals = screen.getByTestId("spending-clarity-evidence-signals");
     expect(evidenceSignals.textContent || "").toMatch(/lider 55% em 4 lanc\.; generico no top 3 0%\./i);
     expect(screen.getByText(/ajuste sugerido de maior impacto/i)).toBeTruthy();
+    expect(screen.getByText(/revise agora as 3 categorias lideres no extrato e corte pelo menos 1 item de cada\./i)).toBeTruthy();
   });
 
   it("explica confianca moderada com sinais objetivos do recorte", () => {
@@ -159,5 +160,33 @@ describe("SpendingClarityCard", () => {
     const evidenceSignals = screen.getByTestId("spending-clarity-evidence-signals");
     expect(evidenceSignals.textContent || "").toMatch(/lider 100% em 2 lanc\.; generico no top 3 0%\./i);
     expect(screen.getByText(/ajuste sugerido \(confirmar no extrato\)/i)).toBeTruthy();
+    expect(screen.getByText(/use o insight como direcao inicial/i)).toBeTruthy();
+    expect(screen.queryByText(/corte pelo menos 1 item de cada/i)).toBeNull();
+  });
+
+  it("reduz tom prescritivo quando confianca e baixa por pouca sustentacao do lider", () => {
+    render(
+      <SpendingClarityCard
+        data={{
+          totalSaidasRealizadas: 100,
+          topCategorias: [
+            { categoria: "Transporte", total: 80, percentual: 80, lancamentos: 1 },
+            { categoria: "Lazer", total: 20, percentual: 20, lancamentos: 2 },
+          ],
+          concentracaoTop3Percentual: 100,
+          totalRecorrente: 0,
+          totalPontual: 100,
+          percentualRecorrente: 0,
+          percentualPontual: 100,
+          maiorAltaVsMesAnterior: null,
+        }}
+        responsavel="Todos"
+      />
+    );
+
+    const evidence = screen.getByTestId("spending-clarity-evidence-strength");
+    expect(within(evidence).getByText(/^baixa$/i)).toBeTruthy();
+    expect(screen.getByText(/base fraca para prescrever corte/i)).toBeTruthy();
+    expect(screen.queryByText(/corte pelo menos 1 item de cada/i)).toBeNull();
   });
 });
