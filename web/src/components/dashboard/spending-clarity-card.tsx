@@ -115,6 +115,17 @@ function buildEvidenceCalibration(data: SpendingClarityData): EvidenceCalibratio
   };
 }
 
+function buildEvidenceSignalsSummary(data: SpendingClarityData): string | null {
+  if (data.totalSaidasRealizadas <= 0 || data.topCategorias.length === 0) return null;
+
+  const categoriaLider = data.topCategorias[0];
+  const genericShareTop = data.topCategorias
+    .filter((item) => isGenericCategory(item.categoria))
+    .reduce((acc, item) => acc + item.percentual, 0);
+
+  return `Sinais: lider ${categoriaLider.percentual.toFixed(0)}% em ${categoriaLider.lancamentos} lanc.; generico no top 3 ${genericShareTop.toFixed(0)}%.`;
+}
+
 function buildPrimaryInsight(data: SpendingClarityData): PrimaryInsight {
   if (data.topCategorias.length === 0) {
     return {
@@ -219,6 +230,7 @@ export function SpendingClarityCard({
   const hint = buildControlHint(data);
   const primaryInsight = buildPrimaryInsight(data);
   const evidence = buildEvidenceCalibration(data);
+  const evidenceSignals = buildEvidenceSignalsSummary(data);
   const categoriaLider = data.topCategorias[0] ?? null;
   const reviewHref = buildLeaderReviewHref(targetTransacoesHref, categoriaLider?.categoria);
   const actionTitle = buildActionTitle(evidence);
@@ -271,6 +283,11 @@ export function SpendingClarityCard({
                 Confianca do insight: <strong>{evidence.label}</strong>
               </p>
               <p className="text-muted-foreground mt-1">{evidence.message}</p>
+              {evidenceSignals ? (
+                <p className="text-xs text-muted-foreground mt-1" data-testid="spending-clarity-evidence-signals">
+                  {evidenceSignals}
+                </p>
+              ) : null}
             </div>
 
             <div className="space-y-2">

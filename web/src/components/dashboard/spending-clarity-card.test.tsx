@@ -57,6 +57,8 @@ describe("SpendingClarityCard", () => {
     const evidence = screen.getByTestId("spending-clarity-evidence-strength");
     expect(within(evidence).getByText(/confianca do insight:/i)).toBeTruthy();
     expect(within(evidence).getByText(/^baixa$/i)).toBeTruthy();
+    const evidenceSignals = screen.getByTestId("spending-clarity-evidence-signals");
+    expect(evidenceSignals.textContent || "").toMatch(/lider 90% em 8 lanc\.; generico no top 3 90%\./i);
   });
 
   it("usa deep-link explicito para extrato quando href contextual e informado", () => {
@@ -127,6 +129,35 @@ describe("SpendingClarityCard", () => {
     const evidence = screen.getByTestId("spending-clarity-evidence-strength");
     expect(within(evidence).getByText(/confianca do insight:/i)).toBeTruthy();
     expect(within(evidence).getByText(/^alta$/i)).toBeTruthy();
+    const evidenceSignals = screen.getByTestId("spending-clarity-evidence-signals");
+    expect(evidenceSignals.textContent || "").toMatch(/lider 55% em 4 lanc\.; generico no top 3 0%\./i);
     expect(screen.getByText(/ajuste sugerido de maior impacto/i)).toBeTruthy();
+  });
+
+  it("explica confianca moderada com sinais objetivos do recorte", () => {
+    render(
+      <SpendingClarityCard
+        data={{
+          totalSaidasRealizadas: 80.62,
+          topCategorias: [
+            { categoria: "Alimentacao", total: 80.62, percentual: 100, lancamentos: 2 },
+          ],
+          concentracaoTop3Percentual: 100,
+          totalRecorrente: 0,
+          totalPontual: 80.62,
+          percentualRecorrente: 0,
+          percentualPontual: 100,
+          maiorAltaVsMesAnterior: null,
+        }}
+        responsavel="Todos"
+      />
+    );
+
+    const evidence = screen.getByTestId("spending-clarity-evidence-strength");
+    expect(within(evidence).getByText(/confianca do insight:/i)).toBeTruthy();
+    expect(within(evidence).getByText(/^moderada$/i)).toBeTruthy();
+    const evidenceSignals = screen.getByTestId("spending-clarity-evidence-signals");
+    expect(evidenceSignals.textContent || "").toMatch(/lider 100% em 2 lanc\.; generico no top 3 0%\./i);
+    expect(screen.getByText(/ajuste sugerido \(confirmar no extrato\)/i)).toBeTruthy();
   });
 });
