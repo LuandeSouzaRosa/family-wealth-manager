@@ -42,6 +42,14 @@ type PrimaryInsight = {
   message: string;
 };
 
+type EvidenceStrength = "alta" | "moderada" | "baixa";
+
+type EvidenceCalibration = {
+  strength: EvidenceStrength;
+  label: string;
+  message: string;
+};
+
 function normalizeLabel(value: string): string {
   return value
     .trim()
@@ -50,15 +58,61 @@ function normalizeLabel(value: string): string {
     .replace(/[\u0300-\u036f]/g, "");
 }
 
+function isGenericCategory(categoria: string): boolean {
+  const normalized = normalizeLabel(categoria);
+  return normalized === "outros" || normalized === "sem categoria";
+}
+
 function isGenericLeader(data: SpendingClarityData): boolean {
   if (data.topCategorias.length === 0) return false;
 
   const categoriaLider = data.topCategorias[0];
-  const categoriaLiderNormalizada = normalizeLabel(categoriaLider.categoria);
-  const liderGenerica =
-    categoriaLiderNormalizada === "outros" || categoriaLiderNormalizada === "sem categoria";
+  const liderGenerica = isGenericCategory(categoriaLider.categoria);
 
   return liderGenerica && categoriaLider.percentual >= 60;
+}
+
+function buildEvidenceCalibration(data: SpendingClarityData): EvidenceCalibration {
+  if (data.totalSaidasRealizadas <= 0 || data.topCategorias.length === 0) {
+    return {
+      strength: "baixa",
+      label: "Baixa",
+      message: "Nao ha saidas suficientes no recorte atual para sustentar um insight forte.",
+    };
+  }
+
+  const categoriaLider = data.topCategorias[0];
+  const genericShareTop = data.topCategorias
+    .filter((item) => isGenericCategory(item.categoria))
+    .reduce((acc, item) => acc + item.percentual, 0);
+
+  const reasons: string[] = [];
+  if (isGenericLeader(data)) reasons.push("a categoria lider ainda e generica");
+  if (genericShareTop >= 40) reasons.push(`categorias genericas somam ${genericShareTop.toFixed(0)}% do top 3`);
+  if (categoriaLider.lancamentos < 2) reasons.push(`a categoria lider tem apenas ${categoriaLider.lancamentos} lancamento(s)`);
+  if (categoriaLider.percentual < 25) reasons.push(`a categoria lider representa ${categoriaLider.percentual.toFixed(0)}% das saidas`);
+
+  if (reasons.length > 0) {
+    return {
+      strength: "baixa",
+      label: "Baixa",
+      message: `Leitura preliminar: ${reasons.join("; ")}.`,
+    };
+  }
+
+  if (categoriaLider.lancamentos >= 3 && categoriaLider.percentual >= 40 && genericShareTop < 20) {
+    return {
+      strength: "alta",
+      label: "Alta",
+      message: `Categoria lider com boa sustentacao (${categoriaLider.lancamentos} lancamentos e ${categoriaLider.percentual.toFixed(0)}% das saidas).`,
+    };
+  }
+
+  return {
+    strength: "moderada",
+    label: "Moderada",
+    message: "A direcao principal esta visivel, mas vale validar os lancamentos no extrato antes de decidir corte.",
+  };
 }
 
 function buildPrimaryInsight(data: SpendingClarityData): PrimaryInsight {
@@ -140,6 +194,18 @@ function buildLeaderReviewHref(baseHref: string, categoriaLider?: string): strin
   return `${url.pathname}?${url.searchParams.toString()}`;
 }
 
+function buildActionTitle(evidence: EvidenceCalibration): string {
+  if (evidence.strength === "alta") return "Ajuste sugerido de maior impacto";
+  if (evidence.strength === "moderada") return "Ajuste sugerido (confirmar no extrato)";
+  return "Sugestao preliminar (baixa confianca)";
+}
+
+function buildActionHint(hint: string, evidence: EvidenceCalibration): string {
+  if (evidence.strength === "alta") return hint;
+  if (evidence.strength === "moderada") return `${hint} Confirme as linhas de maior valor antes de decidir.`;
+  return `${hint} Trate como triagem inicial e valide no extrato antes de agir.`;
+}
+
 export function SpendingClarityCard({
   data,
   responsavel,
@@ -152,8 +218,11 @@ export function SpendingClarityCard({
   const targetTransacoesHref = transacoesHref || defaultTransacoesHref;
   const hint = buildControlHint(data);
   const primaryInsight = buildPrimaryInsight(data);
+  const evidence = buildEvidenceCalibration(data);
   const categoriaLider = data.topCategorias[0] ?? null;
   const reviewHref = buildLeaderReviewHref(targetTransacoesHref, categoriaLider?.categoria);
+  const actionTitle = buildActionTitle(evidence);
+  const actionHint = buildActionHint(hint, evidence);
   const hasOtherScopeMovement =
     data.totalSaidasRealizadas <= 0 &&
     totalSaidasRealizadasTodos > 0 &&
@@ -197,6 +266,13 @@ export function SpendingClarityCard({
               <p className="text-muted-foreground">{primaryInsight.message}</p>
             </div>
 
+            <div className="rounded-lg border border-border/60 p-3 bg-muted/20 text-sm" data-testid="spending-clarity-evidence-strength">
+              <p className="font-medium">
+                Confianca do insight: <strong>{evidence.label}</strong>
+              </p>
+              <p className="text-muted-foreground mt-1">{evidence.message}</p>
+            </div>
+
             <div className="space-y-2">
               {data.topCategorias.map((item, index) => (
                 <div key={`${item.categoria}-${index}`} className="flex items-center justify-between text-sm">
@@ -230,8 +306,8 @@ export function SpendingClarityCard({
             </div>
 
             <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm">
-              <p className="font-medium mb-1">Ajuste sugerido de maior impacto</p>
-              <p className="text-muted-foreground">{hint}</p>
+              <p className="font-medium mb-1">{actionTitle}</p>
+              <p className="text-muted-foreground">{actionHint}</p>
             </div>
           </>
         )}

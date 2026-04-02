@@ -3,7 +3,7 @@
  */
 import React from "react";
 import { describe, expect, it } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { SpendingClarityCard } from "./spending-clarity-card";
 
 const emptyData = {
@@ -54,6 +54,9 @@ describe("SpendingClarityCard", () => {
 
     expect(screen.getByText(/classificacao ainda generica/i)).toBeTruthy();
     expect(screen.getByText(/classificar os principais lancamentos deixa o insight mais confiavel/i)).toBeTruthy();
+    const evidence = screen.getByTestId("spending-clarity-evidence-strength");
+    expect(within(evidence).getByText(/confianca do insight:/i)).toBeTruthy();
+    expect(within(evidence).getByText(/^baixa$/i)).toBeTruthy();
   });
 
   it("usa deep-link explicito para extrato quando href contextual e informado", () => {
@@ -98,5 +101,32 @@ describe("SpendingClarityCard", () => {
     expect(url.searchParams.get("year")).toBe("2026");
     expect(url.searchParams.get("category")).toBe("Alimentacao");
     expect(url.searchParams.get("sort")).toBe("value_desc");
+  });
+
+  it("sinaliza confianca alta quando a categoria lider tem sustentacao forte", () => {
+    render(
+      <SpendingClarityCard
+        data={{
+          totalSaidasRealizadas: 1000,
+          topCategorias: [
+            { categoria: "Transporte", total: 550, percentual: 55, lancamentos: 4 },
+            { categoria: "Alimentacao", total: 300, percentual: 30, lancamentos: 3 },
+            { categoria: "Lazer", total: 150, percentual: 15, lancamentos: 2 },
+          ],
+          concentracaoTop3Percentual: 100,
+          totalRecorrente: 550,
+          totalPontual: 450,
+          percentualRecorrente: 55,
+          percentualPontual: 45,
+          maiorAltaVsMesAnterior: null,
+        }}
+        responsavel="Todos"
+      />
+    );
+
+    const evidence = screen.getByTestId("spending-clarity-evidence-strength");
+    expect(within(evidence).getByText(/confianca do insight:/i)).toBeTruthy();
+    expect(within(evidence).getByText(/^alta$/i)).toBeTruthy();
+    expect(screen.getByText(/ajuste sugerido de maior impacto/i)).toBeTruthy();
   });
 });
