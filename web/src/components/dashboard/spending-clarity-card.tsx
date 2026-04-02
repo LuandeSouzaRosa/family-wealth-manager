@@ -129,6 +129,17 @@ function buildControlHint(data: SpendingClarityData): string {
   return "Revise semanalmente as 3 categorias lideres para manter o mes sob controle.";
 }
 
+function buildLeaderReviewHref(baseHref: string, categoriaLider?: string): string {
+  const categoria = categoriaLider?.trim();
+  if (!categoria) return baseHref;
+
+  const url = new URL(baseHref, "http://fwm.local");
+  url.searchParams.set("category", categoria);
+  url.searchParams.set("sort", "value_desc");
+
+  return `${url.pathname}?${url.searchParams.toString()}`;
+}
+
 export function SpendingClarityCard({
   data,
   responsavel,
@@ -142,6 +153,7 @@ export function SpendingClarityCard({
   const hint = buildControlHint(data);
   const primaryInsight = buildPrimaryInsight(data);
   const categoriaLider = data.topCategorias[0] ?? null;
+  const reviewHref = buildLeaderReviewHref(targetTransacoesHref, categoriaLider?.categoria);
   const hasOtherScopeMovement =
     data.totalSaidasRealizadas <= 0 &&
     totalSaidasRealizadasTodos > 0 &&
@@ -225,7 +237,7 @@ export function SpendingClarityCard({
         )}
 
         <div className="pt-1">
-          <Link href={targetTransacoesHref}>
+          <Link href={reviewHref}>
             <Button variant="outline" size="sm">
               Revisar no extrato
             </Button>

@@ -68,4 +68,35 @@ describe("SpendingClarityCard", () => {
     const action = screen.getByRole("button", { name: /revisar no extrato/i }).closest("a");
     expect(action?.getAttribute("href")).toBe("/transacoes?month=4&year=2026");
   });
+
+  it("torna o insight acionavel com categoria lider e ordenacao util", () => {
+    render(
+      <SpendingClarityCard
+        data={{
+          totalSaidasRealizadas: 1800,
+          topCategorias: [
+            { categoria: "Alimentacao", total: 900, percentual: 50, lancamentos: 6 },
+          ],
+          concentracaoTop3Percentual: 50,
+          totalRecorrente: 700,
+          totalPontual: 1100,
+          percentualRecorrente: 39,
+          percentualPontual: 61,
+          maiorAltaVsMesAnterior: null,
+        }}
+        responsavel="Todos"
+        transacoesHref="/transacoes?month=4&year=2026"
+      />
+    );
+
+    const action = screen.getByRole("button", { name: /revisar no extrato/i }).closest("a");
+    const href = action?.getAttribute("href") || "";
+    const url = new URL(href, "http://fwm.local");
+
+    expect(url.pathname).toBe("/transacoes");
+    expect(url.searchParams.get("month")).toBe("4");
+    expect(url.searchParams.get("year")).toBe("2026");
+    expect(url.searchParams.get("category")).toBe("Alimentacao");
+    expect(url.searchParams.get("sort")).toBe("value_desc");
+  });
 });
