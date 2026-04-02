@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { getCurrentMonthIsoRange, getPreviousMonthIsoRange } from "./period-range";
+import {
+  getCurrentMonthIsoRange,
+  getPreviousMonthIsoRange,
+  getYearFilterOptions,
+} from "./period-range";
 
 describe("getCurrentMonthIsoRange", () => {
   it("retorna janela fechada-aberta do mes corrente", () => {
@@ -42,5 +46,23 @@ describe("getPreviousMonthIsoRange", () => {
 
     expect(range.startIso).toBe(expectedStart);
     expect(range.endExclusiveIso).toBe(expectedEndExclusive);
+  });
+});
+
+describe("getYearFilterOptions", () => {
+  it("retorna faixa dinamica baseada no ano atual", () => {
+    const ref = new Date("2026-03-15T12:00:00.000Z");
+    expect(getYearFilterOptions("2026", ref)).toEqual(["2026", "2025", "2024"]);
+  });
+
+  it("inclui ano selecionado fora da faixa para manter previsibilidade do filtro", () => {
+    const ref = new Date("2026-03-15T12:00:00.000Z");
+    expect(getYearFilterOptions("2022", ref)).toEqual(["2026", "2025", "2024", "2022"]);
+  });
+
+  it("nao inclui ano selecionado invalido", () => {
+    const ref = new Date("2026-03-15T12:00:00.000Z");
+    expect(getYearFilterOptions("Todos", ref)).toEqual(["2026", "2025", "2024"]);
+    expect(getYearFilterOptions("0", ref)).toEqual(["2026", "2025", "2024"]);
   });
 });

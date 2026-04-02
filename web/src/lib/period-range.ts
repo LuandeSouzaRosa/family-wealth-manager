@@ -17,3 +17,29 @@ export function getPreviousMonthIsoRange(referenceDate: Date = new Date()) {
     endExclusiveIso: startOfCurrentMonth.toISOString(),
   };
 }
+
+export function getYearFilterOptions(
+  selectedYear: string,
+  referenceDate: Date = new Date(),
+  yearsBack: number = 2,
+) {
+  const currentYear = referenceDate.getFullYear();
+  const years = new Set<number>();
+
+  for (let offset = 0; offset <= yearsBack; offset += 1) {
+    years.add(currentYear - offset);
+  }
+
+  const selectedYearAsNumber = Number.parseInt(selectedYear, 10);
+  if (
+    !Number.isNaN(selectedYearAsNumber) &&
+    selectedYearAsNumber >= 2000 &&
+    selectedYearAsNumber <= 2100
+  ) {
+    years.add(selectedYearAsNumber);
+  }
+
+  return Array.from(years)
+    .sort((a, b) => b - a)
+    .map(String);
+}

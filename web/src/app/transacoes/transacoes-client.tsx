@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/u
 import { Input } from '@/components/ui/input'
 import { useFilter } from '@/contexts/filter-context'
 import { isResponsibleMatch } from '@/lib/filter-utils'
+import { getYearFilterOptions } from '@/lib/period-range'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -63,8 +64,6 @@ const MONTHS = [
   { value: "12", label: "Dezembro" },
 ]
 
-const YEARS = ["2026", "2025", "2024"]
-
 export function TransacoesClientShell({
   initialData,
   initialCartoes,
@@ -110,6 +109,8 @@ export function TransacoesClientShell({
     const cats = new Set(initialData.map(tx => tx.categoria))
     return Array.from(cats).sort()
   }, [initialData])
+
+  const availableYears = useMemo(() => getYearFilterOptions(year), [year])
 
   // Note: For a fully Server-Side approach we would push router params (?month=X&year=Y)
   // For maximum fluidity + 0 latency, we filter the pre-fetched massive list locally if small enough,
@@ -303,7 +304,7 @@ export function TransacoesClientShell({
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="0">Todos</SelectItem>
-                            {YEARS.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
+                            {availableYears.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
                           </SelectContent>
                         </Select>
                       </div>
