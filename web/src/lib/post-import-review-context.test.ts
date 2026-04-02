@@ -10,6 +10,8 @@ describe('buildPostImportReviewContext', () => {
     expect(result.outrosRows).toBe(0)
     expect(result.outrosValue).toBe(0)
     expect(result.reviewHref).toBeNull()
+    expect(result.periodReviewHref).toBe('/transacoes?month=3&year=2026&sort=value_desc')
+    expect(result.periodLabel).toBe('03/2026')
   })
 
   it('gera deep-link com mes/ano explicitos quando lote esta no mesmo mes', () => {
@@ -22,6 +24,8 @@ describe('buildPostImportReviewContext', () => {
     expect(result.outrosRows).toBe(2)
     expect(result.outrosValue).toBe(350)
     expect(result.reviewHref).toBe('/transacoes?month=3&year=2026&category=Outros&sort=value_desc')
+    expect(result.periodReviewHref).toBe('/transacoes?month=3&year=2026&sort=value_desc')
+    expect(result.periodLabel).toBe('03/2026')
   })
 
   it('abre ano inteiro quando lote cobre varios meses no mesmo ano', () => {
@@ -31,6 +35,8 @@ describe('buildPostImportReviewContext', () => {
     ])
 
     expect(result.reviewHref).toBe('/transacoes?month=0&year=2026&category=Outros&sort=value_desc')
+    expect(result.periodReviewHref).toBe('/transacoes?month=0&year=2026&sort=value_desc')
+    expect(result.periodLabel).toBe('ano 2026')
   })
 
   it('abre recorte global quando lote cobre mais de um ano', () => {
@@ -40,5 +46,7 @@ describe('buildPostImportReviewContext', () => {
     ])
 
     expect(result.reviewHref).toBe('/transacoes?month=0&year=0&category=Outros&sort=value_desc')
+    expect(result.periodReviewHref).toBe('/transacoes?month=0&year=0&sort=value_desc')
+    expect(result.periodLabel).toBe('todos os anos')
   })
 })

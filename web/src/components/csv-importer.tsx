@@ -85,6 +85,8 @@ export function CsvImporter() {
     outrosRows: number;
     outrosValue: number;
     reviewHref: string | null;
+    periodReviewHref: string;
+    periodLabel: string;
   } | null>(null)
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -281,6 +283,8 @@ export function CsvImporter() {
            outrosRows: reviewContext.outrosRows,
            outrosValue: reviewContext.outrosValue,
            reviewHref: reviewContext.reviewHref,
+           periodReviewHref: reviewContext.periodReviewHref,
+           periodLabel: reviewContext.periodLabel,
         })
         toast.success("Lote processado com sucesso!")
         setData([])
@@ -668,6 +672,20 @@ export function CsvImporter() {
               Guardrail: {importReceipt.linhasSemDescricao} linha(s) entraram sem descricao reconhecida ({importReceipt.pctSemDescricao}%).
             </p>
           )}
+
+          <div className="w-full max-w-3xl rounded-lg border border-border/60 bg-muted/20 p-4 text-sm">
+            <p className="font-medium text-foreground">
+              Continue a revisao no periodo importado ({importReceipt.periodLabel}).
+            </p>
+            <p className="text-muted-foreground mt-1">
+              Abrir o extrato neste recorte evita drift de contexto apos a importacao.
+            </p>
+            <Link href={importReceipt.periodReviewHref} className="inline-block mt-3">
+              <Button variant="outline" size="sm">
+                Abrir extrato do periodo importado
+              </Button>
+            </Link>
+          </div>
 
           {importReceipt.outrosRows > 0 && importReceipt.reviewHref && (
             <div className="w-full max-w-3xl rounded-lg border border-primary/20 bg-primary/5 p-4 text-sm">

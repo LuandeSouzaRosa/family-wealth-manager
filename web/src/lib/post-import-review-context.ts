@@ -8,6 +8,8 @@ export type PostImportReviewContext = {
   outrosRows: number
   outrosValue: number
   reviewHref: string | null
+  periodReviewHref: string
+  periodLabel: string
 }
 
 function normalizeToken(value: string | null | undefined): string {
@@ -23,29 +25,17 @@ function isGenericCategory(value: string | null | undefined): boolean {
   return normalized === "outros" || normalized === "sem categoria"
 }
 
-export function buildPostImportReviewContext(rows: PostImportReviewRow[]): PostImportReviewContext {
-  const outrosRows = rows.filter((row) => isGenericCategory(row.categoria)).length
-  const outrosValue = rows
-    .filter((row) => isGenericCategory(row.categoria))
-    .reduce((acc, row) => acc + (Number(row.valor) || 0), 0)
-
-  if (outrosRows === 0) {
-    return {
-      outrosRows: 0,
-      outrosValue: 0,
-      reviewHref: null,
-    }
-  }
-
+function resolveImportPeriod(rows: PostImportReviewRow[]) {
   const parsedDates = rows
     .map((row) => new Date(row.data || ""))
     .filter((date) => !Number.isNaN(date.getTime()))
 
   if (parsedDates.length === 0) {
     return {
-      outrosRows,
-      outrosValue,
-      reviewHref: "/transacoes?month=0&year=0&category=Outros&sort=value_desc",
+      month: "0",
+      year: "0",
+      periodReviewHref: "/transacoes?month=0&year=0&sort=value_desc",
+      periodLabel: "todos os anos",
     }
   }
 
@@ -63,9 +53,39 @@ export function buildPostImportReviewContext(rows: PostImportReviewRow[]): PostI
     year = String(parsedDates[0].getUTCFullYear())
   }
 
+  const periodLabel =
+    month !== "0" ? `${month.padStart(2, "0")}/${year}` : year !== "0" ? `ano ${year}` : "todos os anos"
+
+  return {
+    month,
+    year,
+    periodReviewHref: `/transacoes?month=${month}&year=${year}&sort=value_desc`,
+    periodLabel,
+  }
+}
+
+export function buildPostImportReviewContext(rows: PostImportReviewRow[]): PostImportReviewContext {
+  const period = resolveImportPeriod(rows)
+  const outrosRows = rows.filter((row) => isGenericCategory(row.categoria)).length
+  const outrosValue = rows
+    .filter((row) => isGenericCategory(row.categoria))
+    .reduce((acc, row) => acc + (Number(row.valor) || 0), 0)
+
+  if (outrosRows === 0) {
+    return {
+      outrosRows: 0,
+      outrosValue: 0,
+      reviewHref: null,
+      periodReviewHref: period.periodReviewHref,
+      periodLabel: period.periodLabel,
+    }
+  }
+
   return {
     outrosRows,
     outrosValue,
-    reviewHref: `/transacoes?month=${month}&year=${year}&category=Outros&sort=value_desc`,
+    reviewHref: `/transacoes?month=${period.month}&year=${period.year}&category=Outros&sort=value_desc`,
+    periodReviewHref: period.periodReviewHref,
+    periodLabel: period.periodLabel,
   }
 }
