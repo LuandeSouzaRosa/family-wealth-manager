@@ -13,6 +13,11 @@ describe('buildPostImportReviewContext', () => {
     expect(result.ambiguousRows).toBe(0)
     expect(result.ambiguousValue).toBe(0)
     expect(result.ambiguousReviewHref).toBeNull()
+    expect(result.periodSummary.mode).toBe('consumption_focus')
+    expect(result.periodSummary.totalConsumptionValue).toBe(120)
+    expect(result.periodSummary.totalNonConsumptionValue).toBe(0)
+    expect(result.periodSummary.attentionCategory).toBe('Alimentacao')
+    expect(result.periodSummary.leaderReviewHref).toBe('/transacoes?month=3&year=2026&category=Alimentacao&sort=value_desc')
     expect(result.periodReviewHref).toBe('/transacoes?month=3&year=2026&sort=value_desc')
     expect(result.periodLabel).toBe('03/2026')
   })
@@ -30,6 +35,10 @@ describe('buildPostImportReviewContext', () => {
     expect(result.ambiguousRows).toBe(2)
     expect(result.ambiguousValue).toBe(350)
     expect(result.ambiguousReviewHref).toBe('/transacoes?month=3&year=2026&review=ambiguous&sort=value_desc')
+    expect(result.periodSummary.mode).toBe('consumption_focus')
+    expect(result.periodSummary.totalConsumptionValue).toBe(430)
+    expect(result.periodSummary.totalNonConsumptionValue).toBe(0)
+    expect(result.periodSummary.topConsumptionCategories[0]?.categoria).toBe('Outros')
     expect(result.periodReviewHref).toBe('/transacoes?month=3&year=2026&sort=value_desc')
     expect(result.periodLabel).toBe('03/2026')
   })
@@ -45,6 +54,9 @@ describe('buildPostImportReviewContext', () => {
     expect(result.ambiguousRows).toBe(1)
     expect(result.ambiguousValue).toBe(480)
     expect(result.ambiguousReviewHref).toBe('/transacoes?month=3&year=2026&review=ambiguous&sort=value_desc')
+    expect(result.periodSummary.mode).toBe('consumption_focus')
+    expect(result.periodSummary.totalConsumptionValue).toBe(1380)
+    expect(result.periodSummary.topConsumptionCategories[0]?.categoria).toBe('Moradia')
   })
 
   it('abre ano inteiro quando lote cobre varios meses no mesmo ano', () => {
@@ -70,5 +82,18 @@ describe('buildPostImportReviewContext', () => {
     expect(result.periodReviewHref).toBe('/transacoes?month=0&year=0&sort=value_desc')
     expect(result.periodLabel).toBe('todos os anos')
   })
-})
 
+  it('sinaliza periodo dominado por movimentacao financeira quando sobra zero consumo real', () => {
+    const result = buildPostImportReviewContext([
+      { categoria: 'Fatura Cartao', valor: 2000, data: '2026-03-04T00:00:00.000Z', tipo: 'Saida' },
+      { categoria: 'Investimentos', valor: 900, data: '2026-03-09T00:00:00.000Z', tipo: 'Saida' },
+    ])
+
+    expect(result.periodSummary.mode).toBe('non_consumption_dominant')
+    expect(result.periodSummary.totalConsumptionValue).toBe(0)
+    expect(result.periodSummary.totalNonConsumptionValue).toBe(2900)
+    expect(result.periodSummary.topConsumptionCategories).toHaveLength(0)
+    expect(result.periodSummary.attentionCategory).toBeNull()
+    expect(result.periodSummary.leaderReviewHref).toBeNull()
+  })
+})

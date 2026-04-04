@@ -88,6 +88,21 @@ export function CsvImporter() {
     ambiguousRows: number;
     ambiguousValue: number;
     ambiguousReviewHref: string | null;
+    periodSummary: {
+      mode: "consumption_focus" | "non_consumption_dominant" | "insufficient_base";
+      totalConsumptionValue: number;
+      totalNonConsumptionValue: number;
+      topConsumptionCategories: Array<{
+        categoria: string;
+        total: number;
+        percentual: number;
+        lancamentos: number;
+        reviewHref: string;
+      }>;
+      attentionCategory: string | null;
+      attentionPercent: number | null;
+      leaderReviewHref: string | null;
+    };
     periodReviewHref: string;
     periodLabel: string;
   } | null>(null)
@@ -289,6 +304,7 @@ export function CsvImporter() {
            ambiguousRows: reviewContext.ambiguousRows,
            ambiguousValue: reviewContext.ambiguousValue,
            ambiguousReviewHref: reviewContext.ambiguousReviewHref,
+           periodSummary: reviewContext.periodSummary,
            periodReviewHref: reviewContext.periodReviewHref,
            periodLabel: reviewContext.periodLabel,
         })
@@ -678,6 +694,58 @@ export function CsvImporter() {
               Guardrail: {importReceipt.linhasSemDescricao} linha(s) entraram sem descricao reconhecida ({importReceipt.pctSemDescricao}%).
             </p>
           )}
+
+          <div className="w-full max-w-3xl rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-4 text-sm">
+            <p className="font-medium text-foreground">Resumo inteligente do periodo importado</p>
+            {importReceipt.periodSummary.mode === "consumption_focus" ? (
+              <>
+                <p className="text-muted-foreground mt-1">
+                  Consumo real mapeado:{" "}
+                  {importReceipt.periodSummary.totalConsumptionValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                  {importReceipt.periodSummary.totalNonConsumptionValue > 0 && (
+                    <>
+                      {" "}| movimentacao financeira desconsiderada:{" "}
+                      {importReceipt.periodSummary.totalNonConsumptionValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}.
+                    </>
+                  )}
+                </p>
+                {importReceipt.periodSummary.topConsumptionCategories.length > 0 && (
+                  <ul className="mt-2 space-y-1 text-muted-foreground">
+                    {importReceipt.periodSummary.topConsumptionCategories.slice(0, 3).map((item) => (
+                      <li key={item.categoria}>
+                        {item.categoria}: {item.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} ({item.percentual.toFixed(1)}% | {item.lancamentos} lanc.)
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {importReceipt.periodSummary.attentionCategory && (
+                  <p className="text-muted-foreground mt-2">
+                    Frente inicial de atencao: {importReceipt.periodSummary.attentionCategory} ({(importReceipt.periodSummary.attentionPercent || 0).toFixed(1)}% do consumo real).
+                  </p>
+                )}
+                {importReceipt.periodSummary.leaderReviewHref && (
+                  <Link href={importReceipt.periodSummary.leaderReviewHref} className="inline-block mt-3">
+                    <Button variant="outline" size="sm">
+                      Revisar categoria lider no extrato
+                    </Button>
+                  </Link>
+                )}
+              </>
+            ) : importReceipt.periodSummary.mode === "non_consumption_dominant" ? (
+              <p className="text-muted-foreground mt-1">
+                O periodo importado foi dominado por movimentacao financeira ({importReceipt.periodSummary.totalNonConsumptionValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} em Fatura Cartao/Investimentos), sem base suficiente de consumo real para conclusao forte.
+              </p>
+            ) : (
+              <p className="text-muted-foreground mt-1">
+                Ainda nao ha base de saidas suficientes no periodo importado para sintetizar consumo real com seguranca.
+              </p>
+            )}
+            {importReceipt.ambiguousRows > 0 && (
+              <p className="text-amber-700 dark:text-amber-400 mt-2">
+                Ressalva: {importReceipt.ambiguousRows} lancamento(s) ambiguo(s) somando {importReceipt.ambiguousValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} ainda podem alterar a leitura final.
+              </p>
+            )}
+          </div>
 
           <div className="w-full max-w-3xl rounded-lg border border-border/60 bg-muted/20 p-4 text-sm">
             <p className="font-medium text-foreground">

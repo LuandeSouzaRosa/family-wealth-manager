@@ -1,11 +1,31 @@
 import { isAmbiguousReviewCandidate, isGenericCategory } from "./ambiguous-review"
+import { buildSpendingClaritySnapshot } from "./spending-clarity"
 
 export type PostImportReviewRow = {
   categoria?: string | null
   descricao?: string | null
+  responsavel?: string | null
   tipo?: string | null
   valor?: number | null
   data?: string | null
+}
+
+export type PostImportTopConsumptionCategory = {
+  categoria: string
+  total: number
+  percentual: number
+  lancamentos: number
+  reviewHref: string
+}
+
+export type PostImportPeriodSummary = {
+  mode: "consumption_focus" | "non_consumption_dominant" | "insufficient_base"
+  totalConsumptionValue: number
+  totalNonConsumptionValue: number
+  topConsumptionCategories: PostImportTopConsumptionCategory[]
+  attentionCategory: string | null
+  attentionPercent: number | null
+  leaderReviewHref: string | null
 }
 
 export type PostImportReviewContext = {
@@ -15,6 +35,7 @@ export type PostImportReviewContext = {
   ambiguousRows: number
   ambiguousValue: number
   ambiguousReviewHref: string | null
+  periodSummary: PostImportPeriodSummary
   periodReviewHref: string
   periodLabel: string
 }
@@ -58,8 +79,55 @@ function resolveImportPeriod(rows: PostImportReviewRow[]) {
   }
 }
 
+function buildCategoryReviewHref(month: string, year: string, category: string): string {
+  return `/transacoes?month=${month}&year=${year}&category=${encodeURIComponent(category)}&sort=value_desc`
+}
+
+function buildPeriodSummary(rows: PostImportReviewRow[], month: string, year: string): PostImportPeriodSummary {
+  const snapshot = buildSpendingClaritySnapshot(
+    rows.map((row) => ({
+      valor: Number(row.valor) || 0,
+      tipo: row.tipo || "Saida",
+      categoria: row.categoria || "Sem categoria",
+      responsavel: row.responsavel || "Casal",
+      status: null,
+    })),
+    []
+  ).Todos
+
+  const topConsumptionCategories = snapshot.topCategorias.map((item) => ({
+    categoria: item.categoria,
+    total: item.total,
+    percentual: item.percentual,
+    lancamentos: item.lancamentos,
+    reviewHref: buildCategoryReviewHref(month, year, item.categoria),
+  }))
+
+  const totalConsumptionValue = Number(snapshot.totalSaidasRealizadas || 0)
+  const totalNonConsumptionValue = Number(snapshot.totalSaidasDesconsideradas || 0)
+  const leader = topConsumptionCategories[0] || null
+
+  const mode: PostImportPeriodSummary["mode"] =
+    totalConsumptionValue > 0
+      ? "consumption_focus"
+      : totalNonConsumptionValue > 0
+        ? "non_consumption_dominant"
+        : "insufficient_base"
+
+  return {
+    mode,
+    totalConsumptionValue,
+    totalNonConsumptionValue,
+    topConsumptionCategories,
+    attentionCategory: leader?.categoria || null,
+    attentionPercent: leader?.percentual ?? null,
+    leaderReviewHref: leader?.reviewHref || null,
+  }
+}
+
 export function buildPostImportReviewContext(rows: PostImportReviewRow[]): PostImportReviewContext {
   const period = resolveImportPeriod(rows)
+  const periodSummary = buildPeriodSummary(rows, period.month, period.year)
   const outrosRows = rows.filter((row) => isGenericCategory(row.categoria)).length
   const outrosValue = rows
     .filter((row) => isGenericCategory(row.categoria))
@@ -81,6 +149,7 @@ export function buildPostImportReviewContext(rows: PostImportReviewRow[]): PostI
       ambiguousRows,
       ambiguousValue,
       ambiguousReviewHref,
+      periodSummary,
       periodReviewHref: period.periodReviewHref,
       periodLabel: period.periodLabel,
     }
@@ -93,8 +162,8 @@ export function buildPostImportReviewContext(rows: PostImportReviewRow[]): PostI
     ambiguousRows,
     ambiguousValue,
     ambiguousReviewHref,
+    periodSummary,
     periodReviewHref: period.periodReviewHref,
     periodLabel: period.periodLabel,
   }
 }
-

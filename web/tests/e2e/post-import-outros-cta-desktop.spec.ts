@@ -53,6 +53,18 @@ test.describe('Post-import Outros review CTA (desktop)', () => {
         timeout: 180000,
       });
 
+      const summaryTitle = page.getByText(/Resumo inteligente do periodo importado/i).first();
+      await expect(summaryTitle).toBeVisible({ timeout: 15000 });
+      const leaderCta = page.getByRole('button', { name: /Revisar categoria lider no extrato/i }).first();
+      await expect(leaderCta).toBeVisible({ timeout: 15000 });
+      const leaderHref = await leaderCta.evaluate((element) => {
+        const anchor = element.closest('a');
+        return anchor?.getAttribute('href');
+      });
+      expect(leaderHref).toContain(`/transacoes?month=${month}&year=${year}`);
+      expect(leaderHref).toContain('category=');
+      expect(leaderHref).toContain('sort=value_desc');
+
       const outrosContext = page.getByText(/Restaram\s+\d+\s+linha\(s\)\s+em\s+"Outros"\s+somando/i).first();
       await expect(outrosContext).toBeVisible({ timeout: 15000 });
 
