@@ -16,6 +16,7 @@ import { isAmbiguousReviewCandidate } from '@/lib/ambiguous-review'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
+import type { LatestImportedPeriodReading } from '@/lib/latest-imported-period-reading'
 
 interface Transaction {
   id: string
@@ -37,6 +38,7 @@ interface TransacoesClientProps {
   initialSort?: "date_desc" | "value_desc" | "value_asc"
   initialReview?: "all" | "ambiguous"
   initialResponsavelFromUrl?: "Todos" | "Luan" | "Luana" | "Casal" | null
+  latestImportedPeriodReading?: LatestImportedPeriodReading | null
 }
 
 const SPRING_TRANSITION = { type: "spring" as const, bounce: 0.4, duration: 0.8 }
@@ -76,6 +78,7 @@ export function TransacoesClientShell({
   initialSort = "date_desc",
   initialReview = "all",
   initialResponsavelFromUrl = null,
+  latestImportedPeriodReading = null,
 }: TransacoesClientProps) {
   const { responsavel, setResponsavel } = useFilter()
   const router = useRouter()
@@ -290,6 +293,45 @@ export function TransacoesClientShell({
           <AddTransactionDialog cartoes={initialCartoes} variant="secondary" />
         </div>
       </motion.div>
+
+      {latestImportedPeriodReading && (
+        <motion.div variants={scaleUpVariant}>
+          <Card className="border border-border bg-card shadow-sm" data-testid="latest-imported-reading-card">
+            <CardContent className="p-5 space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Ultima leitura util do periodo importado ({latestImportedPeriodReading.periodLabel})
+              </p>
+              <p className="text-sm text-foreground">{latestImportedPeriodReading.primaryAttentionText}</p>
+              {latestImportedPeriodReading.confidenceLimiterText && (
+                <p className="text-xs text-amber-700 dark:text-amber-400">
+                  Limitador atual: {latestImportedPeriodReading.confidenceLimiterText}
+                </p>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Proxima acao: {latestImportedPeriodReading.nextActionText}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Ganho esperado: {latestImportedPeriodReading.expectedConfidenceImpact}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Fortalecimento observado: {latestImportedPeriodReading.strengtheningText}
+              </p>
+              <div className="flex flex-wrap gap-2 pt-1">
+                <Link href={latestImportedPeriodReading.nextActionHref}>
+                  <Button variant="default" size="sm">
+                    {latestImportedPeriodReading.nextActionLabel}
+                  </Button>
+                </Link>
+                <Link href={latestImportedPeriodReading.periodReviewHref}>
+                  <Button variant="outline" size="sm">
+                    Abrir extrato do periodo
+                  </Button>
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
 
       {/* Filters & Summary Dashboard */}
       <motion.div variants={scaleUpVariant} className="grid grid-cols-1 md:grid-cols-12 gap-6">

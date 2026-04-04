@@ -1,7 +1,8 @@
-import { getTransactions, deleteTransaction } from "@/actions/transactions"
+import { getTransactions } from "@/actions/transactions"
 import { getContasBancarias, getCartoesCredito } from "@/actions/accounts"
 import { TransacoesClientShell } from "./transacoes-client"
 import { createClient } from "@/utils/supabase/server"
+import { buildLatestImportedPeriodReading } from "@/lib/latest-imported-period-reading"
 import { redirect } from "next/navigation"
 
 import { cookies } from "next/headers"
@@ -74,6 +75,41 @@ export default async function TransacoesPage({ searchParams }: { searchParams: P
 
   // Lote fatiado! Overfetch evitado na fonte.
   const transactions = await getTransactions(monthParam, yearParam)
+
+  let latestImportedPeriodReading = null
+  const { data: latestImportedTx } = await supabase
+    .from("transacoes")
+    .select("data")
+    .ilike("origem", "%import%")
+    .order("data", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (latestImportedTx?.data) {
+    const latestImportedDate = new Date(latestImportedTx.data)
+    if (!Number.isNaN(latestImportedDate.getTime())) {
+      const importedMonth = latestImportedDate.getUTCMonth() + 1
+      const importedYear = latestImportedDate.getUTCFullYear()
+      const latestPeriodRowsRaw =
+        importedMonth === monthParam && importedYear === yearParam
+          ? transactions
+          : await getTransactions(importedMonth, importedYear)
+
+      const latestPeriodRows = (latestPeriodRowsRaw || []).map((row: any) => ({
+        categoria: row.categoria,
+        descricao: row.descricao,
+        responsavel: row.responsavel,
+        tipo: row.tipo,
+        status: row.status,
+        origem: row.origem,
+        valor: Number(row.valor) || 0,
+        data: row.data,
+      }))
+
+      latestImportedPeriodReading = buildLatestImportedPeriodReading(latestPeriodRows)
+    }
+  }
+
   const cartoes = await getCartoesCredito()
   const categoryParam = asSingleValue(resolvedParams?.category);
   const initialCategory =
@@ -109,6 +145,7 @@ export default async function TransacoesPage({ searchParams }: { searchParams: P
          initialSort={initialSort}
          initialReview={initialReview}
          initialResponsavelFromUrl={initialResponsavelFromUrl}
+         latestImportedPeriodReading={latestImportedPeriodReading}
       />
     </div>
   )

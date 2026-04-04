@@ -90,6 +90,8 @@ test.describe('Post-import Outros review CTA (desktop)', () => {
       const ambiguousUrl = new URL(ambiguousHref!, appUrl).toString();
       await ambiguousPage.goto(ambiguousUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
       await expect(ambiguousPage.getByTestId('filter-year')).toBeVisible({ timeout: 15000 });
+      await expect(ambiguousPage.getByTestId('latest-imported-reading-card')).toBeVisible({ timeout: 15000 });
+      await expect(ambiguousPage.getByText(/Ultima leitura util do periodo importado/i).first()).toBeVisible({ timeout: 15000 });
 
       const ambiguousCurrentUrl = new URL(ambiguousPage.url());
       expect(ambiguousCurrentUrl.pathname).toBe('/transacoes');
