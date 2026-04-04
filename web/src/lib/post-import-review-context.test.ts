@@ -166,6 +166,28 @@ describe('buildPostImportReviewContext', () => {
     expect(result.strengtheningSummary.text).toContain('cobertura evoluiu')
   })
 
+  it('evolui de partial para ready quando importacoes do periodo entram com responsavel correto', () => {
+    const firstImport = [
+      { categoria: 'Moradia', valor: 700, data: '2026-03-02T00:00:00.000Z', tipo: 'Saida', responsavel: 'Luan', origem: 'Importacao', status: 'Realizado' },
+    ]
+    const partial = buildPostImportReviewContext(firstImport, firstImport)
+
+    expect(partial.consolidatedSummary.coverage.status).toBe('partial')
+    expect(partial.periodPriorities.nextAction.actionHref).toBe('/conciliacao')
+
+    const secondImport = [
+      { categoria: 'Alimentacao', valor: 320, data: '2026-03-03T00:00:00.000Z', tipo: 'Saida', responsavel: 'Luana', origem: 'Importacao', status: 'Realizado' },
+    ]
+    const consolidatedPeriod = [...firstImport, ...secondImport]
+    const ready = buildPostImportReviewContext(secondImport, consolidatedPeriod)
+
+    expect(ready.consolidatedSummary.coverage.status).toBe('ready')
+    expect(ready.consolidatedSummary.coverage.importedResponsaveis).toEqual(
+      expect.arrayContaining(['Luan', 'Luana'])
+    )
+    expect(ready.periodPriorities.nextAction.actionHref).not.toBe('/conciliacao')
+  })
+
   it('prioriza revisao ambigua quando valor ambiguo relevante persiste', () => {
     const result = buildPostImportReviewContext(
       [

@@ -14,6 +14,11 @@ import { findBestMatch, parseDate, parseMoney } from '@/lib/reconciliation-logic
 import { categorizeImportedDescription, deriveRuleTextFromDescription } from '@/lib/csv-categorization'
 import { extractCanonicalCsvFields } from '@/lib/csv-column-normalization'
 import { buildPostImportReviewContext } from '@/lib/post-import-review-context'
+import {
+  applyCsvImportResponsavelDefault,
+  markCsvImportResponsavelAsManual,
+  resolveCsvImportResponsavelFromConta,
+} from '@/lib/csv-import-responsavel'
 import { Upload, Check, AlertCircle, Loader2, FileSpreadsheet, PlusCircle, Info } from 'lucide-react'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
@@ -168,6 +173,7 @@ export function CsvImporter() {
     Papa.parse(file, {
       header: true,
              complete: async (results) => {
+          const defaultResponsavel = resolveCsvImportResponsavelFromConta(contaAtual?.responsavel)
           let lastValidDate = new Date().toISOString();
           const normalized = results.data.map((row: any, index) => {
             const fields = extractCanonicalCsvFields(row || {})
@@ -183,7 +189,8 @@ export function CsvImporter() {
               descricao: desc,
               valor: parsedValue,
               categoria: aplicarRegras(desc),
-              responsavel: "Casal",
+              responsavel: defaultResponsavel,
+              responsavelAuto: true,
               tipo: (parsedValue < 0 ? "Sa\u00EDda" : "Entrada") as "Entrada" | "Sa\u00EDda",
               missingDescription: !rawDescription
             }
@@ -272,13 +279,28 @@ export function CsvImporter() {
     setData(newData)
   }
 
+  const updateResponsavelRow = (index: number, responsavel: "Casal" | "Luan" | "Luana") => {
+    const newData = [...data]
+    newData[index] = markCsvImportResponsavelAsManual(newData[index], responsavel)
+    setData(newData)
+  }
+
+  const handleContaSelecionadaChange = (nextContaId: string) => {
+    setContaSelecionada(nextContaId)
+    if (data.length === 0) return
+
+    const selectedConta = contas.find(conta => conta.id === nextContaId)
+    const nextResponsavel = resolveCsvImportResponsavelFromConta(selectedConta?.responsavel)
+    setData((prev) => applyCsvImportResponsavelDefault(prev, nextResponsavel))
+  }
+
   const handleImport = async () => {
     if (isSubmittingRef.current) return; // True synchronous lock via ref
     isSubmittingRef.current = true;
     setIsUploading(true)
     const valids = data.filter(r => r.acao !== "Duplicado")
     
-    const payload = valids.map(({ id, acao, matchLevel, matchCandidateId, isSplitGroup, matchScore, missingDescription, ...rest }) => ({
+    const payload = valids.map(({ id, acao, matchLevel, matchCandidateId, isSplitGroup, matchScore, missingDescription, responsavelAuto, ...rest }) => ({
         ...rest,
         conta_id: contaSelecionada !== "none" ? contaSelecionada : null,
         _acao: acao,
@@ -310,7 +332,7 @@ export function CsvImporter() {
                 descricao: "Ajuste de saldo inicial",
                 valor: Math.abs(saldoAnterior),
                 categoria: "Outros", 
-                responsavel: "Casal",
+                responsavel: resolveCsvImportResponsavelFromConta(contaAtual?.responsavel),
                 tipo: saldoAnterior > 0 ? "Entrada" : "Saída",
                 conta_id: contaSelecionada !== "none" ? contaSelecionada : null
             })
@@ -421,7 +443,7 @@ export function CsvImporter() {
               <span className="text-sm shrink-0">({data.length} linhas)</span>
             </div>
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
-               <Select value={contaSelecionada} onValueChange={setContaSelecionada}>
+               <Select value={contaSelecionada} onValueChange={handleContaSelecionadaChange}>
                   <SelectTrigger className="w-full sm:w-[250px]">
                     <SelectValue placeholder="Vincular a uma conta..." />
                   </SelectTrigger>
@@ -690,7 +712,7 @@ export function CsvImporter() {
                     </TableCell>
 
                     <TableCell>
-                      <Select value={row.responsavel} onValueChange={(val) => updateRow(index, 'responsavel', val)}>
+                      <Select value={row.responsavel} onValueChange={(val) => updateResponsavelRow(index, val as "Casal" | "Luan" | "Luana")}>
                         <SelectTrigger className="h-8 w-[130px] border-primary/20 bg-primary/5 text-primary-foreground dark:text-primary">
                           <SelectValue />
                         </SelectTrigger>
