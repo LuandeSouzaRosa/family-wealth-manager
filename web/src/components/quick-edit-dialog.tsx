@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select"
 import { quickEditTransaction } from "@/actions/transactions"
 import { Edit3, Loader2 } from "lucide-react"
+import { useRouter } from "next/navigation"
 
 export function QuickEditTransactionDialog({ 
     transaction, 
@@ -34,6 +35,7 @@ export function QuickEditTransactionDialog({
   const [responsavel, setResponsavel] = React.useState(transaction.responsavel || "Casal")
   const [isPending, startTransition] = useTransition()
   const isSubmittingRef = useRef(false)
+  const router = useRouter()
 
   const CATEGORIAS_FALLBACK = ["Moradia", "Alimentação", "Transporte", "Saúde", "Educação", "Lazer", "Outros", "Salário", "Investimentos"]
   const categorias = categoriasValidas.length > 0 ? categoriasValidas : CATEGORIAS_FALLBACK
@@ -49,6 +51,7 @@ export function QuickEditTransactionDialog({
           alert(res.error)
         } else {
           setOpen(false)
+          router.refresh()
         }
       } finally {
         isSubmittingRef.current = false;
@@ -59,7 +62,12 @@ export function QuickEditTransactionDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary transition-colors">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 text-muted-foreground hover:text-primary transition-colors"
+          data-testid="btn-quick-edit-transaction"
+        >
             <Edit3 className="h-4 w-4" />
         </Button>
       </DialogTrigger>
@@ -76,7 +84,7 @@ export function QuickEditTransactionDialog({
             <label className="text-right text-sm font-medium">Categoria</label>
             <div className="col-span-3">
               <Select value={categoria} onValueChange={setCategoria}>
-                <SelectTrigger>
+                <SelectTrigger data-testid="quick-edit-categoria">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -91,7 +99,7 @@ export function QuickEditTransactionDialog({
              <label className="text-right text-sm font-medium">Responsável</label>
              <div className="col-span-3">
                <Select value={responsavel} onValueChange={setResponsavel}>
-                 <SelectTrigger>
+                 <SelectTrigger data-testid="quick-edit-responsavel">
                    <SelectValue />
                  </SelectTrigger>
                  <SelectContent>
@@ -105,7 +113,7 @@ export function QuickEditTransactionDialog({
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)} disabled={isPending}>Cancelar</Button>
-          <Button onClick={handleSave} disabled={isPending}>
+          <Button onClick={handleSave} disabled={isPending} data-testid="btn-quick-edit-salvar">
              {isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null} Salvar
           </Button>
         </DialogFooter>

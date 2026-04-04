@@ -231,7 +231,14 @@ export function TransacoesClientShell({
 
     if(confirm(msg)) {
       startTransition(() => {
-        deleteTransaction(tx.id)
+        void (async () => {
+          const result = await deleteTransaction(tx.id)
+          if (result && "error" in result && result.error) {
+            alert(result.error)
+            return
+          }
+          router.refresh()
+        })()
       })
     }
   }
