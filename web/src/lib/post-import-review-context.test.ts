@@ -20,6 +20,10 @@ describe('buildPostImportReviewContext', () => {
     expect(result.periodSummary.leaderReviewHref).toBe('/transacoes?month=3&year=2026&category=Alimentacao&sort=value_desc')
     expect(result.consolidatedSummary.coverage.status).toBe('unknown')
     expect(result.consolidatedSummary.views).toHaveLength(3)
+    expect(result.periodPriorities.target).toBe('Casal')
+    expect(result.periodPriorities.primaryAttention.text).toContain('Alimentacao')
+    expect(result.periodPriorities.confidenceLimiter?.text).toContain('cobertura do casal ainda nao confirmada')
+    expect(result.periodPriorities.nextAction.actionHref).toBe('/transacoes?month=3&year=2026&sort=value_desc')
     expect(result.periodReviewHref).toBe('/transacoes?month=3&year=2026&sort=value_desc')
     expect(result.periodLabel).toBe('03/2026')
   })
@@ -127,5 +131,47 @@ describe('buildPostImportReviewContext', () => {
     const casal = result.consolidatedSummary.views.find((view) => view.responsavel === 'Casal')
     expect(casal?.mode).toBe('non_consumption_dominant')
     expect(casal?.totalNonConsumptionValue).toBe(1100)
+    expect(result.periodPriorities.target).toBe('Luan')
+    expect(result.periodPriorities.primaryAttention.actionHref).toBe(
+      '/transacoes?month=3&year=2026&category=Moradia&sort=value_desc&responsavel=Luan'
+    )
+    expect(result.periodPriorities.confidenceLimiter).toBeNull()
+    expect(result.periodPriorities.nextAction.actionHref).toBe(
+      '/transacoes?month=3&year=2026&category=Moradia&sort=value_desc&responsavel=Luan'
+    )
+  })
+
+  it('prioriza completar cobertura quando leitura do casal esta parcial', () => {
+    const result = buildPostImportReviewContext(
+      [
+        { categoria: 'Moradia', valor: 700, data: '2026-03-02T00:00:00.000Z', tipo: 'Saida', responsavel: 'Luan' },
+      ],
+      [
+        { categoria: 'Moradia', valor: 700, data: '2026-03-02T00:00:00.000Z', tipo: 'Saida', responsavel: 'Luan', origem: 'Importacao', status: 'Realizado' },
+      ]
+    )
+
+    expect(result.consolidatedSummary.coverage.status).toBe('partial')
+    expect(result.periodPriorities.confidenceLimiter?.actionHref).toBe('/conciliacao')
+    expect(result.periodPriorities.nextAction.actionHref).toBe('/conciliacao')
+    expect(result.periodPriorities.nextAction.text).toContain('completar a visao consolidada do casal')
+  })
+
+  it('prioriza revisao ambigua quando valor ambiguo relevante persiste', () => {
+    const result = buildPostImportReviewContext(
+      [
+        { categoria: 'Moradia', valor: 950, data: '2026-03-02T00:00:00.000Z', tipo: 'Saida', responsavel: 'Casal' },
+        { categoria: 'Outros', descricao: 'PIX ENVIADO', valor: 420, data: '2026-03-03T00:00:00.000Z', tipo: 'Saida', responsavel: 'Casal' },
+      ],
+      [
+        { categoria: 'Moradia', valor: 950, data: '2026-03-02T00:00:00.000Z', tipo: 'Saida', responsavel: 'Casal', origem: 'Importacao', status: 'Realizado' },
+        { categoria: 'Outros', descricao: 'PIX ENVIADO', valor: 420, data: '2026-03-03T00:00:00.000Z', tipo: 'Saida', responsavel: 'Casal', origem: 'Importacao', status: 'Realizado' },
+      ]
+    )
+
+    expect(result.consolidatedSummary.coverage.status).toBe('ready')
+    expect(result.periodPriorities.confidenceLimiter?.actionHref).toBe('/transacoes?month=3&year=2026&review=ambiguous&sort=value_desc&responsavel=Casal')
+    expect(result.periodPriorities.nextAction.actionHref).toBe('/transacoes?month=3&year=2026&review=ambiguous&sort=value_desc&responsavel=Casal')
+    expect(result.periodPriorities.nextAction.text).toContain('revisar primeiro os ambiguos de maior impacto')
   })
 })

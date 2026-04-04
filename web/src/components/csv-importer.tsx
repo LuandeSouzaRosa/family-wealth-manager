@@ -115,6 +115,24 @@ export function CsvImporter() {
         ambiguousReviewHref: string | null;
       }>;
     };
+    periodPriorities: {
+      target: "Luan" | "Luana" | "Casal" | "Periodo";
+      primaryAttention: {
+        text: string;
+        actionLabel: string;
+        actionHref: string;
+      };
+      confidenceLimiter: {
+        text: string;
+        actionLabel: string;
+        actionHref: string;
+      } | null;
+      nextAction: {
+        text: string;
+        actionLabel: string;
+        actionHref: string;
+      };
+    };
     periodSummary: {
       mode: "consumption_focus" | "non_consumption_dominant" | "insufficient_base";
       totalConsumptionValue: number;
@@ -345,12 +363,13 @@ export function CsvImporter() {
            reviewHref: reviewContext.reviewHref,
            ambiguousRows: reviewContext.ambiguousRows,
            ambiguousValue: reviewContext.ambiguousValue,
-           ambiguousReviewHref: reviewContext.ambiguousReviewHref,
-           consolidatedSummary: reviewContext.consolidatedSummary,
-           periodSummary: reviewContext.periodSummary,
-           periodReviewHref: reviewContext.periodReviewHref,
-           periodLabel: reviewContext.periodLabel,
-        })
+            ambiguousReviewHref: reviewContext.ambiguousReviewHref,
+            consolidatedSummary: reviewContext.consolidatedSummary,
+            periodPriorities: reviewContext.periodPriorities,
+            periodSummary: reviewContext.periodSummary,
+            periodReviewHref: reviewContext.periodReviewHref,
+            periodLabel: reviewContext.periodLabel,
+         })
         toast.success("Lote processado com sucesso!")
         setData([])
         setFileName("")
@@ -818,6 +837,41 @@ export function CsvImporter() {
                 Ressalva: {importReceipt.ambiguousRows} lancamento(s) ambiguo(s) somando {importReceipt.ambiguousValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} ainda podem alterar a leitura final.
               </p>
             )}
+          </div>
+
+          <div className="w-full max-w-3xl rounded-lg border border-border/60 bg-muted/20 p-4 text-sm">
+            <p className="font-medium text-foreground">Prioridades do periodo importado</p>
+            <p className="text-muted-foreground mt-1">{importReceipt.periodPriorities.primaryAttention.text}</p>
+            <Link href={importReceipt.periodPriorities.primaryAttention.actionHref} className="inline-block mt-2">
+              <Button variant="outline" size="sm">
+                {importReceipt.periodPriorities.primaryAttention.actionLabel}
+              </Button>
+            </Link>
+
+            {importReceipt.periodPriorities.confidenceLimiter && (
+              <div className="mt-3 rounded-md border border-amber-500/30 bg-amber-500/10 p-3">
+                <p className="text-amber-800 dark:text-amber-300">
+                  {importReceipt.periodPriorities.confidenceLimiter.text}
+                </p>
+                <Link
+                  href={importReceipt.periodPriorities.confidenceLimiter.actionHref}
+                  className="inline-block mt-2"
+                >
+                  <Button variant="outline" size="sm">
+                    {importReceipt.periodPriorities.confidenceLimiter.actionLabel}
+                  </Button>
+                </Link>
+              </div>
+            )}
+
+            <div className="mt-3 rounded-md border border-border/60 bg-background/70 p-3">
+              <p className="text-muted-foreground">{importReceipt.periodPriorities.nextAction.text}</p>
+              <Link href={importReceipt.periodPriorities.nextAction.actionHref} className="inline-block mt-2">
+                <Button variant="outline" size="sm">
+                  {importReceipt.periodPriorities.nextAction.actionLabel}
+                </Button>
+              </Link>
+            </div>
           </div>
 
           <div className="w-full max-w-3xl rounded-lg border border-border/60 bg-muted/20 p-4 text-sm">

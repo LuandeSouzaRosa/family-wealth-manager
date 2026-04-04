@@ -55,7 +55,11 @@ test.describe('Post-import Outros review CTA (desktop)', () => {
 
       const summaryTitle = page.getByText(/Resumo inteligente do periodo importado/i).first();
       await expect(summaryTitle).toBeVisible({ timeout: 15000 });
-      const leaderCta = page.getByRole('button', { name: /Revisar categoria lider no extrato/i }).first();
+      const prioritiesTitle = page.getByText(/Prioridades do periodo importado/i).first();
+      await expect(prioritiesTitle).toBeVisible({ timeout: 15000 });
+      await expect(page.getByText(/Proxima acao recomendada/i).first()).toBeVisible({ timeout: 15000 });
+
+      const leaderCta = page.getByRole('button', { name: /Revisar lider no extrato|Auditar .* no extrato/i }).first();
       await expect(leaderCta).toBeVisible({ timeout: 15000 });
       const leaderHref = await leaderCta.evaluate((element) => {
         const anchor = element.closest('a');
