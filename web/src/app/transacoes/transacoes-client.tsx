@@ -117,6 +117,19 @@ export function TransacoesClientShell({
       responsavel,
     })
   }, [latestImportedPeriodReading, month, year, responsavel])
+  const pendingStatusLabel =
+    latestImportedPeriodReading?.pendingSummary.status === "active"
+      ? "ativa"
+      : latestImportedPeriodReading?.pendingSummary.status === "reduced"
+        ? "reduzida"
+        : latestImportedPeriodReading?.pendingSummary.status === "resolved"
+          ? "resolvida"
+          : "sem pendencia relevante"
+  const hasAlignmentCta = Boolean(readingAlignment?.ctaHref && readingAlignment?.ctaLabel)
+  const hasPendingShortcut =
+    !!latestImportedPeriodReading &&
+    (latestImportedPeriodReading.pendingSummary.actionHref !== latestImportedPeriodReading.nextActionHref ||
+      latestImportedPeriodReading.pendingSummary.actionLabel !== latestImportedPeriodReading.nextActionLabel)
 
   useEffect(() => {
     setSelectedCategory(initialCategory)
@@ -313,34 +326,13 @@ export function TransacoesClientShell({
       {latestImportedPeriodReading && (
         <motion.div variants={scaleUpVariant}>
           <Card className="border border-border bg-card shadow-sm" data-testid="latest-imported-reading-card">
-            <CardContent className="p-5 space-y-3">
+            <CardContent className="p-4 md:p-5 space-y-3">
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Ultima leitura util do periodo importado ({latestImportedPeriodReading.periodLabel})
               </p>
-              <p className="text-xs text-muted-foreground">
-                Contexto temporal: {latestImportedPeriodReading.temporalSummary.periodStatusText}{" "}
-                {latestImportedPeriodReading.temporalSummary.lastImportedTransactionDate
-                  ? `Referencia mais recente no periodo em ${latestImportedPeriodReading.temporalSummary.lastImportedTransactionDate}.`
-                  : "Referencia de data importada indisponivel."}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Recencia: {latestImportedPeriodReading.temporalSummary.recencyHint}
-              </p>
-              {readingAlignment && (
-                <p className="text-xs text-muted-foreground" data-testid="latest-reading-alignment">
-                  Coerencia com filtros ativos: {readingAlignment.text}
-                </p>
-              )}
               <p className="text-sm text-foreground">{latestImportedPeriodReading.primaryAttentionText}</p>
               <p className="text-xs text-muted-foreground">
-                Pendencia principal ({latestImportedPeriodReading.pendingSummary.status === "active"
-                  ? "ativa"
-                  : latestImportedPeriodReading.pendingSummary.status === "reduced"
-                    ? "reduzida"
-                    : latestImportedPeriodReading.pendingSummary.status === "resolved"
-                      ? "resolvida"
-                      : "sem pendencia relevante"}
-                ): {latestImportedPeriodReading.pendingSummary.text}
+                Pendencia principal ({pendingStatusLabel}): {latestImportedPeriodReading.pendingSummary.text}
               </p>
               {latestImportedPeriodReading.confidenceLimiterText && (
                 <p className="text-xs text-amber-700 dark:text-amber-400">
@@ -348,37 +340,92 @@ export function TransacoesClientShell({
                 </p>
               )}
               <p className="text-xs text-muted-foreground">
-                Proxima acao: {latestImportedPeriodReading.nextActionText}
+                Contexto temporal: {latestImportedPeriodReading.temporalSummary.periodStatusText}{" "}
+                {latestImportedPeriodReading.temporalSummary.lastImportedTransactionDate
+                  ? `Referencia mais recente no periodo em ${latestImportedPeriodReading.temporalSummary.lastImportedTransactionDate}.`
+                  : "Referencia de data importada indisponivel."}
               </p>
-              <p className="text-xs text-muted-foreground">
-                Ganho esperado: {latestImportedPeriodReading.expectedConfidenceImpact}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Fortalecimento observado: {latestImportedPeriodReading.strengtheningText}
-              </p>
-              <div className="flex flex-wrap gap-2 pt-1">
-                {readingAlignment?.ctaHref && readingAlignment.ctaLabel && (
+              {readingAlignment && (
+                <p className="text-xs text-muted-foreground" data-testid="latest-reading-alignment">
+                  Coerencia com filtros ativos: {readingAlignment.text}
+                </p>
+              )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                <Link href={latestImportedPeriodReading.nextActionHref}>
+                  <Button variant="default" size="sm" className="w-full">
+                    {latestImportedPeriodReading.nextActionLabel}
+                  </Button>
+                </Link>
+                {hasAlignmentCta && readingAlignment?.ctaHref && readingAlignment?.ctaLabel && (
                   <Link href={readingAlignment.ctaHref}>
-                    <Button variant="outline" size="sm">
+                    <Button variant="outline" size="sm" className="w-full">
                       {readingAlignment.ctaLabel}
                     </Button>
                   </Link>
                 )}
-                <Link href={latestImportedPeriodReading.pendingSummary.actionHref}>
-                  <Button variant="outline" size="sm">
-                    {latestImportedPeriodReading.pendingSummary.actionLabel}
-                  </Button>
-                </Link>
-                <Link href={latestImportedPeriodReading.nextActionHref}>
-                  <Button variant="default" size="sm">
-                    {latestImportedPeriodReading.nextActionLabel}
-                  </Button>
-                </Link>
-                <Link href={latestImportedPeriodReading.periodReviewHref}>
-                  <Button variant="outline" size="sm">
-                    Abrir extrato do periodo
-                  </Button>
-                </Link>
+              </div>
+              <div className="md:hidden">
+                <details className="rounded-md border border-border/60 bg-muted/20">
+                  <summary className="cursor-pointer list-none px-3 py-2 text-xs text-muted-foreground">
+                    Mais contexto desta leitura
+                  </summary>
+                  <div className="px-3 pb-3 space-y-2">
+                    <p className="text-xs text-muted-foreground">
+                      Recencia: {latestImportedPeriodReading.temporalSummary.recencyHint}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Proxima acao: {latestImportedPeriodReading.nextActionText}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Ganho esperado: {latestImportedPeriodReading.expectedConfidenceImpact}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Fortalecimento observado: {latestImportedPeriodReading.strengtheningText}
+                    </p>
+                    <div className="flex flex-col gap-2">
+                      {hasPendingShortcut && (
+                        <Link href={latestImportedPeriodReading.pendingSummary.actionHref}>
+                          <Button variant="outline" size="sm" className="w-full">
+                            {latestImportedPeriodReading.pendingSummary.actionLabel}
+                          </Button>
+                        </Link>
+                      )}
+                      <Link href={latestImportedPeriodReading.periodReviewHref}>
+                        <Button variant="outline" size="sm" className="w-full">
+                          Abrir extrato do periodo
+                        </Button>
+                      </Link>
+                    </div>
+                  </div>
+                </details>
+              </div>
+              <div className="hidden md:block space-y-3">
+                <p className="text-xs text-muted-foreground">
+                  Recencia: {latestImportedPeriodReading.temporalSummary.recencyHint}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Proxima acao: {latestImportedPeriodReading.nextActionText}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Ganho esperado: {latestImportedPeriodReading.expectedConfidenceImpact}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Fortalecimento observado: {latestImportedPeriodReading.strengtheningText}
+                </p>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {hasPendingShortcut && (
+                    <Link href={latestImportedPeriodReading.pendingSummary.actionHref}>
+                      <Button variant="outline" size="sm">
+                        {latestImportedPeriodReading.pendingSummary.actionLabel}
+                      </Button>
+                    </Link>
+                  )}
+                  <Link href={latestImportedPeriodReading.periodReviewHref}>
+                    <Button variant="outline" size="sm">
+                      Abrir extrato do periodo
+                    </Button>
+                  </Link>
+                </div>
               </div>
             </CardContent>
           </Card>

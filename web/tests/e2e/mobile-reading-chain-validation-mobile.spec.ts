@@ -300,9 +300,8 @@ test.describe('Mobile reading chain validation', () => {
       await page.getByRole('option', { name: 'Moradia', exact: true }).click();
       await page.getByTestId('btn-quick-edit-salvar').click();
 
-      await expect(mobileTransactionsList.locator('div.p-4').filter({ hasText: lote1PixDesc })).toHaveCount(0, {
-        timeout: 15000,
-      });
+      await expect(page.getByRole('heading', { name: /Revis/i })).toHaveCount(0, { timeout: 15000 });
+      await expect(page.getByTestId('latest-imported-reading-card')).toBeVisible({ timeout: 15000 });
       await expect(
         page.getByText(/Pendencia principal \((ativa|reduzida|resolvida|sem pendencia relevante)\)/i).first()
       ).toBeVisible({ timeout: 15000 });
