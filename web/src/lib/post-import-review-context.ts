@@ -76,6 +76,7 @@ export type PostImportPrioritiesSummary = {
   primaryAttention: PostImportPriorityAction
   confidenceLimiter: PostImportPriorityLimiter
   nextAction: PostImportPriorityAction
+  expectedConfidenceImpact: string
 }
 
 export type PostImportReviewContext = {
@@ -479,6 +480,33 @@ function buildNextAction(
   }
 }
 
+function buildExpectedConfidenceImpact(
+  targetView: PostImportResponsibleSummary | null,
+  summary: PostImportConsolidatedSummary
+): string {
+  if (summary.coverage.status === "partial") {
+    return "Concluir esta acao fortalece a visao do casal ao reduzir leitura parcial neste periodo."
+  }
+
+  if (summary.coverage.status === "unknown") {
+    return "Concluir esta acao valida a cobertura do recorte e reduz o risco de interpretar um periodo incompleto."
+  }
+
+  if (targetView && isAmbiguityRelevant(targetView) && targetView.ambiguousReviewHref) {
+    return "Concluir esta acao pode reduzir ambiguidade residual e deixar a prioridade do periodo mais confiavel."
+  }
+
+  if (targetView?.leaderReviewHref && targetView.attentionCategory) {
+    return `Concluir esta acao ajuda a confirmar se ${targetView.attentionCategory} e a principal frente de atencao neste recorte.`
+  }
+
+  if (targetView?.mode === "non_consumption_dominant") {
+    return "Concluir esta acao ajuda a separar movimentacao financeira de consumo real antes de sugerir controle."
+  }
+
+  return "Concluir esta acao melhora a validacao dos maiores valores e reduz leitura superficial do periodo."
+}
+
 function buildPeriodPriorities(
   summary: PostImportConsolidatedSummary,
   periodReviewHref: string
@@ -490,6 +518,7 @@ function buildPeriodPriorities(
     primaryAttention: buildPrimaryAttention(targetView, summary.coverage.status, periodReviewHref),
     confidenceLimiter: buildConfidenceLimiter(targetView, summary, periodReviewHref),
     nextAction: buildNextAction(targetView, summary, periodReviewHref),
+    expectedConfidenceImpact: buildExpectedConfidenceImpact(targetView, summary),
   }
 }
 

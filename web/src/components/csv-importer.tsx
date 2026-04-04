@@ -132,6 +132,7 @@ export function CsvImporter() {
         actionLabel: string;
         actionHref: string;
       };
+      expectedConfidenceImpact: string;
     };
     periodSummary: {
       mode: "consumption_focus" | "non_consumption_dominant" | "insufficient_base";
@@ -871,6 +872,9 @@ export function CsvImporter() {
                   {importReceipt.periodPriorities.nextAction.actionLabel}
                 </Button>
               </Link>
+              <p className="text-xs text-muted-foreground mt-2">
+                Ganho esperado: {importReceipt.periodPriorities.expectedConfidenceImpact}
+              </p>
             </div>
           </div>
 
