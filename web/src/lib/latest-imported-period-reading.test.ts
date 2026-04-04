@@ -31,7 +31,7 @@ describe("latest-imported-period-reading", () => {
       {
         categoria: "Outros",
         descricao: "PIX ENVIADO",
-        valor: 420,
+        valor: 280,
         tipo: "Saida",
         data: "2026-03-05T00:00:00.000Z",
         origem: "Importacao",
@@ -54,6 +54,90 @@ describe("latest-imported-period-reading", () => {
     expect(reading?.nextActionHref).toContain("/transacoes?month=3&year=2026")
     expect(reading?.expectedConfidenceImpact.length).toBeGreaterThan(10)
     expect(reading?.strengtheningText.length).toBeGreaterThan(10)
+    expect(reading?.pendingSummary.status).toBe("active")
+    expect(reading?.pendingSummary.text).toContain("Pendencia principal deste periodo")
+  })
+
+  it("marca pendencia como reduzida quando houve fortalecimento parcial com limitador ainda ativo", () => {
+    const reading = buildLatestImportedPeriodReading([
+      {
+        categoria: "Moradia",
+        valor: 500,
+        tipo: "Saida",
+        data: "2026-03-04T00:00:00.000Z",
+        origem: "Importacao",
+        status: "Realizado",
+        responsavel: "Luan",
+      },
+      {
+        categoria: "Moradia",
+        valor: 1500,
+        tipo: "Saida",
+        data: "2026-03-05T00:00:00.000Z",
+        origem: "Manual",
+        status: "Realizado",
+        responsavel: "Casal",
+      },
+    ])
+
+    expect(reading).not.toBeNull()
+    expect(reading?.pendingSummary.status).toBe("reduced")
+    expect(reading?.pendingSummary.text).toContain("perdeu forca")
+  })
+
+  it("marca pendencia como resolvida quando limitador some apos consolidacao", () => {
+    const reading = buildLatestImportedPeriodReading([
+      {
+        categoria: "Outros",
+        descricao: "PIX ENVIADO",
+        valor: 280,
+        tipo: "Saida",
+        data: "2026-03-05T00:00:00.000Z",
+        origem: "Importacao",
+        status: "Realizado",
+        responsavel: "Casal",
+      },
+      {
+        categoria: "Moradia",
+        valor: 4000,
+        tipo: "Saida",
+        data: "2026-03-06T00:00:00.000Z",
+        origem: "Manual",
+        status: "Realizado",
+        responsavel: "Casal",
+      },
+    ])
+
+    expect(reading).not.toBeNull()
+    expect(reading?.pendingSummary.status).toBe("resolved")
+    expect(reading?.pendingSummary.text).toContain("pendencia principal anterior foi destravada")
+  })
+
+  it("marca sem pendencia relevante quando leitura ja nasce estavel", () => {
+    const reading = buildLatestImportedPeriodReading([
+      {
+        categoria: "Moradia",
+        valor: 1500,
+        tipo: "Saida",
+        data: "2026-03-05T00:00:00.000Z",
+        origem: "Importacao",
+        status: "Realizado",
+        responsavel: "Casal",
+      },
+      {
+        categoria: "Transporte",
+        valor: 350,
+        tipo: "Saida",
+        data: "2026-03-08T00:00:00.000Z",
+        origem: "Importacao",
+        status: "Realizado",
+        responsavel: "Casal",
+      },
+    ])
+
+    expect(reading).not.toBeNull()
+    expect(reading?.pendingSummary.status).toBe("no_relevant")
+    expect(reading?.pendingSummary.text).toContain("Nao ha pendencia forte")
   })
 
   it("identifica origem de importacao de forma tolerante", () => {
@@ -63,4 +147,3 @@ describe("latest-imported-period-reading", () => {
     expect(isImportedOrigin("Manual")).toBe(false)
   })
 })
-

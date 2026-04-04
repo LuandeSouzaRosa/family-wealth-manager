@@ -302,6 +302,16 @@ export function TransacoesClientShell({
                 Ultima leitura util do periodo importado ({latestImportedPeriodReading.periodLabel})
               </p>
               <p className="text-sm text-foreground">{latestImportedPeriodReading.primaryAttentionText}</p>
+              <p className="text-xs text-muted-foreground">
+                Pendencia principal ({latestImportedPeriodReading.pendingSummary.status === "active"
+                  ? "ativa"
+                  : latestImportedPeriodReading.pendingSummary.status === "reduced"
+                    ? "reduzida"
+                    : latestImportedPeriodReading.pendingSummary.status === "resolved"
+                      ? "resolvida"
+                      : "sem pendencia relevante"}
+                ): {latestImportedPeriodReading.pendingSummary.text}
+              </p>
               {latestImportedPeriodReading.confidenceLimiterText && (
                 <p className="text-xs text-amber-700 dark:text-amber-400">
                   Limitador atual: {latestImportedPeriodReading.confidenceLimiterText}
@@ -317,6 +327,11 @@ export function TransacoesClientShell({
                 Fortalecimento observado: {latestImportedPeriodReading.strengtheningText}
               </p>
               <div className="flex flex-wrap gap-2 pt-1">
+                <Link href={latestImportedPeriodReading.pendingSummary.actionHref}>
+                  <Button variant="outline" size="sm">
+                    {latestImportedPeriodReading.pendingSummary.actionLabel}
+                  </Button>
+                </Link>
                 <Link href={latestImportedPeriodReading.nextActionHref}>
                   <Button variant="default" size="sm">
                     {latestImportedPeriodReading.nextActionLabel}
