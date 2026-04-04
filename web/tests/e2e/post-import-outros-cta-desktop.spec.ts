@@ -59,6 +59,7 @@ test.describe('Post-import Outros review CTA (desktop)', () => {
       await expect(prioritiesTitle).toBeVisible({ timeout: 15000 });
       await expect(page.getByText(/Proxima acao recomendada/i).first()).toBeVisible({ timeout: 15000 });
       await expect(page.getByText(/Ganho esperado:/i).first()).toBeVisible({ timeout: 15000 });
+      await expect(page.getByText(/Fortalecimento observado no resumo/i).first()).toBeVisible({ timeout: 15000 });
 
       const leaderCta = page.getByRole('button', { name: /Revisar lider no extrato|Auditar .* no extrato/i }).first();
       await expect(leaderCta).toBeVisible({ timeout: 15000 });

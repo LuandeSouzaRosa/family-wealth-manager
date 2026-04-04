@@ -134,6 +134,10 @@ export function CsvImporter() {
       };
       expectedConfidenceImpact: string;
     };
+    strengtheningSummary: {
+      level: "strengthened" | "partially_strengthened" | "limited";
+      text: string;
+    };
     periodSummary: {
       mode: "consumption_focus" | "non_consumption_dominant" | "insufficient_base";
       totalConsumptionValue: number;
@@ -367,6 +371,7 @@ export function CsvImporter() {
             ambiguousReviewHref: reviewContext.ambiguousReviewHref,
             consolidatedSummary: reviewContext.consolidatedSummary,
             periodPriorities: reviewContext.periodPriorities,
+            strengtheningSummary: reviewContext.strengtheningSummary,
             periodSummary: reviewContext.periodSummary,
             periodReviewHref: reviewContext.periodReviewHref,
             periodLabel: reviewContext.periodLabel,
@@ -876,6 +881,11 @@ export function CsvImporter() {
                 Ganho esperado: {importReceipt.periodPriorities.expectedConfidenceImpact}
               </p>
             </div>
+          </div>
+
+          <div className="w-full max-w-3xl rounded-lg border border-border/60 bg-muted/10 p-4 text-sm">
+            <p className="font-medium text-foreground">Fortalecimento observado no resumo</p>
+            <p className="text-muted-foreground mt-1">{importReceipt.strengtheningSummary.text}</p>
           </div>
 
           <div className="w-full max-w-3xl rounded-lg border border-border/60 bg-muted/20 p-4 text-sm">

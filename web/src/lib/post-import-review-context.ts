@@ -79,6 +79,11 @@ export type PostImportPrioritiesSummary = {
   expectedConfidenceImpact: string
 }
 
+export type PostImportStrengtheningSummary = {
+  level: "strengthened" | "partially_strengthened" | "limited"
+  text: string
+}
+
 export type PostImportReviewContext = {
   outrosRows: number
   outrosValue: number
@@ -89,6 +94,7 @@ export type PostImportReviewContext = {
   periodSummary: PostImportPeriodSummary
   consolidatedSummary: PostImportConsolidatedSummary
   periodPriorities: PostImportPrioritiesSummary
+  strengtheningSummary: PostImportStrengtheningSummary
   periodReviewHref: string
   periodLabel: string
 }
@@ -522,15 +528,92 @@ function buildPeriodPriorities(
   }
 }
 
+function coverageRank(status: PostImportCoverageSummary["status"]): number {
+  if (status === "ready") return 2
+  if (status === "partial") return 1
+  return 0
+}
+
+function hasAmbiguityLimiter(limiter: PostImportPriorityLimiter): boolean {
+  return Boolean(limiter?.actionHref.includes("review=ambiguous"))
+}
+
+function buildStrengtheningSummary(
+  baselineSummary: PostImportConsolidatedSummary,
+  currentSummary: PostImportConsolidatedSummary,
+  baselinePriorities: PostImportPrioritiesSummary,
+  currentPriorities: PostImportPrioritiesSummary,
+  hasPeriodComparison: boolean
+): PostImportStrengtheningSummary {
+  if (!hasPeriodComparison) {
+    return {
+      level: "limited",
+      text: "Ainda nao ha comparacao consolidada neste periodo; siga a proxima acao para fortalecer esta leitura.",
+    }
+  }
+
+  const baselineCoverage = baselineSummary.coverage.status
+  const currentCoverage = currentSummary.coverage.status
+
+  if (coverageRank(currentCoverage) > coverageRank(baselineCoverage)) {
+    if (currentCoverage === "ready") {
+      return {
+        level: "strengthened",
+        text: "A leitura deste periodo ficou mais forte: a cobertura do casal agora esta pronta para consolidacao.",
+      }
+    }
+
+    return {
+      level: "partially_strengthened",
+      text: "A leitura deste periodo ficou mais forte: a cobertura evoluiu, mas ainda nao esta completa para o casal.",
+    }
+  }
+
+  if (baselinePriorities.confidenceLimiter && !currentPriorities.confidenceLimiter) {
+    return {
+      level: "strengthened",
+      text: "A leitura deste periodo ficou mais forte: o principal limitador de confianca deixou de bloquear a prioridade.",
+    }
+  }
+
+  if (hasAmbiguityLimiter(baselinePriorities.confidenceLimiter) && !hasAmbiguityLimiter(currentPriorities.confidenceLimiter)) {
+    return {
+      level: "partially_strengthened",
+      text: "A leitura deste periodo ficou menos ambigua; a prioridade principal agora esta mais estavel.",
+    }
+  }
+
+  if (baselinePriorities.target !== currentPriorities.target && currentPriorities.target === "Casal") {
+    return {
+      level: "partially_strengthened",
+      text: "A prioridade migrou para a visao do casal neste periodo, com leitura mais consolidada que no lote isolado.",
+    }
+  }
+
+  return {
+    level: "limited",
+    text: "A leitura segue cautelosa neste periodo; a melhoria depende de concluir a proxima acao auditavel.",
+  }
+}
+
 export function buildPostImportReviewContext(
   rows: PostImportReviewRow[],
   periodRows?: PostImportReviewRow[]
 ): PostImportReviewContext {
   const period = resolveImportPeriod(rows)
+  const baselineSummary = buildConsolidatedSummary(rows, period.month, period.year)
+  const baselinePriorities = buildPeriodPriorities(baselineSummary, period.periodReviewHref)
   const sourceRows = getSummarySourceRows(rows, periodRows)
   const periodSummary = buildPeriodSummary(sourceRows, period.month, period.year)
   const consolidatedSummary = buildConsolidatedSummary(sourceRows, period.month, period.year)
   const periodPriorities = buildPeriodPriorities(consolidatedSummary, period.periodReviewHref)
+  const strengtheningSummary = buildStrengtheningSummary(
+    baselineSummary,
+    consolidatedSummary,
+    baselinePriorities,
+    periodPriorities,
+    Boolean(periodRows && periodRows.length > 0)
+  )
   const outrosRows = rows.filter((row) => isGenericCategory(row.categoria)).length
   const outrosValue = rows
     .filter((row) => isGenericCategory(row.categoria))
@@ -555,6 +638,7 @@ export function buildPostImportReviewContext(
       periodSummary,
       consolidatedSummary,
       periodPriorities,
+      strengtheningSummary,
       periodReviewHref: period.periodReviewHref,
       periodLabel: period.periodLabel,
     }
@@ -570,6 +654,7 @@ export function buildPostImportReviewContext(
     periodSummary,
     consolidatedSummary,
     periodPriorities,
+    strengtheningSummary,
     periodReviewHref: period.periodReviewHref,
     periodLabel: period.periodLabel,
   }

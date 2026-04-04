@@ -25,6 +25,8 @@ describe('buildPostImportReviewContext', () => {
     expect(result.periodPriorities.confidenceLimiter?.text).toContain('cobertura do casal ainda nao confirmada')
     expect(result.periodPriorities.nextAction.actionHref).toBe('/transacoes?month=3&year=2026&sort=value_desc')
     expect(result.periodPriorities.expectedConfidenceImpact).toContain('reduz o risco de interpretar um periodo incompleto')
+    expect(result.strengtheningSummary.level).toBe('limited')
+    expect(result.strengtheningSummary.text).toContain('Ainda nao ha comparacao consolidada')
     expect(result.periodReviewHref).toBe('/transacoes?month=3&year=2026&sort=value_desc')
     expect(result.periodLabel).toBe('03/2026')
   })
@@ -141,6 +143,8 @@ describe('buildPostImportReviewContext', () => {
       '/transacoes?month=3&year=2026&category=Moradia&sort=value_desc&responsavel=Luan'
     )
     expect(result.periodPriorities.expectedConfidenceImpact).toContain('confirmar se Moradia')
+    expect(result.strengtheningSummary.level).toBe('strengthened')
+    expect(result.strengtheningSummary.text).toContain('cobertura do casal agora esta pronta')
   })
 
   it('prioriza completar cobertura quando leitura do casal esta parcial', () => {
@@ -158,6 +162,8 @@ describe('buildPostImportReviewContext', () => {
     expect(result.periodPriorities.nextAction.actionHref).toBe('/conciliacao')
     expect(result.periodPriorities.nextAction.text).toContain('completar a visao consolidada do casal')
     expect(result.periodPriorities.expectedConfidenceImpact).toContain('fortalece a visao do casal')
+    expect(result.strengtheningSummary.level).toBe('partially_strengthened')
+    expect(result.strengtheningSummary.text).toContain('cobertura evoluiu')
   })
 
   it('prioriza revisao ambigua quando valor ambiguo relevante persiste', () => {
@@ -177,5 +183,18 @@ describe('buildPostImportReviewContext', () => {
     expect(result.periodPriorities.nextAction.actionHref).toBe('/transacoes?month=3&year=2026&review=ambiguous&sort=value_desc&responsavel=Casal')
     expect(result.periodPriorities.nextAction.text).toContain('revisar primeiro os ambiguos de maior impacto')
     expect(result.periodPriorities.expectedConfidenceImpact).toContain('reduzir ambiguidade residual')
+    expect(result.strengtheningSummary.level).toBe('strengthened')
+    expect(result.strengtheningSummary.text).toContain('cobertura do casal agora esta pronta')
+  })
+
+  it('mantem leitura cautelosa quando comparacao nao mostra ganho claro', () => {
+    const rows = [
+      { categoria: 'Moradia', valor: 850, data: '2026-03-02T00:00:00.000Z', tipo: 'Saida', responsavel: 'Casal', origem: 'Importacao', status: 'Realizado' },
+      { categoria: 'Transporte', valor: 230, data: '2026-03-05T00:00:00.000Z', tipo: 'Saida', responsavel: 'Casal', origem: 'Importacao', status: 'Realizado' },
+    ]
+    const result = buildPostImportReviewContext(rows, rows)
+
+    expect(result.strengtheningSummary.level).toBe('limited')
+    expect(result.strengtheningSummary.text).toContain('segue cautelosa')
   })
 })
