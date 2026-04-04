@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest"
-import { buildLatestImportedPeriodReading, isImportedOrigin } from "./latest-imported-period-reading"
+import {
+  buildLatestImportedPeriodReading,
+  isImportedOrigin,
+  resolveLatestReadingContextAlignment,
+} from "./latest-imported-period-reading"
 
 describe("latest-imported-period-reading", () => {
   it("retorna null quando nao existem linhas de importacao no periodo", () => {
@@ -51,6 +55,7 @@ describe("latest-imported-period-reading", () => {
 
     expect(reading).not.toBeNull()
     expect(reading?.periodLabel).toBe("03/2026")
+    expect(reading?.targetScope).toBe("Casal")
     expect(reading?.temporalSummary.periodReference).toBe("03/2026")
     expect(reading?.temporalSummary.periodStatus).toBe("ongoing")
     expect(reading?.temporalSummary.periodStatusText).toContain("Periodo em andamento")
@@ -172,5 +177,91 @@ describe("latest-imported-period-reading", () => {
     expect(reading?.temporalSummary.periodStatus).toBe("closed")
     expect(reading?.temporalSummary.periodStatusText).toContain("encerrado")
     expect(reading?.temporalSummary.recencyHint).toContain("ultimo periodo importado")
+  })
+
+  it("marca alinhamento quando leitura e filtros ativos batem em periodo e responsavel", () => {
+    const reading = buildLatestImportedPeriodReading(
+      [
+        {
+          categoria: "Moradia",
+          valor: 980,
+          tipo: "Saida",
+          data: "2026-03-10T00:00:00.000Z",
+          origem: "Importacao",
+          status: "Realizado",
+          responsavel: "Casal",
+        },
+      ],
+      new Date("2026-03-20T00:00:00.000Z")
+    )
+
+    expect(reading).not.toBeNull()
+    const alignment = resolveLatestReadingContextAlignment(reading!, {
+      month: "3",
+      year: "2026",
+      responsavel: "Casal",
+    })
+
+    expect(alignment.status).toBe("aligned")
+    expect(alignment.text).toContain("Leitura alinhada")
+    expect(alignment.ctaHref).toBeNull()
+  })
+
+  it("marca alinhamento parcial quando periodo bate, mas responsavel diverge", () => {
+    const reading = buildLatestImportedPeriodReading(
+      [
+        {
+          categoria: "Moradia",
+          valor: 980,
+          tipo: "Saida",
+          data: "2026-03-10T00:00:00.000Z",
+          origem: "Importacao",
+          status: "Realizado",
+          responsavel: "Casal",
+        },
+      ],
+      new Date("2026-03-20T00:00:00.000Z")
+    )
+
+    expect(reading).not.toBeNull()
+    const alignment = resolveLatestReadingContextAlignment(reading!, {
+      month: "3",
+      year: "2026",
+      responsavel: "Luan",
+    })
+
+    expect(alignment.status).toBe("partially_aligned")
+    expect(alignment.text).toContain("focada em Casal")
+    expect(alignment.ctaHref).toContain("responsavel=Casal")
+  })
+
+  it("marca fora do recorte quando mes/ano atuais diferem da leitura", () => {
+    const reading = buildLatestImportedPeriodReading(
+      [
+        {
+          categoria: "Moradia",
+          valor: 980,
+          tipo: "Saida",
+          data: "2026-03-10T00:00:00.000Z",
+          origem: "Importacao",
+          status: "Realizado",
+          responsavel: "Casal",
+        },
+      ],
+      new Date("2026-03-20T00:00:00.000Z")
+    )
+
+    expect(reading).not.toBeNull()
+    const alignment = resolveLatestReadingContextAlignment(reading!, {
+      month: "2",
+      year: "2026",
+      responsavel: "Casal",
+    })
+
+    expect(alignment.status).toBe("outside_scope")
+    expect(alignment.text).toContain("fora do recorte atual")
+    expect(alignment.ctaLabel).toBe("Voltar para o recorte da leitura")
+    expect(alignment.ctaHref).toContain("month=3")
+    expect(alignment.ctaHref).toContain("year=2026")
   })
 })

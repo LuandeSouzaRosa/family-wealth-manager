@@ -13,6 +13,7 @@ import { useFilter } from '@/contexts/filter-context'
 import { isResponsibleMatch } from '@/lib/filter-utils'
 import { getYearFilterOptions } from '@/lib/period-range'
 import { isAmbiguousReviewCandidate } from '@/lib/ambiguous-review'
+import { resolveLatestReadingContextAlignment } from '@/lib/latest-imported-period-reading'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -108,6 +109,14 @@ export function TransacoesClientShell({
   const [sortBy, setSortBy] = useState<"date_desc" | "value_desc" | "value_asc">(initialSort)
   const [visibleCount, setVisibleCount] = useState(30)
   const reviewPreset = initialReview === "ambiguous" ? "ambiguous" : "all"
+  const readingAlignment = useMemo(() => {
+    if (!latestImportedPeriodReading) return null
+    return resolveLatestReadingContextAlignment(latestImportedPeriodReading, {
+      month,
+      year,
+      responsavel,
+    })
+  }, [latestImportedPeriodReading, month, year, responsavel])
 
   useEffect(() => {
     setSelectedCategory(initialCategory)
@@ -310,6 +319,11 @@ export function TransacoesClientShell({
               <p className="text-xs text-muted-foreground">
                 Recencia: {latestImportedPeriodReading.temporalSummary.recencyHint}
               </p>
+              {readingAlignment && (
+                <p className="text-xs text-muted-foreground" data-testid="latest-reading-alignment">
+                  Coerencia com filtros ativos: {readingAlignment.text}
+                </p>
+              )}
               <p className="text-sm text-foreground">{latestImportedPeriodReading.primaryAttentionText}</p>
               <p className="text-xs text-muted-foreground">
                 Pendencia principal ({latestImportedPeriodReading.pendingSummary.status === "active"
@@ -336,6 +350,13 @@ export function TransacoesClientShell({
                 Fortalecimento observado: {latestImportedPeriodReading.strengtheningText}
               </p>
               <div className="flex flex-wrap gap-2 pt-1">
+                {readingAlignment?.ctaHref && readingAlignment.ctaLabel && (
+                  <Link href={readingAlignment.ctaHref}>
+                    <Button variant="outline" size="sm">
+                      {readingAlignment.ctaLabel}
+                    </Button>
+                  </Link>
+                )}
                 <Link href={latestImportedPeriodReading.pendingSummary.actionHref}>
                   <Button variant="outline" size="sm">
                     {latestImportedPeriodReading.pendingSummary.actionLabel}

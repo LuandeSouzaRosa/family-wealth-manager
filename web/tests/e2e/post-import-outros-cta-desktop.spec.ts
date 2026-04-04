@@ -94,6 +94,7 @@ test.describe('Post-import Outros review CTA (desktop)', () => {
       await expect(ambiguousPage.getByText(/Ultima leitura util do periodo importado/i).first()).toBeVisible({ timeout: 15000 });
       await expect(ambiguousPage.getByText(/Contexto temporal:/i).first()).toBeVisible({ timeout: 15000 });
       await expect(ambiguousPage.getByText(/Recencia:/i).first()).toBeVisible({ timeout: 15000 });
+      await expect(ambiguousPage.getByText(/Coerencia com filtros ativos:/i).first()).toBeVisible({ timeout: 15000 });
       await expect(ambiguousPage.getByText(/Pendencia principal/i).first()).toBeVisible({ timeout: 15000 });
 
       const ambiguousCurrentUrl = new URL(ambiguousPage.url());
