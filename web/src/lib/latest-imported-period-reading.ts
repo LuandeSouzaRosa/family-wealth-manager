@@ -4,6 +4,13 @@ import { buildPostImportReviewContext, PostImportReviewRow } from "./post-import
 export type LatestImportedPeriodReading = {
   periodLabel: string
   periodReviewHref: string
+  temporalSummary: {
+    periodReference: string
+    recencyHint: string
+    periodStatus: "ongoing" | "closed"
+    periodStatusText: string
+    lastImportedTransactionDate: string | null
+  }
   primaryAttentionText: string
   confidenceLimiterText: string | null
   nextActionText: string
@@ -23,8 +30,69 @@ export function isImportedOrigin(origem: string | null | undefined): boolean {
   return normalizeToken(origem).includes("import")
 }
 
+function formatDatePtBr(value: Date): string {
+  const day = String(value.getUTCDate()).padStart(2, "0")
+  const month = String(value.getUTCMonth() + 1).padStart(2, "0")
+  const year = String(value.getUTCFullYear())
+  return `${day}/${month}/${year}`
+}
+
+function startOfDay(value: Date): Date {
+  return new Date(value.getFullYear(), value.getMonth(), value.getDate())
+}
+
+function buildTemporalSummary(
+  importedRows: PostImportReviewRow[],
+  periodLabel: string,
+  referenceDate: Date
+): LatestImportedPeriodReading["temporalSummary"] {
+  const importedDates = importedRows
+    .map((row) => new Date(row.data || ""))
+    .filter((date) => !Number.isNaN(date.getTime()))
+
+  if (importedDates.length === 0) {
+    return {
+      periodReference: periodLabel,
+      recencyHint: "Leitura mais recente disponivel para o ultimo periodo importado.",
+      periodStatus: "closed",
+      periodStatusText: "Sem data importada valida para definir se o periodo esta em andamento.",
+      lastImportedTransactionDate: null,
+    }
+  }
+
+  const latestImportedDate = importedDates.reduce((latest, current) =>
+    current.getTime() > latest.getTime() ? current : latest
+  )
+
+  const isOngoing =
+    latestImportedDate.getUTCFullYear() === referenceDate.getUTCFullYear() &&
+    latestImportedDate.getUTCMonth() === referenceDate.getUTCMonth()
+
+  const dayDiff = Math.floor(
+    (startOfDay(referenceDate).getTime() - startOfDay(latestImportedDate).getTime()) / (1000 * 60 * 60 * 24)
+  )
+
+  const recencyHint =
+    dayDiff <= 10
+      ? "Leitura mais recente disponivel para este periodo importado."
+      : dayDiff <= 45
+        ? "Leitura recente para este periodo importado, mas vale validar novos lancamentos."
+        : "Leitura do ultimo periodo importado; pode haver defasagem para o contexto atual."
+
+  return {
+    periodReference: periodLabel,
+    recencyHint,
+    periodStatus: isOngoing ? "ongoing" : "closed",
+    periodStatusText: isOngoing
+      ? "Periodo em andamento."
+      : "Periodo ja encerrado no calendario.",
+    lastImportedTransactionDate: formatDatePtBr(latestImportedDate),
+  }
+}
+
 export function buildLatestImportedPeriodReading(
-  periodRows: PostImportReviewRow[]
+  periodRows: PostImportReviewRow[],
+  referenceDate: Date = new Date()
 ): LatestImportedPeriodReading | null {
   if (!periodRows || periodRows.length === 0) return null
 
@@ -34,6 +102,7 @@ export function buildLatestImportedPeriodReading(
   const context = buildPostImportReviewContext(importedRows, periodRows)
   const limiter = context.periodPriorities.confidenceLimiter
   const strengtheningLevel = context.strengtheningSummary.level
+  const temporalSummary = buildTemporalSummary(importedRows, context.periodLabel, referenceDate)
 
   const pendingSummary =
     limiter
@@ -63,6 +132,7 @@ export function buildLatestImportedPeriodReading(
   return {
     periodLabel: context.periodLabel,
     periodReviewHref: context.periodReviewHref,
+    temporalSummary,
     primaryAttentionText: context.periodPriorities.primaryAttention.text,
     confidenceLimiterText: context.periodPriorities.confidenceLimiter?.text || null,
     nextActionText: context.periodPriorities.nextAction.text,

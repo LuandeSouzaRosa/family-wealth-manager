@@ -47,10 +47,15 @@ describe("latest-imported-period-reading", () => {
         status: "Realizado",
         responsavel: "Casal",
       },
-    ])
+    ], new Date("2026-03-20T00:00:00.000Z"))
 
     expect(reading).not.toBeNull()
     expect(reading?.periodLabel).toBe("03/2026")
+    expect(reading?.temporalSummary.periodReference).toBe("03/2026")
+    expect(reading?.temporalSummary.periodStatus).toBe("ongoing")
+    expect(reading?.temporalSummary.periodStatusText).toContain("Periodo em andamento")
+    expect(reading?.temporalSummary.lastImportedTransactionDate).toBe("05/03/2026")
+    expect(reading?.temporalSummary.recencyHint).toMatch(/Leitura (mais recente disponivel|recente)/)
     expect(reading?.nextActionHref).toContain("/transacoes?month=3&year=2026")
     expect(reading?.expectedConfidenceImpact.length).toBeGreaterThan(10)
     expect(reading?.strengtheningText.length).toBeGreaterThan(10)
@@ -78,7 +83,7 @@ describe("latest-imported-period-reading", () => {
         status: "Realizado",
         responsavel: "Casal",
       },
-    ])
+    ], new Date("2026-03-20T00:00:00.000Z"))
 
     expect(reading).not.toBeNull()
     expect(reading?.pendingSummary.status).toBe("reduced")
@@ -106,7 +111,7 @@ describe("latest-imported-period-reading", () => {
         status: "Realizado",
         responsavel: "Casal",
       },
-    ])
+    ], new Date("2026-03-20T00:00:00.000Z"))
 
     expect(reading).not.toBeNull()
     expect(reading?.pendingSummary.status).toBe("resolved")
@@ -133,7 +138,7 @@ describe("latest-imported-period-reading", () => {
         status: "Realizado",
         responsavel: "Casal",
       },
-    ])
+    ], new Date("2026-03-20T00:00:00.000Z"))
 
     expect(reading).not.toBeNull()
     expect(reading?.pendingSummary.status).toBe("no_relevant")
@@ -145,5 +150,27 @@ describe("latest-imported-period-reading", () => {
     expect(isImportedOrigin("Importação")).toBe(true)
     expect(isImportedOrigin("  importacao csv ")).toBe(true)
     expect(isImportedOrigin("Manual")).toBe(false)
+  })
+
+  it("sinaliza periodo encerrado quando referencia esta em mes posterior", () => {
+    const reading = buildLatestImportedPeriodReading(
+      [
+        {
+          categoria: "Moradia",
+          valor: 1200,
+          tipo: "Saida",
+          data: "2026-02-10T00:00:00.000Z",
+          origem: "Importacao",
+          status: "Realizado",
+          responsavel: "Casal",
+        },
+      ],
+      new Date("2026-04-20T00:00:00.000Z")
+    )
+
+    expect(reading).not.toBeNull()
+    expect(reading?.temporalSummary.periodStatus).toBe("closed")
+    expect(reading?.temporalSummary.periodStatusText).toContain("encerrado")
+    expect(reading?.temporalSummary.recencyHint).toContain("ultimo periodo importado")
   })
 })

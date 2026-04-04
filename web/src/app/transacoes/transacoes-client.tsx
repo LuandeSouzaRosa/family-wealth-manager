@@ -301,6 +301,15 @@ export function TransacoesClientShell({
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Ultima leitura util do periodo importado ({latestImportedPeriodReading.periodLabel})
               </p>
+              <p className="text-xs text-muted-foreground">
+                Contexto temporal: {latestImportedPeriodReading.temporalSummary.periodStatusText}{" "}
+                {latestImportedPeriodReading.temporalSummary.lastImportedTransactionDate
+                  ? `Referencia mais recente no periodo em ${latestImportedPeriodReading.temporalSummary.lastImportedTransactionDate}.`
+                  : "Referencia de data importada indisponivel."}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Recencia: {latestImportedPeriodReading.temporalSummary.recencyHint}
+              </p>
               <p className="text-sm text-foreground">{latestImportedPeriodReading.primaryAttentionText}</p>
               <p className="text-xs text-muted-foreground">
                 Pendencia principal ({latestImportedPeriodReading.pendingSummary.status === "active"
