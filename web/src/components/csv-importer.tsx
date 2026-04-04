@@ -169,6 +169,7 @@ export function CsvImporter() {
     setFileName(file.name)
     setImportReceipt(null) // Limpa recibo anterior
     setCsvQualityGuardrail(null)
+    setNovasRegras(new Set())
     
     Papa.parse(file, {
       header: true,
@@ -341,10 +342,10 @@ export function CsvImporter() {
 
     // Salvar novas regras de categorização
     if (novasRegras.size > 0) {
-      const promises = Array.from(novasRegras).map(index => {
-        const item = data[index]
-        return createCategorizationRule(deriveRuleTextFromDescription(item.descricao), item.categoria)
-      })
+      const promises = Array.from(novasRegras)
+        .map(index => data[index])
+        .filter(Boolean)
+        .map(item => createCategorizationRule(deriveRuleTextFromDescription(item.descricao), item.categoria))
       await Promise.all(promises)
     }
 
@@ -402,10 +403,12 @@ export function CsvImporter() {
         setData([])
         setFileName("")
         setCsvQualityGuardrail(null)
+        setNovasRegras(new Set())
       } else if (result && 'error' in result) {
         toast.error("Erro na importação: " + result.error)
       }
     } finally {
+      setIsUploading(false)
       isSubmittingRef.current = false;
     }
   }
@@ -457,7 +460,7 @@ export function CsvImporter() {
                   </SelectContent>
                 </Select>
 
-                <Button variant="ghost" size="sm" onClick={() => { setData([]); setSaldoInicialInfo(null); setCsvQualityGuardrail(null); }} className="w-full sm:w-auto text-destructive hover:text-destructive hover:bg-destructive/10">
+                <Button variant="ghost" size="sm" onClick={() => { setData([]); setSaldoInicialInfo(null); setCsvQualityGuardrail(null); setNovasRegras(new Set()); }} className="w-full sm:w-auto text-destructive hover:text-destructive hover:bg-destructive/10">
                   Cancelar
                 </Button>
             </div>
@@ -958,7 +961,7 @@ export function CsvImporter() {
             </div>
           )}
 
-          <Button variant="outline" onClick={() => { setImportReceipt(null); setData([]); setCsvQualityGuardrail(null); }} className="mt-4">
+          <Button variant="outline" onClick={() => { setImportReceipt(null); setData([]); setCsvQualityGuardrail(null); setNovasRegras(new Set()); }} className="mt-4">
             Importar Outro Arquivo
           </Button>
         </motion.div>
