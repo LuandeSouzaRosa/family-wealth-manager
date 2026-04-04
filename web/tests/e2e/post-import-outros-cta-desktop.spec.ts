@@ -26,6 +26,15 @@ function buildCsvFile(runTag: string): { csvPath: string; month: number; year: n
   return { csvPath, month, year };
 }
 
+function buildContextUrl(baseUrl: string, month: number, year: number, responsavel: 'Casal' | 'Luan') {
+  const params = new URLSearchParams();
+  params.set('month', String(month));
+  params.set('year', String(year));
+  params.set('responsavel', responsavel);
+  params.set('sort', 'value_desc');
+  return new URL(`/transacoes?${params.toString()}`, baseUrl).toString();
+}
+
 test.describe('Post-import Outros review CTA (desktop)', () => {
   test('deve sair do recibo real para o extrato ja no contexto de revisao de Outros', async ({ page }) => {
     test.setTimeout(240000);
@@ -113,6 +122,64 @@ test.describe('Post-import Outros review CTA (desktop)', () => {
       const clearedUrl = new URL(ambiguousPage.url());
       expect(clearedUrl.searchParams.get('review')).toBeNull();
       await ambiguousPage.close();
+
+      const alignedPage = await page.context().newPage();
+      await alignedPage.goto(buildContextUrl(appUrl, month, year, 'Casal'), {
+        waitUntil: 'domcontentloaded',
+        timeout: 30000,
+      });
+      const alignedCard = alignedPage.getByTestId('latest-imported-reading-card');
+      await expect(alignedCard).toBeVisible({ timeout: 15000 });
+      await expect(alignedCard.getByText(/Coerencia com filtros ativos: Leitura alinhada ao recorte atual/i)).toBeVisible({
+        timeout: 15000,
+      });
+      await expect(
+        alignedCard.getByRole('button', {
+          name: /Voltar para o recorte da leitura|Abrir recorte da leitura|Ver leitura no periodo completo/i,
+        })
+      ).toHaveCount(0);
+      await alignedPage.close();
+
+      const partiallyAlignedPage = await page.context().newPage();
+      await partiallyAlignedPage.goto(buildContextUrl(appUrl, month, year, 'Luan'), {
+        waitUntil: 'domcontentloaded',
+        timeout: 30000,
+      });
+      const partiallyAlignedCard = partiallyAlignedPage.getByTestId('latest-imported-reading-card');
+      await expect(partiallyAlignedCard).toBeVisible({ timeout: 15000 });
+      await expect(partiallyAlignedCard.getByText(/Coerencia com filtros ativos: Leitura no mesmo periodo/i)).toBeVisible({
+        timeout: 15000,
+      });
+      await expect(
+        partiallyAlignedCard.getByRole('button', {
+          name: /Abrir recorte da leitura|Ver leitura no periodo completo/i,
+        }).first()
+      ).toBeVisible({ timeout: 15000 });
+      await partiallyAlignedPage.close();
+
+      const outsideMonth = month === 1 ? 12 : month - 1;
+      const outsideYear = month === 1 ? year - 1 : year;
+      const outsideScopePage = await page.context().newPage();
+      await outsideScopePage.goto(buildContextUrl(appUrl, outsideMonth, outsideYear, 'Casal'), {
+        waitUntil: 'domcontentloaded',
+        timeout: 30000,
+      });
+      const outsideScopeCard = outsideScopePage.getByTestId('latest-imported-reading-card');
+      await expect(outsideScopeCard).toBeVisible({ timeout: 15000 });
+      await expect(
+        outsideScopeCard.getByText(/Coerencia com filtros ativos: Leitura do ultimo periodo importado fora do recorte atual/i)
+      ).toBeVisible({ timeout: 15000 });
+      const returnToReadingButton = outsideScopeCard.getByRole('button', {
+        name: /Voltar para o recorte da leitura/i,
+      });
+      await expect(returnToReadingButton).toBeVisible({ timeout: 15000 });
+      const returnHref = await returnToReadingButton.evaluate((element) => {
+        const anchor = element.closest('a');
+        return anchor?.getAttribute('href');
+      });
+      expect(returnHref).toContain(`month=${month}`);
+      expect(returnHref).toContain(`year=${year}`);
+      await outsideScopePage.close();
 
       const cta = page.getByRole('button', { name: /Revisar maiores em Outros/i }).first();
       await expect(cta).toBeVisible({ timeout: 15000 });
