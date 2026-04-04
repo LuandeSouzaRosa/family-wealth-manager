@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { processReconciliationBatch } from '@/actions/transactions'
+import { getTransactions, processReconciliationBatch } from '@/actions/transactions'
 import { getCategorizationRules, createCategorizationRule } from '@/actions/categories'
 import { getContasBancarias } from '@/actions/accounts'
 import { getReconciliationCandidates } from '@/actions/reconciliation'
@@ -88,6 +88,33 @@ export function CsvImporter() {
     ambiguousRows: number;
     ambiguousValue: number;
     ambiguousReviewHref: string | null;
+    consolidatedSummary: {
+      coverage: {
+        importedResponsaveis: Array<"Luan" | "Luana" | "Casal">;
+        status: "ready" | "partial" | "unknown";
+        missingForCouple: Array<"Luan" | "Luana">;
+      };
+      views: Array<{
+        responsavel: "Luan" | "Luana" | "Casal";
+        mode: "consumption_focus" | "non_consumption_dominant" | "insufficient_base";
+        totalConsumptionValue: number;
+        totalNonConsumptionValue: number;
+        topConsumptionCategories: Array<{
+          categoria: string;
+          total: number;
+          percentual: number;
+          lancamentos: number;
+          reviewHref: string;
+        }>;
+        attentionCategory: string | null;
+        attentionPercent: number | null;
+        ambiguousRows: number;
+        ambiguousValue: number;
+        periodReviewHref: string;
+        leaderReviewHref: string | null;
+        ambiguousReviewHref: string | null;
+      }>;
+    };
     periodSummary: {
       mode: "consumption_focus" | "non_consumption_dominant" | "insufficient_base";
       totalConsumptionValue: number;
@@ -287,7 +314,22 @@ export function CsvImporter() {
       setIsUploading(false)
 
       if (result && 'count' in result) {
-        const reviewContext = buildPostImportReviewContext(valids)
+        const preliminaryContext = buildPostImportReviewContext(valids)
+        const periodParams = new URLSearchParams(preliminaryContext.periodReviewHref.split('?')[1] || "")
+        const periodMonth = Number(periodParams.get('month') || '0')
+        const periodYear = Number(periodParams.get('year') || '0')
+        const persistedPeriodRowsRaw = await getTransactions(periodMonth, periodYear)
+        const persistedPeriodRows = (persistedPeriodRowsRaw || []).map((row: any) => ({
+          categoria: row.categoria,
+          descricao: row.descricao,
+          responsavel: row.responsavel,
+          tipo: row.tipo,
+          status: row.status,
+          origem: row.origem,
+          valor: Number(row.valor) || 0,
+          data: row.data,
+        }))
+        const reviewContext = buildPostImportReviewContext(valids, persistedPeriodRows)
 
         setImportReceipt({
            totalNoLote: data.length,
@@ -304,6 +346,7 @@ export function CsvImporter() {
            ambiguousRows: reviewContext.ambiguousRows,
            ambiguousValue: reviewContext.ambiguousValue,
            ambiguousReviewHref: reviewContext.ambiguousReviewHref,
+           consolidatedSummary: reviewContext.consolidatedSummary,
            periodSummary: reviewContext.periodSummary,
            periodReviewHref: reviewContext.periodReviewHref,
            periodLabel: reviewContext.periodLabel,
@@ -697,49 +740,79 @@ export function CsvImporter() {
 
           <div className="w-full max-w-3xl rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-4 text-sm">
             <p className="font-medium text-foreground">Resumo inteligente do periodo importado</p>
-            {importReceipt.periodSummary.mode === "consumption_focus" ? (
-              <>
-                <p className="text-muted-foreground mt-1">
-                  Consumo real mapeado:{" "}
-                  {importReceipt.periodSummary.totalConsumptionValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                  {importReceipt.periodSummary.totalNonConsumptionValue > 0 && (
-                    <>
-                      {" "}| movimentacao financeira desconsiderada:{" "}
-                      {importReceipt.periodSummary.totalNonConsumptionValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}.
-                    </>
-                  )}
-                </p>
-                {importReceipt.periodSummary.topConsumptionCategories.length > 0 && (
-                  <ul className="mt-2 space-y-1 text-muted-foreground">
-                    {importReceipt.periodSummary.topConsumptionCategories.slice(0, 3).map((item) => (
-                      <li key={item.categoria}>
-                        {item.categoria}: {item.total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} ({item.percentual.toFixed(1)}% | {item.lancamentos} lanc.)
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                {importReceipt.periodSummary.attentionCategory && (
-                  <p className="text-muted-foreground mt-2">
-                    Frente inicial de atencao: {importReceipt.periodSummary.attentionCategory} ({(importReceipt.periodSummary.attentionPercent || 0).toFixed(1)}% do consumo real).
-                  </p>
-                )}
-                {importReceipt.periodSummary.leaderReviewHref && (
-                  <Link href={importReceipt.periodSummary.leaderReviewHref} className="inline-block mt-3">
-                    <Button variant="outline" size="sm">
-                      Revisar categoria lider no extrato
-                    </Button>
-                  </Link>
-                )}
-              </>
-            ) : importReceipt.periodSummary.mode === "non_consumption_dominant" ? (
-              <p className="text-muted-foreground mt-1">
-                O periodo importado foi dominado por movimentacao financeira ({importReceipt.periodSummary.totalNonConsumptionValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} em Fatura Cartao/Investimentos), sem base suficiente de consumo real para conclusao forte.
-              </p>
-            ) : (
-              <p className="text-muted-foreground mt-1">
-                Ainda nao ha base de saidas suficientes no periodo importado para sintetizar consumo real com seguranca.
+            <p className="text-muted-foreground mt-1">
+              Responsaveis detectados no periodo importado:{" "}
+              {importReceipt.consolidatedSummary.coverage.importedResponsaveis.length > 0
+                ? importReceipt.consolidatedSummary.coverage.importedResponsaveis.join(", ")
+                : "nenhum identificado com seguranca"}.
+            </p>
+            {importReceipt.consolidatedSummary.coverage.status === "partial" && (
+              <p className="text-amber-700 dark:text-amber-400 mt-1">
+                Cobertura parcial do casal: ainda faltam importacoes de{" "}
+                {importReceipt.consolidatedSummary.coverage.missingForCouple.join(" e ")} para leitura consolidada completa.
               </p>
             )}
+            {importReceipt.consolidatedSummary.coverage.status === "unknown" && (
+              <p className="text-amber-700 dark:text-amber-400 mt-1">
+                Cobertura do casal ainda nao confirmada neste recorte; use o extrato para validar se todos os responsaveis foram importados.
+              </p>
+            )}
+            {importReceipt.consolidatedSummary.coverage.status === "ready" && (
+              <p className="text-muted-foreground mt-1">
+                Cobertura pronta para leitura consolidada por responsavel e casal neste periodo.
+              </p>
+            )}
+
+            <div className="mt-3 grid gap-3 md:grid-cols-3">
+              {importReceipt.consolidatedSummary.views.map((view) => (
+                <div key={view.responsavel} className="rounded-md border border-border/60 bg-background/70 p-3">
+                  <p className="font-medium text-foreground">{view.responsavel}</p>
+                  {view.mode === "consumption_focus" ? (
+                    <>
+                      <p className="text-muted-foreground mt-1">
+                        Consumo real: {view.totalConsumptionValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                      </p>
+                      {view.totalNonConsumptionValue > 0 && (
+                        <p className="text-muted-foreground">
+                          Nao-consumo desconsiderado: {view.totalNonConsumptionValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                        </p>
+                      )}
+                      {view.attentionCategory && (
+                        <p className="text-muted-foreground">
+                          Atencao inicial: {view.attentionCategory} ({(view.attentionPercent || 0).toFixed(1)}%)
+                        </p>
+                      )}
+                    </>
+                  ) : view.mode === "non_consumption_dominant" ? (
+                    <p className="text-muted-foreground mt-1">
+                      Predominio de movimentacao financeira ({view.totalNonConsumptionValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}), sem base forte de consumo.
+                    </p>
+                  ) : (
+                    <p className="text-muted-foreground mt-1">
+                      Sem base suficiente de saidas para concluir consumo real.
+                    </p>
+                  )}
+                  {view.ambiguousRows > 0 && (
+                    <p className="text-amber-700 dark:text-amber-400 mt-1">
+                      Ambiguo: {view.ambiguousRows} lanc. ({view.ambiguousValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })})
+                    </p>
+                  )}
+                  <Link
+                    href={view.leaderReviewHref || view.ambiguousReviewHref || view.periodReviewHref}
+                    className="inline-block mt-2"
+                  >
+                    <Button variant="outline" size="sm">
+                      {view.leaderReviewHref
+                        ? "Revisar lider no extrato"
+                        : view.ambiguousReviewHref
+                          ? "Revisar ambiguos no extrato"
+                          : "Abrir extrato deste recorte"}
+                    </Button>
+                  </Link>
+                </div>
+              ))}
+            </div>
+
             {importReceipt.ambiguousRows > 0 && (
               <p className="text-amber-700 dark:text-amber-400 mt-2">
                 Ressalva: {importReceipt.ambiguousRows} lancamento(s) ambiguo(s) somando {importReceipt.ambiguousValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} ainda podem alterar a leitura final.

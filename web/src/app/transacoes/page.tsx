@@ -85,6 +85,14 @@ export default async function TransacoesPage({ searchParams }: { searchParams: P
     sortParam === "value_desc" || sortParam === "value_asc" ? sortParam : "date_desc";
   const reviewParam = asSingleValue(resolvedParams?.review);
   const initialReview = reviewParam === "ambiguous" ? "ambiguous" : "all";
+  const responsavelParam = asSingleValue(resolvedParams?.responsavel);
+  const initialResponsavelFromUrl =
+    responsavelParam === "Todos" ||
+    responsavelParam === "Luan" ||
+    responsavelParam === "Luana" ||
+    responsavelParam === "Casal"
+      ? responsavelParam
+      : null;
 
   return (
     <div className="min-h-screen bg-transparent p-6 md:p-12 relative overflow-hidden">
@@ -100,6 +108,7 @@ export default async function TransacoesPage({ searchParams }: { searchParams: P
          initialCategory={initialCategory}
          initialSort={initialSort}
          initialReview={initialReview}
+         initialResponsavelFromUrl={initialResponsavelFromUrl}
       />
     </div>
   )

@@ -1,4 +1,4 @@
-import { isAmbiguousReviewCandidate, isGenericCategory } from "./ambiguous-review"
+import { isAmbiguousReviewCandidate, isGenericCategory, normalizeToken } from "./ambiguous-review"
 import { buildSpendingClaritySnapshot } from "./spending-clarity"
 
 export type PostImportReviewRow = {
@@ -6,9 +6,14 @@ export type PostImportReviewRow = {
   descricao?: string | null
   responsavel?: string | null
   tipo?: string | null
+  status?: string | null
+  origem?: string | null
   valor?: number | null
   data?: string | null
 }
+
+type ResponsibleViewKey = "Luan" | "Luana" | "Casal"
+const RESPONSIBLE_VIEWS: ResponsibleViewKey[] = ["Luan", "Luana", "Casal"]
 
 export type PostImportTopConsumptionCategory = {
   categoria: string
@@ -28,6 +33,32 @@ export type PostImportPeriodSummary = {
   leaderReviewHref: string | null
 }
 
+export type PostImportResponsibleSummary = {
+  responsavel: ResponsibleViewKey
+  mode: "consumption_focus" | "non_consumption_dominant" | "insufficient_base"
+  totalConsumptionValue: number
+  totalNonConsumptionValue: number
+  topConsumptionCategories: PostImportTopConsumptionCategory[]
+  attentionCategory: string | null
+  attentionPercent: number | null
+  ambiguousRows: number
+  ambiguousValue: number
+  periodReviewHref: string
+  leaderReviewHref: string | null
+  ambiguousReviewHref: string | null
+}
+
+export type PostImportCoverageSummary = {
+  importedResponsaveis: ResponsibleViewKey[]
+  status: "ready" | "partial" | "unknown"
+  missingForCouple: Array<"Luan" | "Luana">
+}
+
+export type PostImportConsolidatedSummary = {
+  coverage: PostImportCoverageSummary
+  views: PostImportResponsibleSummary[]
+}
+
 export type PostImportReviewContext = {
   outrosRows: number
   outrosValue: number
@@ -36,6 +67,7 @@ export type PostImportReviewContext = {
   ambiguousValue: number
   ambiguousReviewHref: string | null
   periodSummary: PostImportPeriodSummary
+  consolidatedSummary: PostImportConsolidatedSummary
   periodReviewHref: string
   periodLabel: string
 }
@@ -79,18 +111,65 @@ function resolveImportPeriod(rows: PostImportReviewRow[]) {
   }
 }
 
-function buildCategoryReviewHref(month: string, year: string, category: string): string {
-  return `/transacoes?month=${month}&year=${year}&category=${encodeURIComponent(category)}&sort=value_desc`
+function getSummarySourceRows(rows: PostImportReviewRow[], periodRows?: PostImportReviewRow[]): PostImportReviewRow[] {
+  return periodRows && periodRows.length > 0 ? periodRows : rows
 }
 
-function buildPeriodSummary(rows: PostImportReviewRow[], month: string, year: string): PostImportPeriodSummary {
+function normalizeResponsavel(value: string | null | undefined): ResponsibleViewKey | null {
+  const normalized = normalizeToken(value)
+  if (normalized === "luan") return "Luan"
+  if (normalized === "luana") return "Luana"
+  if (normalized === "casal") return "Casal"
+  return null
+}
+
+function isRowForResponsavel(row: PostImportReviewRow, responsavel: ResponsibleViewKey): boolean {
+  return normalizeResponsavel(row.responsavel) === responsavel
+}
+
+function buildCategoryReviewHref(month: string, year: string, category: string, responsavel?: ResponsibleViewKey): string {
+  const params = new URLSearchParams()
+  params.set("month", month)
+  params.set("year", year)
+  params.set("category", category)
+  params.set("sort", "value_desc")
+  if (responsavel) params.set("responsavel", responsavel)
+  return `/transacoes?${params.toString()}`
+}
+
+function buildPeriodReviewHref(month: string, year: string, responsavel?: ResponsibleViewKey): string {
+  const params = new URLSearchParams()
+  params.set("month", month)
+  params.set("year", year)
+  params.set("sort", "value_desc")
+  if (responsavel) params.set("responsavel", responsavel)
+  return `/transacoes?${params.toString()}`
+}
+
+function buildAmbiguousReviewHref(month: string, year: string, responsavel?: ResponsibleViewKey): string {
+  const params = new URLSearchParams()
+  params.set("month", month)
+  params.set("year", year)
+  params.set("review", "ambiguous")
+  params.set("sort", "value_desc")
+  if (responsavel) params.set("responsavel", responsavel)
+  return `/transacoes?${params.toString()}`
+}
+
+function resolveViewMode(totalConsumptionValue: number, totalNonConsumptionValue: number) {
+  if (totalConsumptionValue > 0) return "consumption_focus" as const
+  if (totalNonConsumptionValue > 0) return "non_consumption_dominant" as const
+  return "insufficient_base" as const
+}
+
+function buildPeriodSummary(sourceRows: PostImportReviewRow[], month: string, year: string): PostImportPeriodSummary {
   const snapshot = buildSpendingClaritySnapshot(
-    rows.map((row) => ({
+    sourceRows.map((row) => ({
       valor: Number(row.valor) || 0,
       tipo: row.tipo || "Saida",
       categoria: row.categoria || "Sem categoria",
       responsavel: row.responsavel || "Casal",
-      status: null,
+      status: row.status || null,
     })),
     []
   ).Todos
@@ -107,15 +186,8 @@ function buildPeriodSummary(rows: PostImportReviewRow[], month: string, year: st
   const totalNonConsumptionValue = Number(snapshot.totalSaidasDesconsideradas || 0)
   const leader = topConsumptionCategories[0] || null
 
-  const mode: PostImportPeriodSummary["mode"] =
-    totalConsumptionValue > 0
-      ? "consumption_focus"
-      : totalNonConsumptionValue > 0
-        ? "non_consumption_dominant"
-        : "insufficient_base"
-
   return {
-    mode,
+    mode: resolveViewMode(totalConsumptionValue, totalNonConsumptionValue),
     totalConsumptionValue,
     totalNonConsumptionValue,
     topConsumptionCategories,
@@ -125,9 +197,109 @@ function buildPeriodSummary(rows: PostImportReviewRow[], month: string, year: st
   }
 }
 
-export function buildPostImportReviewContext(rows: PostImportReviewRow[]): PostImportReviewContext {
+function buildCoverageSummary(sourceRows: PostImportReviewRow[]): PostImportCoverageSummary {
+  const importedResponsaveisSet = new Set<ResponsibleViewKey>()
+  for (const row of sourceRows) {
+    const origem = normalizeToken(row.origem)
+    if (!origem.includes("import")) continue
+    const responsavel = normalizeResponsavel(row.responsavel)
+    if (responsavel) importedResponsaveisSet.add(responsavel)
+  }
+
+  const importedResponsaveis = Array.from(importedResponsaveisSet)
+  const hasCasal = importedResponsaveisSet.has("Casal")
+  const hasLuan = importedResponsaveisSet.has("Luan")
+  const hasLuana = importedResponsaveisSet.has("Luana")
+  const missingForCouple: Array<"Luan" | "Luana"> = []
+
+  if (!hasCasal) {
+    if (!hasLuan) missingForCouple.push("Luan")
+    if (!hasLuana) missingForCouple.push("Luana")
+  }
+
+  const status: PostImportCoverageSummary["status"] =
+    hasCasal || (hasLuan && hasLuana) ? "ready" : hasLuan || hasLuana ? "partial" : "unknown"
+
+  return {
+    importedResponsaveis,
+    status,
+    missingForCouple,
+  }
+}
+
+function buildResponsibleSummary(
+  sourceRows: PostImportReviewRow[],
+  month: string,
+  year: string
+): PostImportResponsibleSummary[] {
+  const snapshot = buildSpendingClaritySnapshot(
+    sourceRows.map((row) => ({
+      valor: Number(row.valor) || 0,
+      tipo: row.tipo || "Saida",
+      categoria: row.categoria || "Sem categoria",
+      responsavel: row.responsavel || "Casal",
+      status: row.status || null,
+    })),
+    []
+  )
+
+  return RESPONSIBLE_VIEWS.map((responsavel) => {
+    const view = snapshot[responsavel]
+    const totalConsumptionValue = Number(view.totalSaidasRealizadas || 0)
+    const totalNonConsumptionValue = Number(view.totalSaidasDesconsideradas || 0)
+    const topConsumptionCategories = view.topCategorias.map((item) => ({
+      categoria: item.categoria,
+      total: item.total,
+      percentual: item.percentual,
+      lancamentos: item.lancamentos,
+      reviewHref: buildCategoryReviewHref(month, year, item.categoria, responsavel),
+    }))
+    const leader = topConsumptionCategories[0] || null
+
+    const ambiguousRows = sourceRows.filter(
+      (row) => isRowForResponsavel(row, responsavel) && isAmbiguousReviewCandidate(row)
+    ).length
+    const ambiguousValue = sourceRows
+      .filter((row) => isRowForResponsavel(row, responsavel) && isAmbiguousReviewCandidate(row))
+      .reduce((acc, row) => acc + (Number(row.valor) || 0), 0)
+
+    return {
+      responsavel,
+      mode: resolveViewMode(totalConsumptionValue, totalNonConsumptionValue),
+      totalConsumptionValue,
+      totalNonConsumptionValue,
+      topConsumptionCategories,
+      attentionCategory: leader?.categoria || null,
+      attentionPercent: leader?.percentual ?? null,
+      ambiguousRows,
+      ambiguousValue,
+      periodReviewHref: buildPeriodReviewHref(month, year, responsavel),
+      leaderReviewHref: leader?.reviewHref || null,
+      ambiguousReviewHref:
+        ambiguousRows > 0 ? buildAmbiguousReviewHref(month, year, responsavel) : null,
+    }
+  })
+}
+
+function buildConsolidatedSummary(
+  sourceRows: PostImportReviewRow[],
+  month: string,
+  year: string
+): PostImportConsolidatedSummary {
+  return {
+    coverage: buildCoverageSummary(sourceRows),
+    views: buildResponsibleSummary(sourceRows, month, year),
+  }
+}
+
+export function buildPostImportReviewContext(
+  rows: PostImportReviewRow[],
+  periodRows?: PostImportReviewRow[]
+): PostImportReviewContext {
   const period = resolveImportPeriod(rows)
-  const periodSummary = buildPeriodSummary(rows, period.month, period.year)
+  const sourceRows = getSummarySourceRows(rows, periodRows)
+  const periodSummary = buildPeriodSummary(sourceRows, period.month, period.year)
+  const consolidatedSummary = buildConsolidatedSummary(sourceRows, period.month, period.year)
   const outrosRows = rows.filter((row) => isGenericCategory(row.categoria)).length
   const outrosValue = rows
     .filter((row) => isGenericCategory(row.categoria))
@@ -150,6 +322,7 @@ export function buildPostImportReviewContext(rows: PostImportReviewRow[]): PostI
       ambiguousValue,
       ambiguousReviewHref,
       periodSummary,
+      consolidatedSummary,
       periodReviewHref: period.periodReviewHref,
       periodLabel: period.periodLabel,
     }
@@ -163,7 +336,9 @@ export function buildPostImportReviewContext(rows: PostImportReviewRow[]): PostI
     ambiguousValue,
     ambiguousReviewHref,
     periodSummary,
+    consolidatedSummary,
     periodReviewHref: period.periodReviewHref,
     periodLabel: period.periodLabel,
   }
 }
+

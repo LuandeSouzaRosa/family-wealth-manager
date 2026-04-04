@@ -36,6 +36,7 @@ interface TransacoesClientProps {
   initialCategory?: string
   initialSort?: "date_desc" | "value_desc" | "value_asc"
   initialReview?: "all" | "ambiguous"
+  initialResponsavelFromUrl?: "Todos" | "Luan" | "Luana" | "Casal" | null
 }
 
 const SPRING_TRANSITION = { type: "spring" as const, bounce: 0.4, duration: 0.8 }
@@ -74,8 +75,9 @@ export function TransacoesClientShell({
   initialCategory = "Todas",
   initialSort = "date_desc",
   initialReview = "all",
+  initialResponsavelFromUrl = null,
 }: TransacoesClientProps) {
-  const { responsavel } = useFilter()
+  const { responsavel, setResponsavel } = useFilter()
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [month, setMonth] = useState<string>(initialMonth) // 0 means all for the selected year
@@ -86,6 +88,13 @@ export function TransacoesClientShell({
     setMonth(initialMonth)
     setYear(initialYear)
   }, [initialMonth, initialYear])
+
+  useEffect(() => {
+    if (!initialResponsavelFromUrl) return
+    if (initialResponsavelFromUrl !== responsavel) {
+      setResponsavel(initialResponsavelFromUrl)
+    }
+  }, [initialResponsavelFromUrl, responsavel, setResponsavel])
 
   // Context Persistence: Sincroniza a validade final (provada pela URL ou Cookie) com a memória de fallback
   useEffect(() => {

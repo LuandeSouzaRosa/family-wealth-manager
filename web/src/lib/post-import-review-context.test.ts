@@ -18,6 +18,8 @@ describe('buildPostImportReviewContext', () => {
     expect(result.periodSummary.totalNonConsumptionValue).toBe(0)
     expect(result.periodSummary.attentionCategory).toBe('Alimentacao')
     expect(result.periodSummary.leaderReviewHref).toBe('/transacoes?month=3&year=2026&category=Alimentacao&sort=value_desc')
+    expect(result.consolidatedSummary.coverage.status).toBe('unknown')
+    expect(result.consolidatedSummary.views).toHaveLength(3)
     expect(result.periodReviewHref).toBe('/transacoes?month=3&year=2026&sort=value_desc')
     expect(result.periodLabel).toBe('03/2026')
   })
@@ -39,6 +41,7 @@ describe('buildPostImportReviewContext', () => {
     expect(result.periodSummary.totalConsumptionValue).toBe(430)
     expect(result.periodSummary.totalNonConsumptionValue).toBe(0)
     expect(result.periodSummary.topConsumptionCategories[0]?.categoria).toBe('Outros')
+    expect(result.consolidatedSummary.views.find((view) => view.responsavel === 'Casal')?.attentionCategory).toBe('Outros')
     expect(result.periodReviewHref).toBe('/transacoes?month=3&year=2026&sort=value_desc')
     expect(result.periodLabel).toBe('03/2026')
   })
@@ -95,5 +98,34 @@ describe('buildPostImportReviewContext', () => {
     expect(result.periodSummary.topConsumptionCategories).toHaveLength(0)
     expect(result.periodSummary.attentionCategory).toBeNull()
     expect(result.periodSummary.leaderReviewHref).toBeNull()
+  })
+
+  it('consolida por periodo persistido e sinaliza cobertura parcial/ready por responsavel', () => {
+    const result = buildPostImportReviewContext(
+      [
+        { categoria: 'Outros', valor: 120, data: '2026-03-11T00:00:00.000Z', tipo: 'Saida', responsavel: 'Luan' },
+      ],
+      [
+        { categoria: 'Moradia', valor: 700, data: '2026-03-02T00:00:00.000Z', tipo: 'Saida', responsavel: 'Luan', origem: 'Importação', status: 'Realizado' },
+        { categoria: 'Transporte', valor: 320, data: '2026-03-03T00:00:00.000Z', tipo: 'Saida', responsavel: 'Luana', origem: 'Importação', status: 'Realizado' },
+        { categoria: 'Fatura Cartao', valor: 1100, data: '2026-03-04T00:00:00.000Z', tipo: 'Saida', responsavel: 'Casal', origem: 'Importação', status: 'Realizado' },
+      ]
+    )
+
+    expect(result.periodSummary.totalConsumptionValue).toBe(1020)
+    expect(result.periodSummary.totalNonConsumptionValue).toBe(1100)
+
+    expect(result.consolidatedSummary.coverage.status).toBe('ready')
+    expect(result.consolidatedSummary.coverage.importedResponsaveis).toEqual(
+      expect.arrayContaining(['Luan', 'Luana', 'Casal'])
+    )
+
+    const luan = result.consolidatedSummary.views.find((view) => view.responsavel === 'Luan')
+    expect(luan?.attentionCategory).toBe('Moradia')
+    expect(luan?.leaderReviewHref).toBe('/transacoes?month=3&year=2026&category=Moradia&sort=value_desc&responsavel=Luan')
+
+    const casal = result.consolidatedSummary.views.find((view) => view.responsavel === 'Casal')
+    expect(casal?.mode).toBe('non_consumption_dominant')
+    expect(casal?.totalNonConsumptionValue).toBe(1100)
   })
 })

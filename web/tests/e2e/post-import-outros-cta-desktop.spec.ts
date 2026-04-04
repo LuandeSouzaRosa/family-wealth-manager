@@ -64,6 +64,7 @@ test.describe('Post-import Outros review CTA (desktop)', () => {
       expect(leaderHref).toContain(`/transacoes?month=${month}&year=${year}`);
       expect(leaderHref).toContain('category=');
       expect(leaderHref).toContain('sort=value_desc');
+      expect(leaderHref).toContain('responsavel=');
 
       const outrosContext = page.getByText(/Restaram\s+\d+\s+linha\(s\)\s+em\s+"Outros"\s+somando/i).first();
       await expect(outrosContext).toBeVisible({ timeout: 15000 });
