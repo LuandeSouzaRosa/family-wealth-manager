@@ -1,5 +1,9 @@
-﻿export type PostImportReviewRow = {
+import { isAmbiguousReviewCandidate, isGenericCategory } from "./ambiguous-review"
+
+export type PostImportReviewRow = {
   categoria?: string | null
+  descricao?: string | null
+  tipo?: string | null
   valor?: number | null
   data?: string | null
 }
@@ -8,21 +12,11 @@ export type PostImportReviewContext = {
   outrosRows: number
   outrosValue: number
   reviewHref: string | null
+  ambiguousRows: number
+  ambiguousValue: number
+  ambiguousReviewHref: string | null
   periodReviewHref: string
   periodLabel: string
-}
-
-function normalizeToken(value: string | null | undefined): string {
-  return (value || "")
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-}
-
-function isGenericCategory(value: string | null | undefined): boolean {
-  const normalized = normalizeToken(value)
-  return normalized === "outros" || normalized === "sem categoria"
 }
 
 function resolveImportPeriod(rows: PostImportReviewRow[]) {
@@ -70,12 +64,23 @@ export function buildPostImportReviewContext(rows: PostImportReviewRow[]): PostI
   const outrosValue = rows
     .filter((row) => isGenericCategory(row.categoria))
     .reduce((acc, row) => acc + (Number(row.valor) || 0), 0)
+  const ambiguousRows = rows.filter((row) => isAmbiguousReviewCandidate(row)).length
+  const ambiguousValue = rows
+    .filter((row) => isAmbiguousReviewCandidate(row))
+    .reduce((acc, row) => acc + (Number(row.valor) || 0), 0)
+  const ambiguousReviewHref =
+    ambiguousRows > 0
+      ? `/transacoes?month=${period.month}&year=${period.year}&review=ambiguous&sort=value_desc`
+      : null
 
   if (outrosRows === 0) {
     return {
       outrosRows: 0,
       outrosValue: 0,
       reviewHref: null,
+      ambiguousRows,
+      ambiguousValue,
+      ambiguousReviewHref,
       periodReviewHref: period.periodReviewHref,
       periodLabel: period.periodLabel,
     }
@@ -85,7 +90,11 @@ export function buildPostImportReviewContext(rows: PostImportReviewRow[]): PostI
     outrosRows,
     outrosValue,
     reviewHref: `/transacoes?month=${period.month}&year=${period.year}&category=Outros&sort=value_desc`,
+    ambiguousRows,
+    ambiguousValue,
+    ambiguousReviewHref,
     periodReviewHref: period.periodReviewHref,
     periodLabel: period.periodLabel,
   }
 }
+

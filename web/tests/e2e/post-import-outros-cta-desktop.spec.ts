@@ -56,6 +56,39 @@ test.describe('Post-import Outros review CTA (desktop)', () => {
       const outrosContext = page.getByText(/Restaram\s+\d+\s+linha\(s\)\s+em\s+"Outros"\s+somando/i).first();
       await expect(outrosContext).toBeVisible({ timeout: 15000 });
 
+      const ambiguousCta = page.getByRole('button', { name: /Revisar ambiguos de maior impacto/i }).first();
+      await expect(ambiguousCta).toBeVisible({ timeout: 15000 });
+      const ambiguousHref = await ambiguousCta.evaluate((element) => {
+        const anchor = element.closest('a');
+        return anchor?.getAttribute('href');
+      });
+      expect(ambiguousHref).toBeTruthy();
+      expect(ambiguousHref).toContain(`/transacoes?month=${month}&year=${year}`);
+      expect(ambiguousHref).toContain('review=ambiguous');
+      expect(ambiguousHref).toContain('sort=value_desc');
+
+      const ambiguousPage = await page.context().newPage();
+      const ambiguousUrl = new URL(ambiguousHref!, appUrl).toString();
+      await ambiguousPage.goto(ambiguousUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await expect(ambiguousPage.getByTestId('filter-year')).toBeVisible({ timeout: 15000 });
+
+      const ambiguousCurrentUrl = new URL(ambiguousPage.url());
+      expect(ambiguousCurrentUrl.pathname).toBe('/transacoes');
+      expect(ambiguousCurrentUrl.searchParams.get('month')).toBe(String(month));
+      expect(ambiguousCurrentUrl.searchParams.get('year')).toBe(String(year));
+      expect(ambiguousCurrentUrl.searchParams.get('review')).toBe('ambiguous');
+      expect(ambiguousCurrentUrl.searchParams.get('sort')).toBe('value_desc');
+      await expect(
+        ambiguousPage.getByText(/Modo revisao: ambiguos de maior impacto/i).first()
+      ).toBeVisible({ timeout: 15000 });
+      const clearReviewButton = ambiguousPage.getByRole('button', { name: /Ver todas no periodo/i }).first();
+      await expect(clearReviewButton).toBeVisible({ timeout: 15000 });
+      await clearReviewButton.click();
+      await expect(ambiguousPage.getByTestId('filter-year')).toBeVisible({ timeout: 15000 });
+      const clearedUrl = new URL(ambiguousPage.url());
+      expect(clearedUrl.searchParams.get('review')).toBeNull();
+      await ambiguousPage.close();
+
       const cta = page.getByRole('button', { name: /Revisar maiores em Outros/i }).first();
       await expect(cta).toBeVisible({ timeout: 15000 });
       await cta.click();

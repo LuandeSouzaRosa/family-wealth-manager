@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input'
 import { useFilter } from '@/contexts/filter-context'
 import { isResponsibleMatch } from '@/lib/filter-utils'
 import { getYearFilterOptions } from '@/lib/period-range'
+import { isAmbiguousReviewCandidate } from '@/lib/ambiguous-review'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -34,6 +35,7 @@ interface TransacoesClientProps {
   initialYear?: string
   initialCategory?: string
   initialSort?: "date_desc" | "value_desc" | "value_asc"
+  initialReview?: "all" | "ambiguous"
 }
 
 const SPRING_TRANSITION = { type: "spring" as const, bounce: 0.4, duration: 0.8 }
@@ -71,6 +73,7 @@ export function TransacoesClientShell({
   initialYear = new Date().getFullYear().toString(),
   initialCategory = "Todas",
   initialSort = "date_desc",
+  initialReview = "all",
 }: TransacoesClientProps) {
   const { responsavel } = useFilter()
   const router = useRouter()
@@ -92,6 +95,7 @@ export function TransacoesClientShell({
   const [selectedCategory, setSelectedCategory] = useState(initialCategory)
   const [sortBy, setSortBy] = useState<"date_desc" | "value_desc" | "value_asc">(initialSort)
   const [visibleCount, setVisibleCount] = useState(30)
+  const reviewPreset = initialReview === "ambiguous" ? "ambiguous" : "all"
 
   useEffect(() => {
     setSelectedCategory(initialCategory)
@@ -103,7 +107,7 @@ export function TransacoesClientShell({
 
   useEffect(() => {
     setVisibleCount(30)
-  }, [month, year, responsavel, searchTerm, selectedCategory])
+  }, [month, year, responsavel, searchTerm, selectedCategory, reviewPreset])
 
   const uniqueCategories = useMemo(() => {
     const cats = new Set(initialData.map(tx => tx.categoria))
@@ -134,6 +138,17 @@ export function TransacoesClientShell({
       result = result.filter(tx => (new Date(tx.data).getMonth() + 1).toString() === month)
     }
 
+    if (reviewPreset === "ambiguous") {
+      result = result.filter((tx) =>
+        isAmbiguousReviewCandidate({
+          categoria: tx.categoria,
+          descricao: tx.descricao,
+          tipo: tx.tipo,
+          valor: tx.valor,
+        })
+      )
+    }
+
     // 4. Filtrar por Termo de Busca
     if (searchTerm) {
       const lower = searchTerm.toLowerCase()
@@ -156,7 +171,7 @@ export function TransacoesClientShell({
     }
 
     return result
-  }, [initialData, month, year, responsavel, searchTerm, selectedCategory, sortBy])
+  }, [initialData, month, year, responsavel, searchTerm, selectedCategory, sortBy, reviewPreset])
 
   const displayData = filteredData.slice(0, visibleCount)
 
@@ -170,10 +185,18 @@ export function TransacoesClientShell({
   const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val)
   const formatDate = (isoStr: string) => new Date(isoStr).toLocaleDateString('pt-BR')
 
-  const buildTransacoesQuery = (nextMonth: string, nextYear: string, nextCategory: string, nextSort: "date_desc" | "value_desc" | "value_asc") => {
+  const buildTransacoesQuery = (
+    nextMonth: string,
+    nextYear: string,
+    nextCategory: string,
+    nextSort: "date_desc" | "value_desc" | "value_asc",
+    options?: { includeReview?: boolean }
+  ) => {
     const params = new URLSearchParams()
     params.set("month", nextMonth)
     params.set("year", nextYear)
+    const includeReview = options?.includeReview ?? true
+    if (reviewPreset === "ambiguous" && includeReview) params.set("review", "ambiguous")
     if (nextCategory !== "Todas") params.set("category", nextCategory)
     if (nextSort !== "date_desc") params.set("sort", nextSort)
     return `?${params.toString()}`
@@ -271,6 +294,25 @@ export function TransacoesClientShell({
                 </div>
                 
                 <div className="space-y-4">
+                  {reviewPreset === "ambiguous" && (
+                    <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-700 dark:text-amber-400">
+                      <div className="flex items-center justify-between gap-2">
+                        <span>Modo revisao: ambiguos de maior impacto (Outros + PIX generico).</span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2 text-[11px] text-amber-700 hover:text-amber-800 dark:text-amber-300 dark:hover:text-amber-200"
+                          onClick={() => {
+                            startTransition(() => {
+                              router.push(buildTransacoesQuery(month, year, selectedCategory, sortBy, { includeReview: false }))
+                            })
+                          }}
+                        >
+                          Ver todas no periodo
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                   
                   {/* Busca */}
                   <div className="space-y-2">

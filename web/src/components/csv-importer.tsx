@@ -85,6 +85,9 @@ export function CsvImporter() {
     outrosRows: number;
     outrosValue: number;
     reviewHref: string | null;
+    ambiguousRows: number;
+    ambiguousValue: number;
+    ambiguousReviewHref: string | null;
     periodReviewHref: string;
     periodLabel: string;
   } | null>(null)
@@ -283,6 +286,9 @@ export function CsvImporter() {
            outrosRows: reviewContext.outrosRows,
            outrosValue: reviewContext.outrosValue,
            reviewHref: reviewContext.reviewHref,
+           ambiguousRows: reviewContext.ambiguousRows,
+           ambiguousValue: reviewContext.ambiguousValue,
+           ambiguousReviewHref: reviewContext.ambiguousReviewHref,
            periodReviewHref: reviewContext.periodReviewHref,
            periodLabel: reviewContext.periodLabel,
         })
@@ -686,6 +692,23 @@ export function CsvImporter() {
               </Button>
             </Link>
           </div>
+
+          {importReceipt.ambiguousRows > 0 && importReceipt.ambiguousReviewHref && (
+            <div className="w-full max-w-3xl rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 text-sm">
+              <p className="font-medium text-foreground">
+                Encontramos {importReceipt.ambiguousRows} lancamento(s) ambiguo(s) somando{" "}
+                {importReceipt.ambiguousValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}.
+              </p>
+              <p className="text-muted-foreground mt-1">
+                Este atalho abre o extrato no periodo importado, em ordem de maior valor, focando "Outros" e PIX generico para revisao manual.
+              </p>
+              <Link href={importReceipt.ambiguousReviewHref} className="inline-block mt-3">
+                <Button variant="outline" size="sm">
+                  Revisar ambiguos de maior impacto
+                </Button>
+              </Link>
+            </div>
+          )}
 
           {importReceipt.outrosRows > 0 && importReceipt.reviewHref && (
             <div className="w-full max-w-3xl rounded-lg border border-primary/20 bg-primary/5 p-4 text-sm">
