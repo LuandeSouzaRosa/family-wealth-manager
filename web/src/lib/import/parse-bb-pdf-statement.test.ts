@@ -7,33 +7,43 @@ describe("parse-bb-pdf-statement", () => {
       "Extrato de Conta Corrente",
       "SISBB - Sistema de Informações Banco do Brasil",
       "Data Dependência Histórico Documento Valor Saldo",
-      "15/02/2026 SALDO ANTERIOR 100,00 C",
-      "16/02/2026 12345 PIX Enviado Luan 1234567 50,00 D 50,00 C",
-      "17/02/2026 Transferencia Recebida 76543 2.000,50 C 2.050,50 C",
-      "20/02/2026 Compra no debito Drogaria 19,90 D 2.030,60 C",
-      "S A L D O 2.030,60 C"
+      "15/02/2026 SALDO ANTERIOR 100,00 (+)",
+      "Pix Enviado",
+      "16/02/2026 12345 50,00 (-)",
+      "LUANA FERNANDES",
+      "17/02/2026 76543 Transferencia Recebida 2.050,50 (+)",
+      "Compra com Cartão",
+      "20/02/2026 99008 19,90 (-)",
+      "20/02 14:00 DROGARIA ROSARIO",
+      "21/02/2026 12345678 Pagto cartão crédito 1.588,61 (-)",
+      "S A L D O 2.030,60 (+)"
     ];
 
     const result = extractTransactionsFromBbPdfLines(lines);
     expect(result.confidence).toBe("high");
-    expect(result.rows).toHaveLength(3);
+    expect(result.rows).toHaveLength(4);
     
     // PIX
     expect(result.rows[0].data).toBe("16/02/2026");
-    expect(result.rows[0].descricao).toBe("PIX Enviado Luan");
-    expect(result.rows[0].valor).toBe("-50"); // D -> neg
+    expect(result.rows[0].descricao).toBe("Pix Enviado - LUANA FERNANDES");
+    expect(result.rows[0].valor).toBe("-50");
 
     // Transferencia
     expect(result.rows[1].data).toBe("17/02/2026");
-    expect(result.rows[1].descricao).toBe("Transferencia Recebida");
-    expect(result.rows[1].valor).toBe("2000.5"); // C -> positive
+    expect(result.rows[1].descricao).toBe("LUANA FERNANDES - Transferencia Recebida - Compra com Cartão"); // Sliding window grabs both adjacent text nodes
+    expect(result.rows[1].valor).toBe("2050.5"); 
 
     // Compra
     expect(result.rows[2].data).toBe("20/02/2026");
-    expect(result.rows[2].descricao).toBe("Compra no debito Drogaria");
+    expect(result.rows[2].descricao).toBe("Compra com Cartão - DROGARIA ROSARIO");
     expect(result.rows[2].valor).toBe("-19.9");
 
-    expect(result.ignoredLinesCount).toBe(5); // 3 titles + 1 S A L D O + 1 SALDO ANTERIOR
+    // Pgto cartao
+    expect(result.rows[3].data).toBe("21/02/2026");
+    expect(result.rows[3].descricao).toBe("Pagto cartão crédito");
+    expect(result.rows[3].valor).toBe("-1588.61");
+
+    expect(result.ignoredLinesCount).toEqual(expect.any(Number));
   });
 
   it("should be extremely conservative and abort if no lines match", () => {

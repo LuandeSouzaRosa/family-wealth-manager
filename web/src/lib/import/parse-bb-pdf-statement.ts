@@ -26,10 +26,8 @@ export function extractTransactionsFromBbPdfLines(fullTextLines: string[]) {
       const dateStr = dateMatch[1];
       let remainder = line.substring(dateStr.length).trim();
       
-      // Remove dependency codes (usually isolated numbers after date)
-      remainder = remainder.replace(/^\d+\s+/, ""); 
-
-      const moneyPattern = /([\d.]*,\d{2})\s*([CD])?/g;
+      // Matches money and sign. Supports: D, C, (+), (-)
+      const moneyPattern = /([\d.]*,\d{2})\s*(\(\+\)|\(-\)|[CD])?/g;
       let match;
       const moneyMatches: { val: string, sign: string, index: number, length: number }[] = [];
       
@@ -43,28 +41,60 @@ export function extractTransactionsFromBbPdfLines(fullTextLines: string[]) {
       }
 
       if (moneyMatches.length > 0) {
-        // Usually, the first money match is the transaction value, and the second is the balance.
-        const moneyMatch = moneyMatches[0];
+        // Find the last money match, as it represents the transaction value, and balances are sometimes matched before
+        const moneyMatch = moneyMatches[moneyMatches.length - 1]; 
         const rawValor = moneyMatch.val.replace(/\./g, "").replace(",", ".");
         let floatValor = parseFloat(rawValor);
         
-        if (moneyMatch.sign === "D") {
+        const isDebit = moneyMatch.sign.includes("-") || moneyMatch.sign === "D";
+        const isCredit = moneyMatch.sign.includes("+") || moneyMatch.sign === "C";
+
+        if (isDebit) {
           floatValor = -Math.abs(floatValor);
-        } else if (moneyMatch.sign === "C") {
+        } else if (isCredit) {
           floatValor = Math.abs(floatValor);
         } else {
-          // Fallback if no sign explicitly present
+          // Fallback if no sign explicitly present: assume it as positive (can be corrected by user)
         }
 
-        const descricaoStr = remainder.substring(0, moneyMatch.index).trim().replace(/\s*\d+$/, "").trim(); // Strip trailing Doc number if any
+        // Clean up the description logic to not eat the value itself
+        let coreDesc = remainder.substring(0, moneyMatch.index).trim();
+        // Remove document numbers at the start or end of the core description
+        coreDesc = coreDesc.replace(/^[\d\s]+/, "").replace(/\s*\d+$/, "").trim(); 
         
-        if (isIgnorable(descricaoStr) || isIgnorable(line)) {
+        if (isIgnorable(coreDesc) || isIgnorable(line)) {
           ignoredLinesCount++;
         } else {
+           // Sliding window for rich description: BB PDFs scatter text above and below the core transaction.
+           const descParts: string[] = [];
+           
+           // Look behind: line i - 1
+           if (i > 0) {
+             const prevLine = fullTextLines[i - 1];
+             const isDateDetail = prevLine.match(/^\d{2}\/\d{2}/) || prevLine.match(/^(\d{2}\/\d{2}\/\d{4})/);
+             if (!isDateDetail && !isIgnorable(prevLine)) {
+               descParts.push(prevLine.trim());
+             }
+           }
+           
+           // Core
+           if (coreDesc) {
+             descParts.push(coreDesc);
+           }
+           
+           // Look ahead: line i + 1
+           if (i + 1 < fullTextLines.length) {
+             const nextLine = fullTextLines[i + 1];
+             if (!nextLine.match(/^(\d{2}\/\d{2}\/\d{4})/) && !isIgnorable(nextLine)) {
+               descParts.push(nextLine.replace(/^[\d\s/:]+/, "").trim()); // remove dates/hours from detail lines
+             }
+           }
+
+           const finalDesc = descParts.filter(Boolean).join(" - ") || "Lançamento sem descrição";
+
            rows.push({
              data: dateStr,
-             descricao: descricaoStr || "Lancamento sem descricao",
-             // Mapeia valor em string formatada do source file, preservando se é negativo
+             descricao: finalDesc,
              valor: String(floatValor)
            });
         }
