@@ -8,7 +8,7 @@ export default function ConciliacaoPage() {
           Conciliação <span className="font-semibold text-primary">Bancária</span>
         </h1>
         <p className="text-muted-foreground max-w-2xl">
-          Importe extratos bancários em formato CSV para agilizar o lançamento de despesas.
+          Importe extratos bancários em formato CSV ou PDF (Banco do Brasil) para agilizar o lançamento de despesas.
           O sistema tentará identificar automaticamente categorias e responsáveis.
         </p>
       </div>

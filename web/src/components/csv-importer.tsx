@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import Papa from 'papaparse'
+import { parseStatementFile } from '@/lib/import/parse-statement-file'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -162,7 +163,7 @@ export function CsvImporter() {
     periodLabel: string;
   } | null>(null)
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
@@ -171,40 +172,46 @@ export function CsvImporter() {
     setCsvQualityGuardrail(null)
     setNovasRegras(new Set())
     
-    Papa.parse(file, {
-      header: true,
-             complete: async (results) => {
-          const defaultResponsavel = resolveCsvImportResponsavelFromConta(contaAtual?.responsavel)
-          let lastValidDate = new Date().toISOString();
-          const normalized = results.data.map((row: any, index) => {
-            const fields = extractCanonicalCsvFields(row || {})
-            const rawDescription = fields.descricao
-            const desc = rawDescription || "Sem descricao"
-            const safeDate = parseDate(fields.data, lastValidDate)
-            const parsedValue = parseMoney(fields.valor || "0")
-            lastValidDate = safeDate;
+    try {
+      const results = await parseStatementFile(file);
 
-            return {
-              id: index,
-              data: safeDate,
-              descricao: desc,
-              valor: parsedValue,
-              categoria: aplicarRegras(desc),
-              responsavel: defaultResponsavel,
-              responsavelAuto: true,
-              tipo: (parsedValue < 0 ? "Sa\u00EDda" : "Entrada") as "Entrada" | "Sa\u00EDda",
-              missingDescription: !rawDescription
-            }
-          })
-          const cleanData = normalized.map(item => {
-             let val = item.valor
-             let tipo = item.tipo
-             if (val < 0) {
-               val = Math.abs(val)
-               tipo = "Saída"
-             }
-             return { ...item, valor: val, tipo: tipo as "Entrada" | "Saída" }
-          }).filter(item => item.valor > 0); // Ignore rows with 0 values
+      if (results.warnings && results.warnings.length > 0) {
+        results.warnings.forEach((w: string) => toast.warning(w));
+      }
+
+      if (results.confidence === "low") {
+        toast.error("Baixa confiança na leitura do arquivo. Revise cuidadosamente antes de importar.");
+      }
+
+      const defaultResponsavel = resolveCsvImportResponsavelFromConta(contaAtual?.responsavel)
+      let lastValidDate = new Date().toISOString();
+      const normalized = results.rows.map((row: any, index: number) => {
+        const desc = row.descricao || "Sem descricao"
+        const safeDate = parseDate(row.data, lastValidDate)
+        const parsedValue = parseMoney(String(row.valor || "0"))
+        lastValidDate = safeDate;
+
+        return {
+          id: index,
+          data: safeDate,
+          descricao: desc,
+          valor: parsedValue,
+          categoria: aplicarRegras(desc),
+          responsavel: defaultResponsavel,
+          responsavelAuto: true,
+          tipo: (parsedValue < 0 ? "Saída" : "Entrada") as "Entrada" | "Saída",
+          missingDescription: !row.descricao
+        }
+      })
+      const cleanData = normalized.map(item => {
+         let val = item.valor
+         let tipo = item.tipo
+         if (val < 0) {
+           val = Math.abs(val)
+           tipo = "Saída"
+         }
+         return { ...item, valor: val, tipo: tipo as "Entrada" | "Saída" }
+      }).filter(item => item.valor > 0); // Ignore rows with 0 values
 
           const missingDescriptionRows = cleanData.filter(item => item.missingDescription).length
           const missingDescriptionPct = cleanData.length > 0
@@ -266,12 +273,10 @@ export function CsvImporter() {
           } else {
               setData([]);
           }
-        },
-        error: (error) => {
-        console.error(error)
-        toast.error("Erro ao ler CSV: " + error.message)
-      }
-    })
+    } catch (error: any) {
+      console.error(error)
+      toast.error("Erro ao ler Arquivo: " + error.message)
+    }
   }
 
   const updateRow = (index: number, field: string, value: any) => {
@@ -425,10 +430,10 @@ export function CsvImporter() {
             <Upload className="h-8 w-8 text-primary" />
           </div>
           <div>
-            <h3 className="text-lg font-semibold text-foreground">Clique para selecionar ou arraste seu CSV</h3>
-            <p className="text-sm text-muted-foreground mt-1">Compatível com Nubank, Itaú, Inter e padrão bancário</p>
+            <h3 className="text-lg font-semibold text-foreground">Clique para selecionar ou arraste seu arquivo</h3>
+            <p className="text-sm text-muted-foreground mt-1">Compatível com CSV e PDF textual do Banco do Brasil</p>
           </div>
-          <Input id="csv-upload" type="file" className="hidden" accept=".csv" onChange={handleFileUpload} />
+          <Input id="csv-upload" type="file" className="hidden" accept=".csv,.pdf,application/pdf" onChange={handleFileUpload} />
         </div>
       )}
 
