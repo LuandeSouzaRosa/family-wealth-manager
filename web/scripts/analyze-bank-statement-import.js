@@ -2,9 +2,7 @@
 const fs = require("fs");
 const path = require("path");
 const Papa = require("papaparse");
-const {
-  categorizeImportedDescription,
-  createServiceClient,
+const {  createServiceClient,
   extractCanonicalCsvFields,
   formatMoney,
   isGenericCategory,
@@ -14,6 +12,7 @@ const {
   writeJson,
 } = require("./utils/fwm-ops-utils");
 
+const { categorizeImportedDescription } = require("../src/lib/csv-categorization.ts");
 const { parseStatementFile } = require("../src/lib/import/parse-statement-file.ts");
 
 async function parseStatement(filePath) {

@@ -19,21 +19,25 @@ function normalizeText(value: string | null | undefined): string {
 }
 
 function sanitizeRuleText(value: string): string {
-  return value.replace(/\s+/g, " ").trim();
+  // Remove noise like partial dates (dd/mm) and partial hours (hh:mm)
+  let clean = value.replace(/\b\d{2}\/\d{2}\b/g, " ").replace(/\b\d{2}:\d{2}\b/g, " ");
+  // Remove extraneous floating tokens
+  clean = clean.replace(/\s*-\s*-/g, " - ");
+  return clean.replace(/\s+/g, " ").trim();
 }
 
 function extractRuleAliasFromDescription(descricao: string): string | null {
   const normalized = sanitizeRuleText(descricao);
 
   const pixMatch = normalized.match(
-    /^transfer[e\u00ea]ncia enviada pelo pix\s*-\s*(.+?)\s*-\s*(?:\d|\u2022)/i
+    /^(?:transfer[e\u00ea]ncia enviada pelo pix|pix\s*-\s*enviado)\s*-\s*(.+?)(?:\s*-\s*(?:\d|\u2022)|$)/i
   );
   if (pixMatch?.[1]) return sanitizeRuleText(pixMatch[1]);
 
-  const debitoMatch = normalized.match(/^compra no d[e\u00e9]bito\s*-\s*(.+)$/i);
+  const debitoMatch = normalized.match(/^(?:compra no d[e\u00e9]bito|compra com cart[a\u00e3]o)\s*-\s*(.+?)(?:\s*-\s*(?:\d|\u2022)|$)/i);
   if (debitoMatch?.[1]) return sanitizeRuleText(debitoMatch[1]);
 
-  const boletoMatch = normalized.match(/^pagamento de boleto efetuado\s*-\s*(.+)$/i);
+  const boletoMatch = normalized.match(/^(?:pagamento de boleto efetuado|pagamento de impostos)\s*-\s*(.+?)(?:\s*-\s*(?:\d|\u2022)|$)/i);
   if (boletoMatch?.[1]) return sanitizeRuleText(boletoMatch[1]);
 
   return null;
@@ -61,17 +65,23 @@ function getCreatedAtScore(createdAt?: string | null): number {
 
 function inferCategoryByHeuristic(normalizedDescription: string): string | null {
   // Heuristica de fallback de baixo risco para elevar utilidade do insight sem sobrescrever regras do usuario.
-  if (normalizedDescription.includes("pagamento de fatura")) return "Fatura Cartao";
+  if (normalizedDescription.includes("pagamento de fatura") || normalizedDescription.includes("pagto cartao") || normalizedDescription.includes("pagamento de boleto") && normalizedDescription.includes("cartao")) return "Fatura Cartao";
+  
   if (
-    normalizedDescription.includes("transferencia enviada pelo pix") &&
+    (normalizedDescription.includes("transferencia enviada") || normalizedDescription.includes("pix enviado")) &&
     normalizedDescription.includes("juliana patricio martello")
   ) {
     return "Moradia";
   }
-  if (normalizedDescription.includes("compra no debito") && normalizedDescription.includes("administradora")) {
+  
+  if (normalizedDescription.includes("dare santa catarina") || normalizedDescription.includes("ipva")) {
+    return "Transporte"; // IPVA is typically related to car/transport
+  }
+
+  if ((normalizedDescription.includes("compra no debito") || normalizedDescription.includes("compra com cartao")) && normalizedDescription.includes("administradora")) {
     return "Moradia";
   }
-  if (normalizedDescription.includes("milium loja")) {
+  if (normalizedDescription.includes("milium loja") || normalizedDescription.includes("cassol")) {
     return "Moradia";
   }
   if (
@@ -80,12 +90,26 @@ function inferCategoryByHeuristic(normalizedDescription: string): string | null 
   ) {
     return "Transporte";
   }
+  
   if (
-    normalizedDescription.includes("transferencia enviada pelo pix") &&
-    normalizedDescription.includes("banco xp")
+    (normalizedDescription.includes("transferencia enviada") || normalizedDescription.includes("pix enviado")) &&
+    (normalizedDescription.includes("banco xp") || normalizedDescription.includes("nu invest") || normalizedDescription.includes("rico") || normalizedDescription.includes("ideal corretora") || normalizedDescription.includes("btg"))
   ) {
     return "Investimentos";
   }
+
+  if (normalizedDescription.includes("farmacia") || normalizedDescription.includes("drogaria") || normalizedDescription.includes("panvel")) {
+    return "Saúde";
+  }
+  
+  if (normalizedDescription.includes("uber ") || normalizedDescription.includes("99app") || normalizedDescription.includes("posto ") || normalizedDescription.includes("auto posto") || normalizedDescription.includes("estacionamento")) {
+    return "Transporte";
+  }
+
+  if (normalizedDescription.includes("tim s a") || normalizedDescription.includes("claro sa") || normalizedDescription.includes("vivo")) {
+    return "Contas Residenciais";
+  }
+
   if (
     normalizedDescription.includes("ifood") ||
     normalizedDescription.includes("restaurante") ||
@@ -93,10 +117,13 @@ function inferCategoryByHeuristic(normalizedDescription: string): string | null 
     normalizedDescription.includes("marmitas") ||
     normalizedDescription.includes("supermercado") ||
     normalizedDescription.includes("market") ||
+    normalizedDescription.includes("martendal") ||
+    normalizedDescription.includes("bistek") ||
     normalizedDescription.includes("pan de amore")
   ) {
     return "Alimentação";
   }
+  
   return null;
 }
 

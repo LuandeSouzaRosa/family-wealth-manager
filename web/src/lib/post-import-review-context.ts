@@ -84,9 +84,15 @@ export type PostImportStrengtheningSummary = {
   text: string
 }
 
+export type TopGenericDescription = {
+  descricao: string
+  valor: number
+}
+
 export type PostImportReviewContext = {
   outrosRows: number
   outrosValue: number
+  topGenericDescriptions: TopGenericDescription[]
   reviewHref: string | null
   ambiguousRows: number
   ambiguousValue: number
@@ -618,6 +624,17 @@ export function buildPostImportReviewContext(
   const outrosValue = rows
     .filter((row) => isGenericCategory(row.categoria))
     .reduce((acc, row) => acc + (Number(row.valor) || 0), 0)
+    
+  const genericDescMap = new Map<string, number>()
+  for (const row of rows.filter(r => isGenericCategory(r.categoria))) {
+    const desc = row.descricao || "Sem descricao"
+    genericDescMap.set(desc, (genericDescMap.get(desc) || 0) + (Number(row.valor) || 0))
+  }
+  const topGenericDescriptions = Array.from(genericDescMap.entries())
+    .map(([descricao, valor]) => ({ descricao, valor }))
+    .sort((a, b) => b.valor - a.valor)
+    .slice(0, 3)
+
   const ambiguousRows = rows.filter((row) => isAmbiguousReviewCandidate(row)).length
   const ambiguousValue = rows
     .filter((row) => isAmbiguousReviewCandidate(row))
@@ -631,6 +648,7 @@ export function buildPostImportReviewContext(
     return {
       outrosRows: 0,
       outrosValue: 0,
+      topGenericDescriptions: [],
       reviewHref: null,
       ambiguousRows,
       ambiguousValue,
@@ -647,6 +665,7 @@ export function buildPostImportReviewContext(
   return {
     outrosRows,
     outrosValue,
+    topGenericDescriptions,
     reviewHref: `/transacoes?month=${period.month}&year=${period.year}&category=Outros&sort=value_desc`,
     ambiguousRows,
     ambiguousValue,

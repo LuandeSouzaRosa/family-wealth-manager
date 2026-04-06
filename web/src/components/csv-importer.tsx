@@ -90,6 +90,10 @@ export function CsvImporter() {
     pctSemDescricao: number;
     outrosRows: number;
     outrosValue: number;
+    topGenericDescriptions: Array<{
+      descricao: string;
+      valor: number;
+    }>;
     reviewHref: string | null;
     ambiguousRows: number;
     ambiguousValue: number;
@@ -393,6 +397,7 @@ export function CsvImporter() {
              : 0,
            outrosRows: reviewContext.outrosRows,
            outrosValue: reviewContext.outrosValue,
+           topGenericDescriptions: reviewContext.topGenericDescriptions,
            reviewHref: reviewContext.reviewHref,
            ambiguousRows: reviewContext.ambiguousRows,
            ambiguousValue: reviewContext.ambiguousValue,
@@ -793,7 +798,22 @@ export function CsvImporter() {
             </p>
           )}
 
-          <div className="w-full max-w-3xl rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-4 text-sm">
+          {importReceipt.outrosRows > 0 && importReceipt.topGenericDescriptions && importReceipt.topGenericDescriptions.length > 0 && (
+            <div className="w-full max-w-3xl rounded-lg border border-amber-500/20 bg-amber-500/5 p-4 text-sm mt-2">
+              <p className="font-medium text-amber-700 dark:text-amber-500">Dica de Qualidade: Crie regras para gastos genéricos recorrentes</p>
+              <p className="text-muted-foreground mt-1 text-xs">
+                Restaram <strong>{importReceipt.outrosRows}</strong> lançamentos sem categoria clara (totalizando {importReceipt.outrosValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}).
+                Avalie ensinar o sistema a ler os principais itens abaixo através de suas <Link href={importReceipt.reviewHref || "/"} className="text-amber-600 dark:text-amber-400 hover:underline">Categorias</Link>:
+              </p>
+              <ul className="list-disc list-inside mt-2 space-y-1 text-xs text-amber-700/90 dark:text-amber-400/90">
+                {importReceipt.topGenericDescriptions.map(td => (
+                  <li key={td.descricao}>{td.descricao.substring(0, 36)}{td.descricao.length > 36 ? '...' : ''} <span className="font-semibold">({td.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })})</span></li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <div className="w-full max-w-3xl rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-4 text-sm mt-4">
             <p className="font-medium text-foreground">Resumo inteligente do periodo importado</p>
             <p className="text-muted-foreground mt-1">
               Responsaveis detectados no periodo importado:{" "}
