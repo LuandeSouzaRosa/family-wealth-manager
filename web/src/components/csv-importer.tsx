@@ -20,12 +20,13 @@ import {
   markCsvImportResponsavelAsManual,
   resolveCsvImportResponsavelFromConta,
 } from '@/lib/csv-import-responsavel'
-import { Upload, Check, AlertCircle, Loader2, FileSpreadsheet, PlusCircle, Info } from 'lucide-react'
+import { Upload, Check, AlertCircle, Loader2, FileSpreadsheet, PlusCircle, Info, ShieldAlert, ShieldCheck } from 'lucide-react'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import { Checkbox } from "@/components/ui/checkbox"
 import { toast } from "sonner"
+import { StatementParseResult } from '@/lib/import/statement-file-types'
 
 type CsvQualityGuardrail = {
   totalRows: number
@@ -50,6 +51,7 @@ export function CsvImporter() {
   const [contas, setContas] = useState<any[]>([])
   const [contaSelecionada, setContaSelecionada] = useState<string>("none")
   const [csvQualityGuardrail, setCsvQualityGuardrail] = useState<CsvQualityGuardrail | null>(null)
+  const [parseResult, setParseResult] = useState<StatementParseResult | null>(null)
   const isSubmittingRef = useRef(false)
   
   const contaAtual = contas.find(c => c.id === contaSelecionada)
@@ -178,6 +180,7 @@ export function CsvImporter() {
     
     try {
       const results = await parseStatementFile(file);
+      setParseResult(results);
 
       if (results.warnings && results.warnings.length > 0) {
         results.warnings.forEach((w: string) => toast.warning(w));
@@ -450,11 +453,36 @@ export function CsvImporter() {
           className="space-y-4"
         >
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="flex items-center gap-2 text-muted-foreground overflow-hidden">
-              <FileSpreadsheet className="h-5 w-5 shrink-0" />
-              <span className="font-medium text-foreground truncate">{fileName}</span>
-              <span className="text-sm shrink-0">({data.length} linhas)</span>
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-2 text-muted-foreground overflow-hidden">
+                <FileSpreadsheet className="h-5 w-5 shrink-0" />
+                <span className="font-medium text-foreground truncate">{fileName}</span>
+                <span className="text-sm shrink-0">({parseResult ? parseResult.parsedRowsCount : data.length} linhas)</span>
+                {parseResult && parseResult.sourceType !== "unknown" && (
+                  <span className="text-xs shrink-0 bg-muted/80 px-2 py-0.5 rounded-md font-medium">
+                    {parseResult.sourceType === "csv" ? "CSV Padrão" : "PDF Banco do Brasil"}
+                  </span>
+                )}
+              </div>
+              
+              {parseResult && (
+                <div className="flex items-center gap-2 text-xs">
+                  {parseResult.confidence === "high" ? (
+                    <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium bg-emerald-500/10 px-1.5 py-0.5 rounded">
+                      <ShieldCheck className="h-3 w-3" /> Confiança Alta na Leitura
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1 text-red-600 dark:text-red-400 font-medium bg-red-500/10 px-1.5 py-0.5 rounded">
+                      <ShieldAlert className="h-3 w-3" /> Confiança Baixa (Revisar com cuidado)
+                    </span>
+                  )}
+                  {parseResult.ignoredLinesCount > 0 && (
+                    <span className="text-muted-foreground">• {parseResult.ignoredLinesCount} ignoradas (cabeçalhos/saldos)</span>
+                  )}
+                </div>
+              )}
             </div>
+            
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
                <Select value={contaSelecionada} onValueChange={handleContaSelecionadaChange}>
                   <SelectTrigger className="w-full sm:w-[250px]">
@@ -769,225 +797,191 @@ export function CsvImporter() {
               <div className="h-12 w-12 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-500 mb-2">
                 <Check className="h-6 w-6" />
               </div>
-              <h3 className="text-2xl font-bold tracking-tight text-foreground">Lote processado com sucesso</h3>
-              <p className="text-muted-foreground">O resumo da operação está detalhado abaixo.</p>
-          </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full max-w-3xl">
-             <div className="bg-muted/50 border border-border p-4 rounded-lg flex flex-col items-center justify-center text-center">
-                 <span className="text-3xl font-light text-foreground">{importReceipt.totalNoLote}</span>
-                 <span className="text-xs uppercase tracking-wider font-semibold text-muted-foreground mt-1">Total no Lote</span>
-             </div>
-             <div className="bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-lg flex flex-col items-center justify-center text-center">
-                 <span className="text-3xl font-light text-emerald-600 dark:text-emerald-400">{importReceipt.importadas}</span>
-                 <span className="text-xs uppercase tracking-wider font-semibold text-emerald-700/70 dark:text-emerald-500/70 mt-1">N. Importadas</span>
-             </div>
-             <div className="bg-blue-500/10 border border-blue-500/20 p-4 rounded-lg flex flex-col items-center justify-center text-center">
-                 <span className="text-3xl font-light text-blue-600 dark:text-blue-400">{importReceipt.conciliadas}</span>
-                 <span className="text-xs uppercase tracking-wider font-semibold text-blue-700/70 dark:text-blue-500/70 mt-1">Conciliadas</span>
-             </div>
-             <div className="bg-secondary border border-border/50 p-4 rounded-lg flex flex-col items-center justify-center text-center opacity-80">
-                 <span className="text-3xl font-light text-muted-foreground">{importReceipt.ignoradas}</span>
-                 <span className="text-xs uppercase tracking-wider font-semibold text-muted-foreground mt-1">Ignoradas</span>
-             </div>
-          </div>
-
-          {importReceipt.linhasSemDescricao > 0 && (
-            <p className="text-xs text-amber-700 dark:text-amber-400 text-center max-w-2xl">
-              Guardrail: {importReceipt.linhasSemDescricao} linha(s) entraram sem descricao reconhecida ({importReceipt.pctSemDescricao}%).
-            </p>
-          )}
-
-          {importReceipt.outrosRows > 0 && importReceipt.topGenericDescriptions && importReceipt.topGenericDescriptions.length > 0 && (
-            <div className="w-full max-w-3xl rounded-lg border border-amber-500/20 bg-amber-500/5 p-4 text-sm mt-2">
-              <p className="font-medium text-amber-700 dark:text-amber-500">Dica de Qualidade: Crie regras para gastos genéricos recorrentes</p>
-              <p className="text-muted-foreground mt-1 text-xs">
-                Restaram <strong>{importReceipt.outrosRows}</strong> lançamentos sem categoria clara (totalizando {importReceipt.outrosValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}).
-                Avalie ensinar o sistema a ler os principais itens abaixo através de suas <Link href={importReceipt.reviewHref || "/"} className="text-amber-600 dark:text-amber-400 hover:underline">Categorias</Link>:
-              </p>
-              <ul className="list-disc list-inside mt-2 space-y-1 text-xs text-amber-700/90 dark:text-amber-400/90">
-                {importReceipt.topGenericDescriptions.map(td => (
-                  <li key={td.descricao}>{td.descricao.substring(0, 36)}{td.descricao.length > 36 ? '...' : ''} <span className="font-semibold">({td.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })})</span></li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          <div className="w-full max-w-3xl rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-4 text-sm mt-4">
-            <p className="font-medium text-foreground">Resumo inteligente do periodo importado</p>
-            <p className="text-muted-foreground mt-1">
-              Responsaveis detectados no periodo importado:{" "}
-              {importReceipt.consolidatedSummary.coverage.importedResponsaveis.length > 0
-                ? importReceipt.consolidatedSummary.coverage.importedResponsaveis.join(", ")
-                : "nenhum identificado com seguranca"}.
-            </p>
-            {importReceipt.consolidatedSummary.coverage.status === "partial" && (
-              <p className="text-amber-700 dark:text-amber-400 mt-1">
-                Cobertura parcial do casal: ainda faltam importacoes de{" "}
-                {importReceipt.consolidatedSummary.coverage.missingForCouple.join(" e ")} para leitura consolidada completa.
-              </p>
-            )}
-            {importReceipt.consolidatedSummary.coverage.status === "unknown" && (
-              <p className="text-amber-700 dark:text-amber-400 mt-1">
-                Cobertura do casal ainda nao confirmada neste recorte; use o extrato para validar se todos os responsaveis foram importados.
-              </p>
-            )}
-            {importReceipt.consolidatedSummary.coverage.status === "ready" && (
-              <p className="text-muted-foreground mt-1">
-                Cobertura pronta para leitura consolidada por responsavel e casal neste periodo.
-              </p>
-            )}
-
-            <div className="mt-3 grid gap-3 md:grid-cols-3">
-              {importReceipt.consolidatedSummary.views.map((view) => (
-                <div key={view.responsavel} className="rounded-md border border-border/60 bg-background/70 p-3">
-                  <p className="font-medium text-foreground">{view.responsavel}</p>
-                  {view.mode === "consumption_focus" ? (
-                    <>
-                      <p className="text-muted-foreground mt-1">
-                        Consumo real: {view.totalConsumptionValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                      </p>
-                      {view.totalNonConsumptionValue > 0 && (
-                        <p className="text-muted-foreground">
-                          Nao-consumo desconsiderado: {view.totalNonConsumptionValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                        </p>
-                      )}
-                      {view.attentionCategory && (
-                        <p className="text-muted-foreground">
-                          Atencao inicial: {view.attentionCategory} ({(view.attentionPercent || 0).toFixed(1)}%)
-                        </p>
-                      )}
-                    </>
-                  ) : view.mode === "non_consumption_dominant" ? (
-                    <p className="text-muted-foreground mt-1">
-                      Predominio de movimentacao financeira ({view.totalNonConsumptionValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}), sem base forte de consumo.
-                    </p>
+              <h3 className="text-2xl font-bold tracking-tight text-foreground">Importação Finalizada</h3>
+              
+              {parseResult && (
+                <div className="flex items-center justify-center gap-3 mt-2 text-sm text-muted-foreground flex-wrap">
+                  <span className="bg-muted px-2 py-0.5 rounded-md text-xs font-medium border border-border">
+                    {parseResult.sourceType === "csv" ? "CSV Tradicional" : "PDF do Banco do Brasil"}
+                  </span>
+                  {parseResult.confidence === "high" ? (
+                    <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium">
+                      <ShieldCheck className="h-4 w-4" /> Leitura Confiável
+                    </span>
                   ) : (
-                    <p className="text-muted-foreground mt-1">
-                      Sem base suficiente de saidas para concluir consumo real.
-                    </p>
+                    <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400 font-medium">
+                      <ShieldAlert className="h-4 w-4" /> Qualidade Parcial
+                    </span>
                   )}
-                  {view.ambiguousRows > 0 && (
-                    <p className="text-amber-700 dark:text-amber-400 mt-1">
-                      Ambiguo: {view.ambiguousRows} lanc. ({view.ambiguousValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })})
-                    </p>
+                  {parseResult.ignoredLinesCount > 0 && (
+                    <span>{parseResult.ignoredLinesCount} descartadas (lixo/cabeçalho)</span>
                   )}
-                  <Link
-                    href={view.leaderReviewHref || view.ambiguousReviewHref || view.periodReviewHref}
-                    className="inline-block mt-2"
-                  >
-                    <Button variant="outline" size="sm">
-                      {view.leaderReviewHref
-                        ? "Revisar lider no extrato"
-                        : view.ambiguousReviewHref
-                          ? "Revisar ambiguos no extrato"
-                          : "Abrir extrato deste recorte"}
-                    </Button>
-                  </Link>
                 </div>
-              ))}
-            </div>
-
-            {importReceipt.ambiguousRows > 0 && (
-              <p className="text-amber-700 dark:text-amber-400 mt-2">
-                Ressalva: {importReceipt.ambiguousRows} lancamento(s) ambiguo(s) somando {importReceipt.ambiguousValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} ainda podem alterar a leitura final.
-              </p>
-            )}
+              )}
           </div>
 
-          <div className="w-full max-w-3xl rounded-lg border border-border/60 bg-muted/20 p-4 text-sm">
-            <p className="font-medium text-foreground">Prioridades do periodo importado</p>
-            <p className="text-muted-foreground mt-1">{importReceipt.periodPriorities.primaryAttention.text}</p>
-            <Link href={importReceipt.periodPriorities.primaryAttention.actionHref} className="inline-block mt-2">
-              <Button variant="outline" size="sm">
-                {importReceipt.periodPriorities.primaryAttention.actionLabel}
-              </Button>
-            </Link>
+          <div className="w-full max-w-4xl space-y-8">
+             {/* SEÇÃO 1: O QUE FOI BEM SUCEDIDO (LEITURA) */}
+             <div className="space-y-4">
+                <h4 className="flex items-center gap-2 text-foreground font-semibold border-b pb-2">
+                   <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                   O que foi processado e lido
+                </h4>
+                
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                   <div className="bg-muted/50 border border-border p-4 rounded-lg flex flex-col items-center justify-center text-center">
+                       <span className="text-3xl font-light text-foreground">{importReceipt.totalNoLote}</span>
+                       <span className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mt-1">Lote Base</span>
+                   </div>
+                   <div className="bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-lg flex flex-col items-center justify-center text-center">
+                       <span className="text-3xl font-light text-emerald-600 dark:text-emerald-400">{importReceipt.importadas}</span>
+                       <span className="text-[10px] uppercase tracking-wider font-semibold text-emerald-700/70 dark:text-emerald-500/70 mt-1">Registradas</span>
+                   </div>
+                   <div className="bg-blue-500/10 border border-blue-500/20 p-4 rounded-lg flex flex-col items-center justify-center text-center">
+                       <span className="text-3xl font-light text-blue-600 dark:text-blue-400">{importReceipt.conciliadas}</span>
+                       <span className="text-[10px] uppercase tracking-wider font-semibold text-blue-700/70 dark:text-blue-500/70 mt-1">Conciliadas</span>
+                   </div>
+                   <div className="bg-secondary border border-border/50 p-4 rounded-lg flex flex-col items-center justify-center text-center opacity-80">
+                       <span className="text-3xl font-light text-muted-foreground">{importReceipt.ignoradas}</span>
+                       <span className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mt-1">Ignoradas (Dupl)</span>
+                   </div>
+                </div>
 
-            {importReceipt.periodPriorities.confidenceLimiter && (
-              <div className="mt-3 rounded-md border border-amber-500/30 bg-amber-500/10 p-3">
-                <p className="text-amber-800 dark:text-amber-300">
-                  {importReceipt.periodPriorities.confidenceLimiter.text}
-                </p>
-                <Link
-                  href={importReceipt.periodPriorities.confidenceLimiter.actionHref}
-                  className="inline-block mt-2"
-                >
-                  <Button variant="outline" size="sm">
-                    {importReceipt.periodPriorities.confidenceLimiter.actionLabel}
-                  </Button>
-                </Link>
-              </div>
-            )}
+                <div className="w-full rounded-lg border border-border bg-card p-4 text-sm shadow-sm">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="font-medium text-foreground">Identidade Financeira do Período</p>
+                      <p className="text-muted-foreground mt-1 text-xs">
+                        Base atual de leitura consolidada para os dados deste extrato:{" "}
+                        {importReceipt.consolidatedSummary.coverage.importedResponsaveis.length > 0
+                          ? importReceipt.consolidatedSummary.coverage.importedResponsaveis.join(", ")
+                          : "indefinido"}.
+                        {importReceipt.consolidatedSummary.coverage.status === "partial" && 
+                           ` Ainda fatam: ${importReceipt.consolidatedSummary.coverage.missingForCouple.join(" e ")}.`
+                        }
+                      </p>
+                    </div>
+                    {importReceipt.strengtheningSummary.level === "strengthened" && (
+                      <span className="bg-blue-500/10 text-blue-600 text-[10px] uppercase tracking-wider font-bold px-2 py-1 rounded">Base Fortificada</span>
+                    )}
+                  </div>
+                  
+                  <div className="mt-4 grid gap-3 md:grid-cols-3">
+                    {importReceipt.consolidatedSummary.views.map((view) => (
+                      <div key={view.responsavel} className="rounded-md border border-border/60 bg-muted/30 p-3 flex flex-col justify-between">
+                        <div>
+                          <p className="font-medium text-foreground">{view.responsavel}</p>
+                          {view.mode === "consumption_focus" ? (
+                            <div className="mt-2 space-y-1 text-xs">
+                              <p className="text-emerald-700 dark:text-emerald-400 font-medium">
+                                Gasto Fixo/Variável: {view.totalConsumptionValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                              </p>
+                              {view.attentionCategory && (
+                                <p className="text-muted-foreground">
+                                  Líder: {view.attentionCategory} ({(view.attentionPercent || 0).toFixed(1)}%)
+                                </p>
+                              )}
+                            </div>
+                          ) : view.mode === "non_consumption_dominant" ? (
+                            <p className="text-muted-foreground mt-2 text-xs">
+                              Fluxo Alto ({view.totalNonConsumptionValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}). Mês dominado por investimentos/faturas.
+                            </p>
+                          ) : (
+                            <p className="text-muted-foreground mt-2 text-xs">Aguardando mais dados de saída.</p>
+                          )}
+                        </div>
+                        <Link href={view.leaderReviewHref || view.ambiguousReviewHref || view.periodReviewHref} className="mt-3">
+                          <Button variant="outline" size="sm" className="w-full text-xs h-7">
+                            Abrir Foco
+                          </Button>
+                        </Link>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+             </div>
 
-            <div className="mt-3 rounded-md border border-border/60 bg-background/70 p-3">
-              <p className="text-muted-foreground">{importReceipt.periodPriorities.nextAction.text}</p>
-              <Link href={importReceipt.periodPriorities.nextAction.actionHref} className="inline-block mt-2">
-                <Button variant="outline" size="sm">
-                  {importReceipt.periodPriorities.nextAction.actionLabel}
-                </Button>
-              </Link>
-              <p className="text-xs text-muted-foreground mt-2">
-                Ganho esperado: {importReceipt.periodPriorities.expectedConfidenceImpact}
-              </p>
-            </div>
+             {/* SEÇÃO 2: O QUE AINDA ESTÁ FROUXO (REFINAMENTO) */}
+             <div className="space-y-4 pt-4">
+                <h4 className="flex items-center gap-2 text-foreground font-semibold border-b pb-2">
+                   <div className="w-2 h-2 rounded-full bg-amber-500"></div>
+                   Onde seu refinamento gerará mais impacto
+                </h4>
+
+                {/* Bloco Tático - Prioridades Dinâmicas */}
+                <div className="w-full flex flex-col md:flex-row gap-4">
+                    <div className="flex-1 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 text-sm flex flex-col justify-between">
+                      <div>
+                        <p className="font-medium text-amber-800 dark:text-amber-500 flex items-center gap-1">
+                           <AlertCircle className="w-4 h-4" /> Qualidade Geral
+                        </p>
+                        <p className="text-amber-700/80 dark:text-amber-400/80 mt-1 text-xs">{importReceipt.periodPriorities.primaryAttention.text}</p>
+                      </div>
+                      <Link href={importReceipt.periodPriorities.primaryAttention.actionHref} className="inline-block mt-3 w-full">
+                        <Button size="sm" variant="outline" className="w-full bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-500 border-amber-500/30">
+                          {importReceipt.periodPriorities.primaryAttention.actionLabel}
+                        </Button>
+                      </Link>
+                    </div>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-4">
+                  {/* Bloco Operacional - Dica Genéricos */}
+                  {importReceipt.outrosRows > 0 && importReceipt.topGenericDescriptions && importReceipt.topGenericDescriptions.length > 0 && (
+                    <div className="w-full rounded-lg border border-border bg-card p-4 text-sm shadow-sm">
+                      <p className="font-medium text-foreground">Ofensores de Clareza (O lixo residual)</p>
+                      <p className="text-muted-foreground mt-1 text-xs">
+                        <strong>{importReceipt.outrosRows}</strong> itens entraram em "Outros" ({importReceipt.outrosValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}). Reduza a carga ensinando nomes comuns abaixo:
+                      </p>
+                      <ul className="list-disc list-inside mt-3 space-y-1 text-xs text-muted-foreground">
+                        {importReceipt.topGenericDescriptions.map(td => (
+                          <li key={td.descricao}>
+                            {td.descricao.substring(0, 30)}{td.descricao.length > 30 ? '...' : ''} <span className="font-medium text-foreground">({td.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })})</span>
+                          </li>
+                        ))}
+                      </ul>
+                      <Link href={importReceipt.reviewHref || "/"} className="inline-block mt-4 w-full">
+                        <Button size="sm" variant="secondary" className="w-full">
+                          Criar regras para listar Outros
+                        </Button>
+                      </Link>
+                    </div>
+                  )}
+
+                  {/* Bloco Operacional - Ambíguos / Guardrail */}
+                  <div className="w-full space-y-3">
+                    {importReceipt.ambiguousRows > 0 && importReceipt.ambiguousReviewHref && (
+                      <div className="rounded-lg border border-border bg-card p-4 text-sm shadow-sm h-full flex flex-col justify-between">
+                        <div>
+                          <p className="font-medium text-foreground">Revisão de Ambiguos</p>
+                          <p className="text-muted-foreground mt-1 text-xs">
+                            {importReceipt.ambiguousRows} lançamentos se cruzam no histórico ({importReceipt.ambiguousValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}). Sua categorização está duvidosa.
+                          </p>
+                        </div>
+                        <Link href={importReceipt.ambiguousReviewHref} className="inline-block mt-3">
+                          <Button variant="secondary" size="sm" className="w-full">Limpar Ambiguidade</Button>
+                        </Link>
+                      </div>
+                    )}
+                    
+                    {importReceipt.linhasSemDescricao > 0 && (
+                      <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-4 text-sm flex flex-col justify-between">
+                         <div>
+                          <p className="font-medium text-red-600 dark:text-red-400">Falha de Dados (Guardrail)</p>
+                          <p className="text-red-500/80 dark:text-red-400/80 mt-1 text-xs">
+                            {importReceipt.linhasSemDescricao} linhas lidas sem qualquer descrição. Este faturamento cego ({importReceipt.pctSemDescricao}%) corrompe relatórios.
+                          </p>
+                         </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+             </div>
           </div>
 
-          <div className="w-full max-w-3xl rounded-lg border border-border/60 bg-muted/10 p-4 text-sm">
-            <p className="font-medium text-foreground">Fortalecimento observado no resumo</p>
-            <p className="text-muted-foreground mt-1">{importReceipt.strengtheningSummary.text}</p>
-          </div>
-
-          <div className="w-full max-w-3xl rounded-lg border border-border/60 bg-muted/20 p-4 text-sm">
-            <p className="font-medium text-foreground">
-              Continue a revisao no periodo importado ({importReceipt.periodLabel}).
-            </p>
-            <p className="text-muted-foreground mt-1">
-              Abrir o extrato neste recorte evita drift de contexto apos a importacao.
-            </p>
-            <Link href={importReceipt.periodReviewHref} className="inline-block mt-3">
-              <Button variant="outline" size="sm">
-                Abrir extrato do periodo importado
-              </Button>
-            </Link>
-          </div>
-
-          {importReceipt.ambiguousRows > 0 && importReceipt.ambiguousReviewHref && (
-            <div className="w-full max-w-3xl rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 text-sm">
-              <p className="font-medium text-foreground">
-                Encontramos {importReceipt.ambiguousRows} lancamento(s) ambiguo(s) somando{" "}
-                {importReceipt.ambiguousValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}.
-              </p>
-              <p className="text-muted-foreground mt-1">
-                Este atalho abre o extrato no periodo importado, em ordem de maior valor, focando "Outros" e PIX generico para revisao manual.
-              </p>
-              <Link href={importReceipt.ambiguousReviewHref} className="inline-block mt-3">
-                <Button variant="outline" size="sm">
-                  Revisar ambiguos de maior impacto
-                </Button>
-              </Link>
-            </div>
-          )}
-
-          {importReceipt.outrosRows > 0 && importReceipt.reviewHref && (
-            <div className="w-full max-w-3xl rounded-lg border border-primary/20 bg-primary/5 p-4 text-sm">
-              <p className="font-medium text-foreground">
-                Restaram {importReceipt.outrosRows} linha(s) em "Outros" somando{" "}
-                {importReceipt.outrosValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}.
-              </p>
-              <p className="text-muted-foreground mt-1">
-                Para reduzir atrito de revisao, abra o extrato ja filtrado por "Outros" e ordenado por maior valor.
-              </p>
-              <Link href={importReceipt.reviewHref} className="inline-block mt-3">
-                <Button variant="outline" size="sm">
-                  Revisar maiores em Outros
-                </Button>
-              </Link>
-            </div>
-          )}
-
-          <Button variant="outline" onClick={() => { setImportReceipt(null); setData([]); setCsvQualityGuardrail(null); setNovasRegras(new Set()); }} className="mt-4">
-            Importar Outro Arquivo
+          <Button variant="outline" onClick={() => { setImportReceipt(null); setData([]); setCsvQualityGuardrail(null); setParseResult(null); setNovasRegras(new Set()); }} className="mt-8">
+            Voltar e Importar Outro Lote
           </Button>
         </motion.div>
       )}
