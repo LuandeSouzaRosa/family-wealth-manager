@@ -19,10 +19,10 @@ function normalizeText(value: string | null | undefined): string {
 }
 
 function sanitizeRuleText(value: string): string {
-  // Remove noise like partial dates (dd/mm) and partial hours (hh:mm)
-  let clean = value.replace(/\b\d{2}\/\d{2}\b/g, " ").replace(/\b\d{2}:\d{2}\b/g, " ");
-  // Remove extraneous floating tokens
-  clean = clean.replace(/\s*-\s*-/g, " - ");
+  let clean = value.replace(/\b\d{2}\/\d{2}(?:\/\d{2,4})?\b/g, " "); // Remove dates dd/mm or dd/mm/yyyy
+  clean = clean.replace(/\b\d{2}:\d{2}(?::\d{2})?\b/g, " "); // Remove times
+  clean = clean.replace(/\b\d{4,}\b/g, " "); // Remove 4+ digits (NSU, CPF, Auth codes)
+  clean = clean.replace(/\s*-\s*-/g, " - "); // Extraneous dashes
   return clean.replace(/\s+/g, " ").trim();
 }
 
@@ -30,15 +30,25 @@ function extractRuleAliasFromDescription(descricao: string): string | null {
   const normalized = sanitizeRuleText(descricao);
 
   const pixMatch = normalized.match(
-    /^(?:transfer[e\u00ea]ncia enviada pelo pix|pix\s*-\s*enviado)\s*-\s*(.+?)(?:\s*-\s*(?:\d|\u2022)|$)/i
+    /^(?:transfer[e\u00ea]ncia enviada pelo pix|pix\s*-\s*enviado|pix elet|pix reinf)\s*-\s*(.+?)(?:\s*-\s*(?:\d|\u2022)|$)/i
   );
   if (pixMatch?.[1]) return sanitizeRuleText(pixMatch[1]);
 
   const debitoMatch = normalized.match(/^(?:compra no d[e\u00e9]bito|compra com cart[a\u00e3]o)\s*-\s*(.+?)(?:\s*-\s*(?:\d|\u2022)|$)/i);
   if (debitoMatch?.[1]) return sanitizeRuleText(debitoMatch[1]);
 
-  const boletoMatch = normalized.match(/^(?:pagamento de boleto efetuado|pagamento de impostos)\s*-\s*(.+?)(?:\s*-\s*(?:\d|\u2022)|$)/i);
+  const boletoMatch = normalized.match(/^(?:pagamento de boleto efetuado|pagamento de impostos|pagto titulo(?: web)?|pagto cobranca)\s*-\s*(.+?)(?:\s*-\s*(?:\d|\u2022)|$)/i);
   if (boletoMatch?.[1]) return sanitizeRuleText(boletoMatch[1]);
+  
+  // Generic prefix remover to strip explicit bank operations that hide the entity
+  const genericRegex = /^(?:pix(?:\s*-\s*|\s+)recebido|pix(?:\s*-\s*|\s+)enviado|pix estorno|ted recebida|ted enviada|doc emitido|tarifa bancaria|tar\.?\s*pacote|mensalidade|pagamento de fatura|pagto cartao)\b\s*(?:-\s*)?/i;
+  const generic = normalized.replace(genericRegex, '');
+  if (generic !== normalized && generic.length > 3) {
+      let parts = generic.split('-');
+      if (parts[0] && parts[0].trim().length > 3) {
+         return sanitizeRuleText(parts[0]);
+      }
+  }
 
   return null;
 }
@@ -130,11 +140,25 @@ function inferCategoryByHeuristic(normalizedDescription: string): string | null 
 export function deriveRuleTextFromDescription(descricao: string): string {
   const trimmed = sanitizeRuleText(descricao);
   if (!trimmed) return "";
+  
+  const pureGenericRegex = /^(?:compra no d[e\u00e9]bito|compra com cart[a\u00e3]o|pagamento de boleto efetuado|pagamento de impostos|pagto titulo(?: web)?|pagto cobranca|pix(?:\s*-\s*|\s+)recebido|pix(?:\s*-\s*|\s+)enviado|pix estorno|ted recebida|ted enviada|doc emitido|tarifa bancaria|tar\.?\s*pacote|mensalidade|pagamento de fatura|pagto cartao|transfer[e\u00ea]ncia enviada pelo pix)\b\s*$/i;
+  if (pureGenericRegex.test(trimmed)) return "";
 
   const alias = extractRuleAliasFromDescription(trimmed);
-  if (!alias || alias.length < 4) return trimmed;
+  let finalCandidate = alias && alias.length >= 4 ? alias : trimmed;
+  
+  const normalized = normalizeText(finalCandidate);
+  
+  const weakKeywords = [
+    "compra", "pix", "pagamento", "transferencia", "debito", "credito", 
+    "cartao", "fatura", "boleto", "recebido", "enviado", "tarifa", "imposto"
+  ];
+  
+  if (weakKeywords.includes(normalized) || normalized.length < 4) {
+      return ""; // Refuse to generate highly ambiguous or short rules
+  }
 
-  return alias;
+  return finalCandidate.replace(/^-|-$/g, '').trim();
 }
 
 export function categorizeImportedDescription(

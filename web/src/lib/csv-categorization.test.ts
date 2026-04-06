@@ -1,4 +1,4 @@
-﻿import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   categorizeImportedDescription,
   deriveRuleTextFromDescription,
@@ -72,14 +72,24 @@ describe("csv categorization helper", () => {
     expect(categorizeImportedDescription("Tarifa de manutenção de conta", regras)).toBe("Outros");
   });
 
-  it("gera texto de regra reaproveitavel para PIX e mantem descricao sem padrao", () => {
+  it("gera texto de regra reaproveitavel para PIX ignorando ruidos sensiveis como CPF", () => {
     expect(
       deriveRuleTextFromDescription(
         "Transfer\u00eancia enviada pelo Pix - AMO SISTEMAS LTDA - 23.145.228/0001-75 - ITA\u00da UNIBANCO S.A. (0341) Ag\u00eancia: 327 Conta: 99370-5"
       )
     ).toBe("AMO SISTEMAS LTDA");
 
-    expect(deriveRuleTextFromDescription("Pagamento de fatura")).toBe("Pagamento de fatura");
+    expect(
+      deriveRuleTextFromDescription("PIX - ENVIADO - JOAO SILVA 12345678901 - 12/04 15:30")
+    ).toBe("JOAO SILVA");
+  });
+
+  it("recusa gerar regras para textos ultra-genericos que sujariam a base", () => {
+    expect(deriveRuleTextFromDescription("Pagamento de fatura")).toBe("");
+    expect(deriveRuleTextFromDescription("Pix enviado")).toBe("");
+    expect(deriveRuleTextFromDescription("Compra com cartao")).toBe("");
+    // But specific enough should work:
+    expect(deriveRuleTextFromDescription("Compra com cartao - Netflix 12/05")).toBe("Netflix");
   });
 
   it("aplica heuristica de fatura quando nao existe regra do usuario", () => {

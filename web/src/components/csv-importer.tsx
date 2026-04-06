@@ -726,9 +726,11 @@ export function CsvImporter() {
                     <TableCell>
                       <Select value={row.categoria} onValueChange={(val) => {
                           updateRow(index, 'categoria', val)
-                          const newRules = new Set(novasRegras)
-                          newRules.add(index)
-                          setNovasRegras(newRules)
+                          if (deriveRuleTextFromDescription(row.descricao)) {
+                              const newRules = new Set(novasRegras)
+                              newRules.add(index)
+                              setNovasRegras(newRules)
+                          }
                       }}>
                         <SelectTrigger className="h-8 w-[160px]">
                           <SelectValue />
@@ -740,16 +742,26 @@ export function CsvImporter() {
                         </SelectContent>
                       </Select>
                     </TableCell>
-                    <TableCell className="text-center">
-                        <Checkbox 
-                            checked={novasRegras.has(index)}
-                            onCheckedChange={(checked) => {
-                                const newSet = new Set(novasRegras)
-                                if (checked) newSet.add(index)
-                                else newSet.delete(index)
-                                setNovasRegras(newSet)
-                            }}
-                        />
+                    <TableCell className="text-center group relative">
+                        {deriveRuleTextFromDescription(row.descricao) ? (
+                            <Checkbox 
+                                checked={novasRegras.has(index)}
+                                onCheckedChange={(checked) => {
+                                    const newSet = new Set(novasRegras)
+                                    if (checked) newSet.add(index)
+                                    else newSet.delete(index)
+                                    setNovasRegras(newSet)
+                                }}
+                            />
+                        ) : (
+                            <div className="flex justify-center w-full">
+                              <Checkbox disabled checked={false} className="opacity-30" />
+                              <div className="absolute hidden group-hover:block bottom-full mb-2 bg-slate-800 text-slate-100 text-[10px] px-2 py-1 rounded w-36 left-1/2 transform -translate-x-1/2 z-50">
+                                  Lançamento com texto instável ou número variável. Uma regra automatizada seria frágil.
+                                  <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800" />
+                              </div>
+                            </div>
+                        )}
                     </TableCell>
 
                     <TableCell>
