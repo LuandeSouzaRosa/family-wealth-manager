@@ -15,7 +15,7 @@
     "test:e2e:spending-clarity-fallback:local": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/run-spending-clarity-fallback-local.ps1",
     "test:e2e:dashboard-extrato-post-mutation:local": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/run-dashboard-extrato-post-mutation-local.ps1",
     "ops:prepare-real-import-reset": "node ./scripts/prepare-real-import-reset.js",
-    "ops:analyze-bank-statement-import": "node ./scripts/analyze-bank-statement-import.js",
+    "ops:analyze-bank-statement-import": "npx tsx ./scripts/analyze-bank-statement-import.js",
     "ops:post-import-validation": "node ./scripts/post-import-validation.js",
     "ops:real-import-ui": "node ./scripts/real-import-ui.js",
     "test:e2e:ui": "playwright test --ui",

@@ -5,8 +5,9 @@ import { ParsedStatementRow, StatementParseConfidence, StatementParseResult } fr
 // Ignores usually applied to: "SALDO", "S A L D O", "SISBB", "SALDO ANTERIOR", balances.
 const isIgnorable = (desc: string) => {
   const d = desc.toLowerCase().trim();
-  if (d.includes("s a l d o") || d === "saldo" || d.includes("saldo anterior") || d.includes("saldo disponível")) return true;
+  if (d.includes("s a l d o") || d === "saldo" || d.includes("saldo anterior") || d.includes("saldo disponível") || d.includes("saldo do dia")) return true;
   if (d.includes("juros / iof") || d.includes("transf. s a l d o") || d.includes("saldos")) return true;
+  if (d.includes("extrato de conta corrente") || d.includes("sisbb")) return true;
   return false;
 };
 

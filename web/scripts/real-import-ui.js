@@ -89,8 +89,8 @@ async function resolveReceiptText(page) {
   return page.locator("body").innerText();
 }
 
-async function uploadCsv(page, csvPath) {
-  const dropzone = page.getByText("Clique para selecionar ou arraste seu CSV").first();
+async function uploadFile(page, filePath) {
+  const dropzone = page.getByText("Clique para selecionar ou arraste seu arquivo").first();
   await dropzone.waitFor({ state: "visible", timeout: 30000 });
 
   try {
@@ -98,10 +98,10 @@ async function uploadCsv(page, csvPath) {
       page.waitForEvent("filechooser", { timeout: 5000 }),
       dropzone.click(),
     ]);
-    await fileChooser.setFiles(csvPath);
+    await fileChooser.setFiles(filePath);
     return;
   } catch {
-    await page.setInputFiles("#csv-upload", csvPath);
+    await page.setInputFiles("#csv-upload", filePath);
   }
 }
 
@@ -130,12 +130,12 @@ async function main() {
 
   const fileArg = readArgValue(args, "--file");
   if (!fileArg) {
-    throw new Error('Missing required argument "--file <csv-path>".');
+    throw new Error('Missing required argument "--file <file-path>".');
   }
 
-  const csvPath = path.isAbsolute(fileArg) ? fileArg : path.resolve(process.cwd(), fileArg);
-  if (!fs.existsSync(csvPath)) {
-    throw new Error(`CSV file not found: ${csvPath}`);
+  const filePath = path.isAbsolute(fileArg) ? fileArg : path.resolve(process.cwd(), fileArg);
+  if (!fs.existsSync(filePath)) {
+    throw new Error(`File not found: ${filePath}`);
   }
 
   const baseUrl =
@@ -171,7 +171,7 @@ async function main() {
     await page.waitForURL((url) => url.pathname === "/", { timeout: 60000 });
 
     await page.goto(`${baseUrl}/conciliacao`, { waitUntil: "domcontentloaded" });
-    await uploadCsv(page, csvPath);
+    await uploadFile(page, filePath);
 
     const previewState = await Promise.race([
       page
@@ -274,7 +274,7 @@ async function main() {
       workflow: "real-import-ui",
       generatedAt: now.toISOString(),
       input: {
-        file: csvPath,
+        file: filePath,
         email,
         baseUrl,
       },

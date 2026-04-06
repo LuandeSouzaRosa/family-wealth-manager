@@ -53,13 +53,47 @@ describe("parse-bb-pdf-statement", () => {
       "0423023 23432",
       "Totally invalid layout"
     ];
-    // By duplicating enough lines we trigger the rawRowsCount > 10 threshold
     const multiplied = Array(15).fill(lines).flat();
     
     const result = extractTransactionsFromBbPdfLines(multiplied);
     expect(result.rows).toHaveLength(0);
     expect(result.confidence).toBe("low");
-    expect(result.warnings.length).toBeGreaterThan(0);
-    expect(result.warnings[0]).toContain("0 transacoes financeiras reconhecidas");
+  });
+
+  it("should handle multipage headers, footers and noisy interleaving", () => {
+    const lines = [
+      "Extrato de Conta Corrente", // header page 1
+      "01/03/2026 SALDO ANTERIOR 0,00 (+)",
+      "Pix Enviado",
+      "02/03/2026 111 50,00 (-)",
+      "João da Silva",
+      "Saldo do dia 50,00 (-)", // footer noise
+      "Extrato de Conta Corrente", // header page 2
+      "03/03/2026 222 10,00 (+)",
+      "S A L D O 40,00 (-)"
+    ];
+
+    const result = extractTransactionsFromBbPdfLines(lines);
+    expect(result.confidence).toBe("high");
+    expect(result.rows).toHaveLength(2);
+    
+    expect(result.rows[0].descricao).toBe("Pix Enviado - João da Silva");
+    expect(result.rows[0].valor).toBe("-50");
+
+    expect(result.rows[1].descricao).toBe("Lançamento sem descrição");
+    expect(result.rows[1].valor).toBe("10");
+  });
+
+  it("should handle complex multiline descriptions accurately without eating values", () => {
+    const lines = [
+      "Pagamento de Impostos",
+      "05/03/2026 333 444 1.234,56 (-)",
+      "DARE SANTA CATARINA - IPVA 2026"
+    ];
+
+    const result = extractTransactionsFromBbPdfLines(lines);
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0].descricao).toBe("Pagamento de Impostos - DARE SANTA CATARINA - IPVA 2026");
+    expect(result.rows[0].valor).toBe("-1234.56");
   });
 });

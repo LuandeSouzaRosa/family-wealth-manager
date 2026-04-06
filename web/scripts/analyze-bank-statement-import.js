@@ -14,17 +14,30 @@ const {
   writeJson,
 } = require("./utils/fwm-ops-utils");
 
-function parseCsv(filePath) {
-  const content = fs.readFileSync(filePath, "utf8");
-  const result = Papa.parse(content, {
-    header: true,
-    skipEmptyLines: true,
-  });
-  if (result.errors && result.errors.length > 0) {
-    const first = result.errors[0];
-    throw new Error(`CSV parse error (${first.code}): ${first.message}`);
+const { parseStatementFile } = require("../src/lib/import/parse-statement-file.ts");
+
+async function parseStatement(filePath) {
+  const contentBuffer = fs.readFileSync(filePath);
+  const arrayBuffer = contentBuffer.buffer.slice(contentBuffer.byteOffset, contentBuffer.byteOffset + contentBuffer.byteLength);
+  
+  // Polyfill File for environments prior to Node 20 or test runners
+  let fileObj;
+  if (typeof File !== "undefined") {
+    fileObj = new File([arrayBuffer], path.basename(filePath));
+  } else {
+    // Basic shim for our parsers that just need name, text(), and arrayBuffer()
+    fileObj = {
+      name: path.basename(filePath),
+      text: async () => contentBuffer.toString('utf8'),
+      arrayBuffer: async () => arrayBuffer
+    };
   }
-  return result.data || [];
+
+  const result = await parseStatementFile(fileObj);
+  if (result.confidence === "low") {
+    console.warn(`[WARNING] Baixa confiança na extração. ${result.warnings.join(' | ')}`);
+  }
+  return result.rows || [];
 }
 
 function classifyCsvRow(row, rules) {
@@ -168,12 +181,12 @@ async function main() {
   }
   const fileArg = readArgValue(args, "--file");
   if (!fileArg) {
-    throw new Error('Missing "--file <csv-path>" argument.');
+    throw new Error('Missing "--file <file-path>" argument.');
   }
 
-  const csvPath = path.isAbsolute(fileArg) ? fileArg : path.resolve(process.cwd(), fileArg);
-  if (!fs.existsSync(csvPath)) {
-    throw new Error(`CSV file not found: ${csvPath}`);
+  const filePath = path.isAbsolute(fileArg) ? fileArg : path.resolve(process.cwd(), fileArg);
+  if (!fs.existsSync(filePath)) {
+    throw new Error(`File not found: ${filePath}`);
   }
 
   const { client, env } = createServiceClient(projectRoot);
@@ -192,8 +205,8 @@ async function main() {
     .order("created_at", { ascending: false });
   if (error) throw error;
 
-  const csvRows = parseCsv(csvPath);
-  const classified = csvRows.map((row) => classifyCsvRow(row, rules || []));
+  const statementRows = await parseStatement(filePath);
+  const classified = statementRows.map((row) => classifyCsvRow(row, rules || []));
   const report = summarize(classified);
 
   const now = new Date();
@@ -208,7 +221,7 @@ async function main() {
     workflow: "analyze-bank-statement-import",
     generatedAt: now.toISOString(),
     input: {
-      file: csvPath,
+      file: filePath,
       email,
       userId: user.id,
       rulesCount: (rules || []).length,
@@ -219,7 +232,7 @@ async function main() {
   writeJson(reportPath, payload);
 
   console.log("[analyze-bank-statement-import] Completed.");
-  console.log(`[analyze-bank-statement-import] File: ${csvPath}`);
+  console.log(`[analyze-bank-statement-import] File: ${filePath}`);
   console.log(
     `[analyze-bank-statement-import] Importable rows: ${report.totals.importableRows}/${report.totals.totalRows}`
   );
