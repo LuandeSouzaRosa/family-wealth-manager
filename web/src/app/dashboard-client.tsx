@@ -149,6 +149,16 @@ export function DashboardClientShell({
   const dashboardPeriodYear = String(now.getFullYear());
   const transacoesHref = `/transacoes?month=${dashboardPeriodMonth}&year=${dashboardPeriodYear}`;
 
+  const missingForCouple: string[] = [];
+  if (metrics.porResponsavel) {
+      if (!("Luan" in metrics.porResponsavel) || metrics.porResponsavel["Luan"].despesasRealizadas === 0) missingForCouple.push("Luan");
+      if (!("Luana" in metrics.porResponsavel) || metrics.porResponsavel["Luana"].despesasRealizadas === 0) missingForCouple.push("Luana");
+  } else {
+      missingForCouple.push("Luan", "Luana");
+  }
+  const isCasalReady = missingForCouple.length === 0;
+  const coverageStatus = isCasalReady ? "ready" : (missingForCouple.length < 2 ? "partial" : "unknown");
+
   return (
     <motion.div 
       initial="hidden"
@@ -252,6 +262,8 @@ export function DashboardClientShell({
             responsavel={responsavel}
             totalSaidasRealizadasTodos={totalSaidasRealizadasTodos}
             transacoesHref={transacoesHref}
+            coverageStatus={coverageStatus as "ready" | "partial" | "unknown"}
+            missingForCouple={missingForCouple}
           />
         </motion.div>
 

@@ -190,9 +190,22 @@ function buildAmbiguousReviewHref(month: string, year: string, responsavel?: Res
 }
 
 function resolveViewMode(totalConsumptionValue: number, totalNonConsumptionValue: number) {
-  if (totalConsumptionValue > 0) return "consumption_focus" as const
-  if (totalNonConsumptionValue > 0) return "non_consumption_dominant" as const
-  return "insufficient_base" as const
+  if (totalConsumptionValue <= 0) {
+    if (totalNonConsumptionValue > 0) return "non_consumption_dominant" as const
+    return "insufficient_base" as const
+  }
+
+  // Se consumo for muito baixo (ex: uma coxinha no mes inteiro) nao da pra focar nisso
+  if (totalConsumptionValue < 150) {
+    return "insufficient_base" as const
+  }
+
+  // Se a movimentacao financeira esmagar o consumo, e o consumo em si for baixo
+  if (totalConsumptionValue < 1000 && totalNonConsumptionValue > totalConsumptionValue * 2) {
+    return "non_consumption_dominant" as const
+  }
+
+  return "consumption_focus" as const
 }
 
 function buildPeriodSummary(sourceRows: PostImportReviewRow[], month: string, year: string): PostImportPeriodSummary {
@@ -387,14 +400,14 @@ function buildPrimaryAttention(
 
   if (targetView.mode === "non_consumption_dominant") {
     return {
-      text: `Principal atencao: ${targetView.responsavel} esta dominado por movimentacoes financeiras (${formatCurrency(targetView.totalNonConsumptionValue)}), sem lider forte de consumo real.`,
+      text: `Principal atencao: o periodo de ${targetView.responsavel} esta focado em nao-consumo (${formatCurrency(targetView.totalNonConsumptionValue)}).`,
       actionLabel: "Abrir extrato deste recorte",
       actionHref: targetView.periodReviewHref,
     }
   }
 
   return {
-    text: `Principal atencao: ${targetView.responsavel} ainda sem base suficiente de saidas para priorizar consumo real.`,
+    text: `Principal atencao: ${targetView.responsavel} nao possui base representativa de consumo real.`,
     actionLabel: "Abrir extrato deste recorte",
     actionHref: targetView.periodReviewHref,
   }

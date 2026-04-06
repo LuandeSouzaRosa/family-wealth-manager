@@ -4,7 +4,7 @@ import { buildPostImportReviewContext } from './post-import-review-context'
 describe('buildPostImportReviewContext', () => {
   it('retorna reviewHref nulo quando nao ha linhas em Outros', () => {
     const result = buildPostImportReviewContext([
-      { categoria: 'Alimentacao', valor: 120, data: '2026-03-10T12:00:00.000Z', tipo: 'Saida' },
+      { categoria: 'Alimentacao', valor: 250, data: '2026-03-10T12:00:00.000Z', tipo: 'Saida' },
     ])
 
     expect(result.outrosRows).toBe(0)
@@ -14,7 +14,7 @@ describe('buildPostImportReviewContext', () => {
     expect(result.ambiguousValue).toBe(0)
     expect(result.ambiguousReviewHref).toBeNull()
     expect(result.periodSummary.mode).toBe('consumption_focus')
-    expect(result.periodSummary.totalConsumptionValue).toBe(120)
+    expect(result.periodSummary.totalConsumptionValue).toBe(250)
     expect(result.periodSummary.totalNonConsumptionValue).toBe(0)
     expect(result.periodSummary.attentionCategory).toBe('Alimentacao')
     expect(result.periodSummary.leaderReviewHref).toBe('/transacoes?month=3&year=2026&category=Alimentacao&sort=value_desc')
@@ -105,6 +105,16 @@ describe('buildPostImportReviewContext', () => {
     expect(result.periodSummary.topConsumptionCategories).toHaveLength(0)
     expect(result.periodSummary.attentionCategory).toBeNull()
     expect(result.periodSummary.leaderReviewHref).toBeNull()
+  })
+
+  it('sinaliza periodo com base insuficiente de consumo quando gasto total eh irrisorio', () => {
+    const result = buildPostImportReviewContext([
+      { categoria: 'Transporte', valor: 50, data: '2026-03-04T00:00:00.000Z', tipo: 'Saida' },
+      { categoria: 'Alimentacao', valor: 20, data: '2026-03-09T00:00:00.000Z', tipo: 'Saida' },
+    ])
+
+    expect(result.periodSummary.mode).toBe('insufficient_base')
+    expect(result.periodSummary.totalConsumptionValue).toBe(70)
   })
 
   it('consolida por periodo persistido e sinaliza cobertura parcial/ready por responsavel', () => {

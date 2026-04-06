@@ -36,6 +36,8 @@ interface SpendingClarityCardProps {
   compact?: boolean;
   totalSaidasRealizadasTodos?: number;
   transacoesHref?: string;
+  coverageStatus?: "ready" | "partial" | "unknown";
+  missingForCouple?: string[];
 }
 
 type PrimaryInsight = {
@@ -73,24 +75,35 @@ function isGenericLeader(data: SpendingClarityData): boolean {
   return liderGenerica && categoriaLider.percentual >= 60;
 }
 
-function hasOnlyFinancialMovement(data: SpendingClarityData): boolean {
-  return data.totalSaidasRealizadas <= 0 && (data.totalSaidasDesconsideradas || 0) > 0;
+function isNonConsumptionDominant(data: SpendingClarityData): boolean {
+  const consumo = data.totalSaidasRealizadas;
+  const naoConsumo = data.totalSaidasDesconsideradas || 0;
+  
+  if (consumo <= 0 && naoConsumo > 0) return true;
+  if (consumo < 1000 && naoConsumo > consumo * 2) return true;
+  return false;
+}
+
+function hasInsufficientBase(data: SpendingClarityData): boolean {
+  const consumo = data.totalSaidasRealizadas;
+  if (consumo > 0 && consumo < 150) return true;
+  return false;
 }
 
 function buildEvidenceCalibration(data: SpendingClarityData): EvidenceCalibration {
-  if (data.totalSaidasRealizadas <= 0 || data.topCategorias.length === 0) {
-    if (hasOnlyFinancialMovement(data)) {
+  if (data.totalSaidasRealizadas <= 0 || data.topCategorias.length === 0 || hasInsufficientBase(data)) {
+    if (isNonConsumptionDominant(data)) {
       return {
         strength: "baixa",
         label: "Baixa",
-        message: "Movimentacao financeira domina o recorte; valide consumo no extrato antes de concluir.",
+        message: "Nao-consumo afogou a amostragem. Confirme a listagem no extrato antes de inferir padrao de custo real.",
       };
     }
 
     return {
       strength: "baixa",
       label: "Baixa",
-      message: "Nao ha saidas suficientes no recorte atual para sustentar um insight forte.",
+      message: "Base insuficiente para extrair insights. Insira mais consumos de rotina para calibrar.",
     };
   }
 
@@ -140,17 +153,17 @@ function buildEvidenceSignalsSummary(data: SpendingClarityData): string | null {
 }
 
 function buildPrimaryInsight(data: SpendingClarityData): PrimaryInsight {
-  if (data.topCategorias.length === 0) {
-    if (hasOnlyFinancialMovement(data)) {
+  if (data.topCategorias.length === 0 || hasInsufficientBase(data)) {
+    if (isNonConsumptionDominant(data)) {
       return {
-        title: "Movimentacao financeira domina",
-        message: "Fatura Cartao/Investimentos nao entram no ranking de consumo. Revise o extrato para confirmar onde houve gasto real.",
+        title: "Dominancia de Movimentacao",
+        message: "A leitura aponta prioritariamente pra investimentos ou faturas de fora da base.",
       };
     }
 
     return {
-      title: "Sem pressao de gasto",
-      message: "Nao houve saidas realizadas no filtro atual.",
+      title: "Consumo irrelevante",
+      message: "Volume disponivel muito raso para criar prioridades estaveis.",
     };
   }
 
@@ -190,12 +203,12 @@ function buildPrimaryInsight(data: SpendingClarityData): PrimaryInsight {
 }
 
 function buildControlHint(data: SpendingClarityData): string {
-  if (data.topCategorias.length === 0) {
-    if (hasOnlyFinancialMovement(data)) {
-      return "Sem base de consumo no recorte: revise no extrato as linhas de movimentacao financeira antes de definir ajuste.";
+  if (data.topCategorias.length === 0 || hasInsufficientBase(data)) {
+    if (isNonConsumptionDominant(data)) {
+      return "Foque momentaneamente na organizacao do Extrato para validar as sementes financeiras.";
     }
 
-    return "Sem acao necessaria neste recorte.";
+    return "Audite eventuais gastos no periodo antes de priorizar categorias.";
   }
 
   if (isGenericLeader(data)) {
@@ -258,6 +271,8 @@ export function SpendingClarityCard({
   compact = false,
   totalSaidasRealizadasTodos = 0,
   transacoesHref,
+  coverageStatus,
+  missingForCouple
 }: SpendingClarityCardProps) {
   const now = new Date();
   const defaultTransacoesHref = `/transacoes?month=${now.getMonth() + 1}&year=${now.getFullYear()}`;
@@ -270,11 +285,9 @@ export function SpendingClarityCard({
   const reviewHref = buildLeaderReviewHref(targetTransacoesHref, categoriaLider?.categoria);
   const actionTitle = buildActionTitle(evidence);
   const actionHint = buildActionHint(data, hint, evidence);
-  const hasOnlyFinancialMovementState = hasOnlyFinancialMovement(data);
-  const hasOtherScopeMovement =
-    data.totalSaidasRealizadas <= 0 &&
-    totalSaidasRealizadasTodos > 0 &&
-    responsavel !== "Todos";
+  
+  const hasOtherScopeMovement = totalSaidasRealizadasTodos > 0 && responsavel !== "Todos";
+
 
   return (
     <Card className="border border-border/50 shadow-sm bg-card">
@@ -288,17 +301,22 @@ export function SpendingClarityCard({
         </CardDescription>
       </CardHeader>
       <CardContent className={compact ? "space-y-3" : "space-y-4"}>
-        {data.totalSaidasRealizadas <= 0 ? (
-          hasOnlyFinancialMovementState ? (
+        {data.totalSaidasRealizadas <= 0 || hasInsufficientBase(data) ? (
+          isNonConsumptionDominant(data) ? (
             <p className="text-sm text-muted-foreground">
-              Movimentacoes financeiras dominaram este recorte (ex.: Fatura Cartao/Investimentos). Revise no extrato as saidas de consumo antes de definir corte.
+              Periodo tomado por fluxo financeiro passivo ou faturas externas. Limpe a base via Extrato para isolar o consumo real do mes.
+            </p>
+          ) : (responsavel === "Casal" && (coverageStatus === "partial" || coverageStatus === "unknown")) ? (
+            <p className="text-sm text-muted-foreground flex flex-col gap-1">
+              <span>Leitura do casal incompleta. Lançamentos insuficientes.</span>
+              <span className="text-amber-600 dark:text-amber-500 font-medium">Recomendação: {missingForCouple?.includes("Luan") && missingForCouple?.includes("Luana") ? "Importe os extratos bases primeiro." : `Importe o extrato de ${missingForCouple?.join(" e ")} primeiro.`}</span>
             </p>
           ) : hasOtherScopeMovement ? (
             <p className="text-sm text-muted-foreground">
-              Ja houve saidas realizadas no mes, mas nao neste filtro de responsavel. Ajuste o filtro ou revise a classificacao no extrato.
+              Ainda faltam entradas diretas rastreaveis para <strong>{responsavel}</strong>. Ajuste as responsabilidades no extrato ou importe.
             </p>
           ) : (
-            <p className="text-sm text-muted-foreground">Nao houve saidas realizadas neste recorte.</p>
+            <p className="text-sm text-muted-foreground">Sem atividade de consumos primarios rastreados no filtro selecionado para esta visualizacao.</p>
           )
         ) : (
           <>
