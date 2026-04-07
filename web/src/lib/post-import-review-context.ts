@@ -89,6 +89,8 @@ export type TopGenericDescription = {
   valor: number
 }
 
+export type PostImportOperationalStatus = "ready" | "partial" | "needs_review" | "blocked"
+
 export type PostImportReviewContext = {
   outrosRows: number
   outrosValue: number
@@ -103,6 +105,8 @@ export type PostImportReviewContext = {
   strengtheningSummary: PostImportStrengtheningSummary
   periodReviewHref: string
   periodLabel: string
+  monthOperationalStatus: PostImportOperationalStatus
+  monthOperationalReason: string
 }
 
 function resolveImportPeriod(rows: PostImportReviewRow[]) {
@@ -657,6 +661,28 @@ export function buildPostImportReviewContext(
       ? `/transacoes?month=${period.month}&year=${period.year}&review=ambiguous&sort=value_desc`
       : null
 
+  const casalView = consolidatedSummary.views.find((v) => v.responsavel === "Casal")
+  let monthOperationalStatus: PostImportOperationalStatus = "ready"
+  let monthOperationalReason = "Fechamento legivel e seguro para analise."
+
+  if (consolidatedSummary.coverage.status === "unknown") {
+    monthOperationalStatus = "blocked"
+    monthOperationalReason = "Base vazia ou sem importacoes confirmadas neste recorte. Inicie a importacao."
+  } else if (consolidatedSummary.coverage.status === "partial") {
+    monthOperationalStatus = "partial"
+    const missing = consolidatedSummary.coverage.missingForCouple.join(" e ")
+    monthOperationalReason = `Falta importar o extrato de ${missing} para concluir o mes.`
+  } else if (periodPriorities.confidenceLimiter) {
+    monthOperationalStatus = "needs_review"
+    monthOperationalReason = periodPriorities.confidenceLimiter.text
+  } else if (casalView && casalView.mode !== "consumption_focus") {
+    monthOperationalStatus = "needs_review"
+    monthOperationalReason = `A visao de casal nao esta focada em consumo (${casalView.mode}).`
+  } else if (outrosValue >= 200 && casalView && outrosValue >= casalView.totalConsumptionValue * 0.1) {
+    monthOperationalStatus = "needs_review"
+    monthOperationalReason = "Excesso critico de lancamentos listados como 'Outros' ou 'Sem categoria'."
+  }
+
   if (outrosRows === 0) {
     return {
       outrosRows: 0,
@@ -672,6 +698,8 @@ export function buildPostImportReviewContext(
       strengtheningSummary,
       periodReviewHref: period.periodReviewHref,
       periodLabel: period.periodLabel,
+      monthOperationalStatus,
+      monthOperationalReason,
     }
   }
 
@@ -689,5 +717,7 @@ export function buildPostImportReviewContext(
     strengtheningSummary,
     periodReviewHref: period.periodReviewHref,
     periodLabel: period.periodLabel,
+    monthOperationalStatus,
+    monthOperationalReason,
   }
 }

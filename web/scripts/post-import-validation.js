@@ -86,7 +86,10 @@ async function main() {
   console.log("");
   console.log(`=== 🩺 FATURAMENTO / SAUDE DO MES: ${context.periodLabel} ===`);
 
-  console.log("\n[1] 📦 VISAO GERAL DE INGESTAO");
+  console.log(`\n[1] 📆 STATUS DO MÊS: [${context.monthOperationalStatus.toUpperCase()}]`);
+  console.log(`  -> ${context.monthOperationalReason}`);
+
+  console.log("\n[2] 📦 VISAO GERAL DE INGESTAO");
   console.log(`  🔹 Total na base local: ${rows.length} lançamentos`);
   console.log(`  🔹 Total ignorado/genérico ("Outros"): ${context.outrosRows} itens (${formatMoney(context.outrosValue)})`);
   console.log(`  🔹 Total ambíguo/warns passivos: ${context.ambiguousRows} itens (${formatMoney(context.ambiguousValue)})`);
@@ -96,7 +99,7 @@ async function main() {
       context.topGenericDescriptions.forEach((d) => console.log(`     - ${d.descricao}: ${formatMoney(d.valor)}`));
   }
 
-  console.log("\n[2] 👥 CONFIABILIDADE POR RESPONSAVEL");
+  console.log("\n[3] 👥 CONFIABILIDADE POR RESPONSAVEL");
   console.log(`  🌍 Cobertura do Casal: [${summary.coverage.status.toUpperCase()}]`);
   if (summary.coverage.missingForCouple.length > 0) {
       console.log(`     -> Ausência material detectada para: ${summary.coverage.missingForCouple.join(" e ")}`);
@@ -114,7 +117,7 @@ async function main() {
       console.log(`  ${icon} ${view.responsavel.padEnd(6, " ")} | Status: ${statusMsg.padEnd(28, " ")} | Base: ${formatMoney(view.totalConsumptionValue)} | Financeiro Ofuscante: ${formatMoney(view.totalNonConsumptionValue)}`);
   }
 
-  console.log("\n[3] 🎯 PRÓXIMO MELHOR PASSO (PMP)");
+  console.log("\n[4] 🎯 PRÓXIMO MELHOR PASSO (PMP)");
   console.log(`  🎯 Foco: ${priorities.target}`);
   console.log(`  👉 Ação: ${priorities.nextAction.text}`);
   console.log(`  💡 ROI:  ${priorities.expectedConfidenceImpact}`);
