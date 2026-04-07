@@ -24,8 +24,8 @@ export async function createAuthenticatedSupabaseClient() {
     },
   });
 
-  const email = getRequiredEnv('TEST_EMAIL');
-  const password = getRequiredEnv('TEST_PASSWORD');
+  const email = getRequiredEnv('HOMOLOG_EMAIL');
+  const password = getRequiredEnv('HOMOLOG_PASSWORD');
   const { error } = await client.auth.signInWithPassword({ email, password });
 
   if (error) {

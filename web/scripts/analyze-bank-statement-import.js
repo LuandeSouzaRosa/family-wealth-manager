@@ -189,10 +189,10 @@ async function main() {
   }
 
   const { client, env } = createServiceClient(projectRoot);
-  const email = readArgValue(args, "--email") || env.TEST_EMAIL || null;
+  const email = readArgValue(args, "--email") || env.HOMOLOG_EMAIL || null;
   if (!email) {
     throw new Error(
-      'Missing target email. Provide "--email user@domain.com" or set TEST_EMAIL in .env.local.'
+      'Missing target email. Provide "--email user@domain.com" or set HOMOLOG_EMAIL in .env.local.'
     );
   }
 

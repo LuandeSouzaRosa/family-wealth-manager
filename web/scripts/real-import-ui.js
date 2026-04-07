@@ -140,8 +140,8 @@ async function main() {
 
   const baseUrl =
     readArgValue(args, "--base-url") || process.env.NEXT_PUBLIC_APP_URL || "http://127.0.0.1:3001";
-  const email = readRequiredCredential(args, "--email", "TEST_EMAIL");
-  const password = readRequiredCredential(args, "--password", "TEST_PASSWORD");
+  const email = readRequiredCredential(args, "--email", "HOMOLOG_EMAIL");
+  const password = readRequiredCredential(args, "--password", "HOMOLOG_PASSWORD");
 
   await waitForServer(baseUrl);
 

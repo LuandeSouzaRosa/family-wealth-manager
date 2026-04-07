@@ -113,8 +113,8 @@ async function waitForLeaderCard(page: Page, runTag: string, expectedCategory: s
 }
 
 async function loginAsTestUser(page: Page) {
-  const email = getRequiredEnv('TEST_EMAIL');
-  const password = getRequiredEnv('TEST_PASSWORD');
+  const email = getRequiredEnv('HOMOLOG_EMAIL');
+  const password = getRequiredEnv('HOMOLOG_PASSWORD');
 
   await page.goto('/login', { waitUntil: 'domcontentloaded', timeout: 60000 });
   await page.locator('input[name="email"]').fill(email);

@@ -17,8 +17,8 @@ function getRequiredEnv(name: string): string {
 setup('authenticate', async ({ page }) => {
   await page.goto('/login');
   
-  const email = getRequiredEnv('TEST_EMAIL');
-  const password = getRequiredEnv('TEST_PASSWORD');
+  const email = getRequiredEnv('HOMOLOG_EMAIL');
+  const password = getRequiredEnv('HOMOLOG_PASSWORD');
   
   await page.locator('input[name="email"]').fill(email);
   await page.locator('input[name="password"]').fill(password);
